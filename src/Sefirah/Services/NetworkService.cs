@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using CommunityToolkit.WinUI;
+using Sefirah.Data.Contracts;
 using Sefirah.Data.Models;
 using Sefirah.Dialogs;
 using Sefirah.Helpers;
@@ -89,7 +90,12 @@ public class NetworkService(
         {
             var localDevice = await deviceManager.GetLocalDeviceAsync();
             var avatar = await UserInformation.GetCurrentUserAvatarAsync();
-            device.SendMessage(new DeviceInfo { DeviceName = localDevice.DeviceName, Avatar = avatar });
+            device.SendMessage(new DeviceInfo
+            {
+                DeviceName = localDevice.DeviceName,
+                Avatar = avatar,
+                Capabilities = [.. ProtocolCapabilities.Local],
+            });
         }
         catch (Exception ex)
         {

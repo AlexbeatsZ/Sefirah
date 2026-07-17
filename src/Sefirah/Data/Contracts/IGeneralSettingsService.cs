@@ -1,4 +1,5 @@
 using Sefirah.Data.Models.Actions;
+using Sefirah.Data.Models;
 
 namespace Sefirah.Data.Contracts;
 
@@ -40,6 +41,8 @@ public interface IGeneralSettingsService : IBaseSettingsService, INotifyProperty
     /// Gets or sets the list of custom actions.
     /// </summary>
     List<BaseAction> Actions { get; set; }
+
+    List<HeadsetConfiguration> Headsets { get; set; }
 
     /// <summary>
     /// Adds a new action to the settings.

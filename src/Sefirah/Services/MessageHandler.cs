@@ -20,6 +20,7 @@ public class MessageHandler(
     ISessionManager sessionManager,
     ICallFeature callFeature,
     IBluetoothPairingService bluetoothPairingService,
+    IHeadsetHandoffService headsetHandoffService,
     ILogger<MessageHandler> logger) : IMessageHandler
 {
     public async void HandleMessageAsync(PairedDevice device, SocketMessage message)
@@ -66,7 +67,7 @@ public class MessageHandler(
                     break;
 
                 case ClipboardInfo clipboard:
-                    await clipboardFeature.SetContentAsync(clipboard.Content, device);
+                    await clipboardFeature.SetContentAsync(clipboard, device);
                     break;
 
                 case ConversationInfo textConversation:
@@ -91,6 +92,8 @@ public class MessageHandler(
 
                 case DeviceInfo deviceInfo:
                     await deviceManager.UpdateDeviceInfo(device, deviceInfo);
+                    if (device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
+                        await headsetHandoffService.SendConfigurationAsync(device);
                     break;
 
                 case CallInfo callInfo:
@@ -103,6 +106,18 @@ public class MessageHandler(
 
                 case BluetoothPairingResult pairingResult:
                     bluetoothPairingService.HandleBluetoothPairingResult(device, pairingResult);
+                    break;
+
+                case BluetoothDeviceCatalog catalog:
+                    headsetHandoffService.HandleCatalog(device, catalog);
+                    break;
+
+                case BluetoothHandoffResult handoffResult:
+                    headsetHandoffService.HandleResult(device, handoffResult);
+                    break;
+
+                case BluetoothHandoffRequest handoffRequest:
+                    headsetHandoffService.HandleRequest(device, handoffRequest);
                     break;
 
                 case Disconnect:

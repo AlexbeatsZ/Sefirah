@@ -63,6 +63,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -72,8 +73,12 @@
                     PaneFlyoutPlacement="Bottom"
                     Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}" />
 
-                <StackPanel
+                <userControls:HeadsetHandoffControl
                     Grid.Row="1"
+                    Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}" />
+
+                <StackPanel
+                    Grid.Row="2"
                     Background="Transparent"
                     Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}">
 
@@ -97,7 +102,7 @@
                 </StackPanel>
 
                 <userControls:NotificationsControl
-                    Grid.Row="2"
+                    Grid.Row="3"
                     Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}" />
 
                 <!--  No Device Connected View  -->

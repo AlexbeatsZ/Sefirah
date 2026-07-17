@@ -37,37 +37,37 @@ public class DatabaseContext
             BusyTimeout = TimeSpan.FromSeconds(5),
         };
 
-        db.CreateTable<SchemaVersionEntity>();
-
-        int? storedSchemaVersion = db.Table<SchemaVersionEntity>()
-            .OrderByDescending(v => v.Version)
-            .FirstOrDefault()?.Version;
+        var hasSchemaVersionTable = db.GetTableInfo(nameof(SchemaVersionEntity)).Count > 0;
+        int? storedSchemaVersion = hasSchemaVersionTable
+            ? db.Table<SchemaVersionEntity>().OrderByDescending(v => v.Version).FirstOrDefault()?.Version
+            : null;
 
         // If schema version doesn't match, run migrations when they exist; otherwise destructive fallback
         if (storedSchemaVersion != CurrentSchemaVersion)
         {
-            if (storedSchemaVersion.HasValue && storedSchemaVersion < CurrentSchemaVersion)
-            {
-                var migrationsToRun = Migrations
-                    .Where(m => m.TargetVersion > storedSchemaVersion.Value && m.TargetVersion <= CurrentSchemaVersion)
-                    .OrderBy(m => m.TargetVersion)
-                    .ToArray();
+            BackupDatabaseFiles(databasePath, logger);
 
-                if (migrationsToRun.Length == 0)
-                {
-                    // No migration path exists (e.g. no migration to current version) → destructive fallback
-                    DestructiveFallback(db);
-                }
-                else
-                {
-                    RunMigrations(db, migrationsToRun, logger);
-                }
-            }
-            else
+            if (storedSchemaVersion > CurrentSchemaVersion)
             {
-                DestructiveFallback(db);
+                throw new InvalidOperationException(
+                    $"Database schema {storedSchemaVersion} is newer than supported schema {CurrentSchemaVersion}. " +
+                    "Refusing to modify it to preserve pairing data.");
             }
 
+            var migrationsToRun = Migrations
+                .Where(m => storedSchemaVersion.HasValue &&
+                            m.TargetVersion > storedSchemaVersion.Value &&
+                            m.TargetVersion <= CurrentSchemaVersion)
+                .OrderBy(m => m.TargetVersion)
+                .ToArray();
+            if (migrationsToRun.Length > 0)
+            {
+                RunMigrations(db, migrationsToRun, logger);
+            }
+
+            // sqlite-net's CreateTable performs additive column migration for existing tables.
+            // Missing historical migration classes must never cause a destructive fallback.
+            CreateAllTables(db);
             SetSchemaVersion(db, CurrentSchemaVersion);
             logger.Info("Database schema updated successfully");
         }
@@ -84,12 +84,6 @@ public class DatabaseContext
         db.InsertOrReplace(new SchemaVersionEntity { Version = version });
     }
 
-    private static void DestructiveFallback(SQLiteConnection db)
-    {
-        DropAllTables(db);
-        CreateAllTables(db);
-    }
-
     private static void RunMigrations(SQLiteConnection db, IMigration[] migrationsToRun, ILogger logger)
     {
         foreach (var migration in migrationsToRun)
@@ -102,11 +96,31 @@ public class DatabaseContext
             }
             catch (Exception ex)
             {
-                logger.Error($"Migration to version {migration.TargetVersion} failed. Falling back to destructive mode.", ex);
-                DestructiveFallback(db);
-                return;
+                logger.Error($"Migration to version {migration.TargetVersion} failed. Pairing data was not deleted.", ex);
+                throw;
             }
         }
+    }
+
+    private static void BackupDatabaseFiles(string databasePath, ILogger logger)
+    {
+        if (!File.Exists(databasePath)) return;
+
+        var backupRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Temp",
+            ".agents",
+            "Sefirah",
+            "database-backups",
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff"));
+        Directory.CreateDirectory(backupRoot);
+
+        foreach (var sourcePath in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
+        {
+            if (!File.Exists(sourcePath)) continue;
+            File.Copy(sourcePath, Path.Combine(backupRoot, Path.GetFileName(sourcePath)), overwrite: false);
+        }
+        logger.Info($"Database backup created at {backupRoot}");
     }
 
     private static void CreateAllTables(SQLiteConnection db)

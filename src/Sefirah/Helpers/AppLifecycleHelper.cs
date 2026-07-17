@@ -123,6 +123,7 @@ public static class AppLifecycleHelper
                 .AddSingleton<IMdnsService, MdnsService>()
                 .AddSingleton<IDiscoveryService, DiscoveryService>()
                 .AddSingleton<INetworkService, NetworkService>()
+                .AddSingleton<IHeadsetHandoffService, HeadsetHandoffService>()
 
                 .AddFeature<INotificationFeature, NotificationFeature>()
                 .AddFeature<IBatteryAlertFeature, BatteryAlertFeature>()
@@ -144,6 +145,7 @@ public static class AppLifecycleHelper
                 .AddSingleton<AppsViewModel>()
                 .AddSingleton<MessagesViewModel>()
                 .AddSingleton<CallsPageViewModel>()
+                .AddSingleton<HeadsetHandoffViewModel>()
                 )
             );
     }

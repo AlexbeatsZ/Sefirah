@@ -1,4 +1,5 @@
 using Sefirah.Data.Models.Actions;
+using Sefirah.Data.Models;
 using Sefirah.Utils.Serialization;
 
 namespace Sefirah.Services.Settings;
@@ -55,6 +56,12 @@ internal sealed partial class GeneralSettingsService : BaseObservableJsonSetting
     public List<BaseAction> Actions
     {
         get => Get<List<BaseAction>>([]);
+        set => Set(value);
+    }
+
+    public List<HeadsetConfiguration> Headsets
+    {
+        get => Get<List<HeadsetConfiguration>>([]);
         set => Set(value);
     }
 

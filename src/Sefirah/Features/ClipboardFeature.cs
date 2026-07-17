@@ -16,7 +16,11 @@ public class ClipboardFeature(
 {
     private readonly DispatcherQueue dispatcher = App.MainWindow.DispatcherQueue;
     private bool isMonitoring = false;
+    private readonly object eventIdLock = new();
+    private readonly HashSet<string> receivedEventIds = [];
+    private readonly Queue<string> receivedEventIdOrder = [];
     private const int DirectTransferThreshold = 2 * 1024 * 1024; // 2MB threshold
+    private const int ReceivedEventIdLimit = 256;
 
     private static readonly Dictionary<string, string> SupportedImageFileTypes = new()
     {
@@ -163,7 +167,7 @@ public class ClipboardFeature(
     }
     
 
-    private static async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
+    private async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
     {
         if (!dataPackageView.Contains(StandardDataFormats.Text)) return;
 
@@ -173,7 +177,14 @@ public class ClipboardFeature(
         // Convert Windows CRLF to Unix LF 
         text = text.Replace("\r\n", "\n");
         
-        var message = new ClipboardInfo { Content = text, ClipboardType = "text/plain" };
+        var localDevice = await deviceManager.GetLocalDeviceAsync();
+        var message = new ClipboardInfo
+        {
+            Content = text,
+            ClipboardType = "text/plain",
+            EventId = Guid.NewGuid().ToString(),
+            OriginDeviceId = localDevice.DeviceId,
+        };
 
         devices.ForEach(d => d.SendMessage(message));
     }
@@ -254,6 +265,29 @@ public class ClipboardFeature(
                 dispatcher.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => isInternalUpdate = false);
             }
         });
+    }
+
+    public Task SetContentAsync(ClipboardInfo clipboard, PairedDevice sourceDevice)
+    {
+        if (!TryRegisterEventId(clipboard.EventId)) return Task.CompletedTask;
+        return SetContentAsync(clipboard.Content, sourceDevice);
+    }
+
+    private bool TryRegisterEventId(string? eventId)
+    {
+        if (string.IsNullOrEmpty(eventId)) return true;
+
+        lock (eventIdLock)
+        {
+            if (!receivedEventIds.Add(eventId)) return false;
+
+            receivedEventIdOrder.Enqueue(eventId);
+            while (receivedEventIdOrder.Count > ReceivedEventIdLimit)
+            {
+                receivedEventIds.Remove(receivedEventIdOrder.Dequeue());
+            }
+            return true;
+        }
     }
 
     public static bool IsValidWebUrl(Uri? uri)

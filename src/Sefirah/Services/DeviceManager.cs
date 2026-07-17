@@ -149,6 +149,7 @@ public partial class DeviceManager(
         {
             device.Name = deviceInfo.DeviceName;
             device.PhoneNumbers = deviceInfo.PhoneNumbers;
+            device.Capabilities = deviceInfo.Capabilities.ToHashSet(StringComparer.Ordinal);
             device.Wallpaper = await existingDevice.WallpaperBytes.ToBitmapAsync();
         });
 

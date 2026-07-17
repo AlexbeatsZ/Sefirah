@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAppShortcutService, AppShortcutService>();
         services.AddSingleton<IPhoneLineService, PhoneLineService>();
         services.AddSingleton<IBluetoothPairingService, BluetoothPairingService>();
+        services.AddSingleton<ILocalBluetoothController, LocalBluetoothController>();
         services.AddSingleton<BluetoothPairingService>(sp => (BluetoothPairingService)sp.GetRequiredService<IBluetoothPairingService>());
         services.AddSingleton<ISystemTrayService, SystemTrayService>();
         return services;

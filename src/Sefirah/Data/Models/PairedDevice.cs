@@ -73,6 +73,10 @@ public partial class PairedDevice : BaseRemoteDevice
 
     public List<PhoneNumber> PhoneNumbers { get; set; } = [];
 
+    public IReadOnlySet<string> Capabilities { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
+    public bool SupportsCapability(string capability) => Capabilities.Contains(capability);
+
     private ImageSource? wallpaper;
     public ImageSource? Wallpaper
     {

@@ -45,12 +45,18 @@ public sealed class BluetoothRadioManager(ILogger logger)
 
     public async Task<bool> TryEnableAsync()
     {
+        return await TrySetStateAsync(true);
+    }
+
+    public async Task<bool> TrySetStateAsync(bool enabled)
+    {
         if (!await RefreshAsync() || bluetoothRadio is null)
         {
             return false;
         }
 
-        if (bluetoothRadio.State is RadioState.On)
+        var targetState = enabled ? RadioState.On : RadioState.Off;
+        if (bluetoothRadio.State == targetState)
         {
             return true;
         }
@@ -64,18 +70,18 @@ public sealed class BluetoothRadioManager(ILogger logger)
                 return false;
             }
 
-            var setState = await bluetoothRadio.SetStateAsync(RadioState.On);
+            var setState = await bluetoothRadio.SetStateAsync(targetState);
             if (setState is not RadioAccessStatus.Allowed)
             {
-                logger.Debug($"Bluetooth radio enable denied: {setState}");
+                logger.Debug($"Bluetooth radio state change denied: {setState}");
                 return false;
             }
 
-            return bluetoothRadio.State is RadioState.On;
+            return bluetoothRadio.State == targetState;
         }
         catch (Exception ex)
         {
-            logger.Warn($"Failed to enable bluetooth radio: {ex}");
+            logger.Warn($"Failed to change bluetooth radio state: {ex}");
             return false;
         }
     }

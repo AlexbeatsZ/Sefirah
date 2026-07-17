@@ -28,6 +28,13 @@ namespace Sefirah.Data.Models;
 [JsonDerivedType(typeof(PairMessage), nameof(PairMessage))]
 [JsonDerivedType(typeof(BluetoothPairingRequest), nameof(BluetoothPairingRequest))]
 [JsonDerivedType(typeof(BluetoothPairingResult), nameof(BluetoothPairingResult))]
+[JsonDerivedType(typeof(BluetoothDeviceCatalogRequest), nameof(BluetoothDeviceCatalogRequest))]
+[JsonDerivedType(typeof(BluetoothDeviceCatalog), nameof(BluetoothDeviceCatalog))]
+[JsonDerivedType(typeof(BluetoothHandoffRequest), nameof(BluetoothHandoffRequest))]
+[JsonDerivedType(typeof(BluetoothHandoffCommand), nameof(BluetoothHandoffCommand))]
+[JsonDerivedType(typeof(BluetoothHandoffResult), nameof(BluetoothHandoffResult))]
+[JsonDerivedType(typeof(BluetoothHandoffState), nameof(BluetoothHandoffState))]
+[JsonDerivedType(typeof(BluetoothHandoffConfiguration), nameof(BluetoothHandoffConfiguration))]
 [JsonDerivedType(typeof(PlaybackInfo), nameof(PlaybackInfo))]
 [JsonDerivedType(typeof(RequestApplicationList), nameof(RequestApplicationList))]
 [JsonDerivedType(typeof(RingerModeState), nameof(RingerModeState))]
@@ -69,6 +76,85 @@ public class BluetoothPairingResult : SocketMessage
     public string? DeviceName { get; set; }
 }
 
+public class BluetoothDeviceCatalogRequest : SocketMessage
+{
+    public required string RequestId { get; set; }
+}
+
+public class BluetoothDeviceCatalog : SocketMessage
+{
+    public required string RequestId { get; set; }
+    public bool ControllerAvailable { get; set; }
+    public bool RadioEnabled { get; set; }
+    public bool SupportsPerDeviceControl { get; set; }
+    public List<BluetoothAudioDevice> Devices { get; set; } = [];
+    public string? ErrorCode { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class BluetoothAudioDevice
+{
+    public required string DeviceKey { get; set; }
+    public required string DisplayName { get; set; }
+    public bool IsConnected { get; set; }
+}
+
+public class BluetoothHandoffRequest : SocketMessage
+{
+    public required string OperationId { get; set; }
+    public required string HeadsetId { get; set; }
+    public required string TargetEndpointId { get; set; }
+}
+
+public class BluetoothHandoffCommand : SocketMessage
+{
+    public required string OperationId { get; set; }
+    public required string Action { get; set; }
+    public string? DeviceKey { get; set; }
+    public bool? Enabled { get; set; }
+}
+
+public class BluetoothHandoffResult : SocketMessage
+{
+    public required string OperationId { get; set; }
+    public required string Action { get; set; }
+    public bool Success { get; set; }
+    public bool? RadioEnabled { get; set; }
+    public bool? DeviceConnected { get; set; }
+    public string? ErrorCode { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class BluetoothHandoffState : SocketMessage
+{
+    public required string OperationId { get; set; }
+    public required string HeadsetId { get; set; }
+    public required string Status { get; set; }
+    public string? SourceEndpointId { get; set; }
+    public required string TargetEndpointId { get; set; }
+    public string? ActiveEndpointId { get; set; }
+    public string? Message { get; set; }
+}
+
+public class BluetoothHandoffConfiguration : SocketMessage
+{
+    public List<BluetoothHeadsetDescriptor> Headsets { get; set; } = [];
+    public List<BluetoothEndpointDescriptor> Endpoints { get; set; } = [];
+}
+
+public class BluetoothHeadsetDescriptor
+{
+    public required string Id { get; set; }
+    public required string DisplayName { get; set; }
+    public string? ActiveEndpointId { get; set; }
+}
+
+public class BluetoothEndpointDescriptor
+{
+    public required string Id { get; set; }
+    public required string DisplayName { get; set; }
+}
+
 public class UdpBroadcast : SocketMessage
 {
     public int Port { get; set; }
@@ -85,6 +171,8 @@ public class DeviceInfo : SocketMessage
     public string? Avatar { get; set; } = null;
 
     public List<PhoneNumber> PhoneNumbers { get; set; } = [];
+
+    public List<string> Capabilities { get; set; } = [];
 }
 
 public class BatteryState : SocketMessage
@@ -294,6 +382,10 @@ public class ClipboardInfo : SocketMessage
     public required string ClipboardType { get; set; }
 
     public required string Content { get; set; }
+
+    public string? EventId { get; set; }
+
+    public string? OriginDeviceId { get; set; }
 }
 
 public class PlaybackInfo : SocketMessage

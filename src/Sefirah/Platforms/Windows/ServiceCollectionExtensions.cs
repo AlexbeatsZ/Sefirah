@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SyncProviderWorker>();
         services.AddSingleton<IPhoneLineService, PhoneLineService>();
         services.AddSingleton<BluetoothRadioManager>();
+        services.AddSingleton<ILocalBluetoothController, LocalBluetoothController>();
         services.AddSingleton<IBluetoothPairingService, BluetoothPairingService>();
         services.AddSingleton<BluetoothPairingService>(sp => (BluetoothPairingService)sp.GetRequiredService<IBluetoothPairingService>());
         return services;
