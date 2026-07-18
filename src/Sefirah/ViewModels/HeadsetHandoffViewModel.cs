@@ -43,36 +43,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         try
         {
             await RefreshEndpointsAsync();
-            var catalogs = new List<(HeadsetEndpointOption Endpoint, BluetoothDeviceCatalog Catalog)>();
-            foreach (var endpoint in Endpoints)
-            {
-                catalogs.Add((endpoint, await handoffService.GetCatalogAsync(endpoint.Id)));
-            }
-
-            var grouped = catalogs
-                .SelectMany(item => item.Catalog.Devices.Select(device => (item.Endpoint, Device: device)))
-                .GroupBy(item => item.Device.DisplayName.Trim(), StringComparer.OrdinalIgnoreCase)
-                .Where(group => group.Select(item => item.Endpoint.Id).Distinct().Count() >= 2)
-                .ToList();
-
-            var configurations = handoffService.Configurations.ToList();
-            foreach (var group in grouped)
-            {
-                var configuration = configurations.FirstOrDefault(h =>
-                    h.DisplayName.Equals(group.Key, StringComparison.OrdinalIgnoreCase));
-                if (configuration is null)
-                {
-                    configuration = new HeadsetConfiguration { DisplayName = group.Key };
-                    configurations.Add(configuration);
-                }
-                foreach (var item in group)
-                {
-                    configuration.EndpointDeviceKeys[item.Endpoint.Id] = item.Device.DeviceKey;
-                    if (item.Device.IsConnected) configuration.ActiveEndpointId = item.Endpoint.Id;
-                }
-            }
-
-            handoffService.SaveConfigurations(configurations);
+            await handoffService.DiscoverAsync();
             ReloadConfigurations();
             StatusText = Headsets.Count == 0
                 ? "No headset paired with at least two endpoints was found."

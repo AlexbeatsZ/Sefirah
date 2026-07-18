@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Renci.SshNet;
 using Sefirah.Platforms.Windows.Bluetooth;
 using Sefirah.Platforms.Windows.Calling;
+using Sefirah.Platforms.Windows.Control;
 using Sefirah.Platforms.Windows.Features;
 using Sefirah.Platforms.Windows.RemoteStorage.Abstractions;
 using Sefirah.Platforms.Windows.RemoteStorage.Configuration;
@@ -41,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddCommonClassObjects();
         services.AddSingleton<ShellRegistrar>();
         services.AddHostedService<ShellWorker>();
+        services.AddHostedService<ControlApiWorker>();
 
         services.AddSingleton<SyncProviderWorker>();
         services.AddSingleton<IPhoneLineService, PhoneLineService>();

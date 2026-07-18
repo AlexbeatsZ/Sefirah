@@ -93,11 +93,71 @@ public sealed class HeadsetHandoffService(
         }
     }
 
+    public async Task<BluetoothDiscoveryReport> DiscoverAsync(CancellationToken cancellationToken = default)
+    {
+        var local = await deviceManager.GetLocalDeviceAsync();
+        var endpoints = new List<BluetoothEndpointDescriptor>
+        {
+            new() { Id = local.DeviceId, DisplayName = $"{local.DeviceName} (this PC)" },
+        };
+        endpoints.AddRange(deviceManager.PairedDevices
+            .Where(device => device.IsConnected && device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
+            .Select(device => new BluetoothEndpointDescriptor { Id = device.Id, DisplayName = device.Name }));
+
+        var endpointCatalogs = new List<BluetoothEndpointCatalog>();
+        foreach (var endpoint in endpoints)
+        {
+            endpointCatalogs.Add(new BluetoothEndpointCatalog
+            {
+                EndpointId = endpoint.Id,
+                DisplayName = endpoint.DisplayName,
+                Catalog = await GetCatalogAsync(endpoint.Id, cancellationToken),
+            });
+        }
+
+        var grouped = endpointCatalogs
+            .SelectMany(item => item.Catalog.Devices.Select(device => (Endpoint: item, Device: device)))
+            .GroupBy(item => item.Device.DisplayName.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Select(item => item.Endpoint.EndpointId).Distinct().Count() >= 2)
+            .ToList();
+
+        var configurations = Configurations.ToList();
+        foreach (var group in grouped)
+        {
+            var configuration = configurations.FirstOrDefault(headset =>
+                headset.DisplayName.Equals(group.Key, StringComparison.OrdinalIgnoreCase));
+            if (configuration is null)
+            {
+                configuration = new HeadsetConfiguration { DisplayName = group.Key };
+                configurations.Add(configuration);
+            }
+
+            foreach (var item in group)
+            {
+                configuration.EndpointDeviceKeys[item.Endpoint.EndpointId] = item.Device.DeviceKey;
+                if (item.Device.IsConnected) configuration.ActiveEndpointId = item.Endpoint.EndpointId;
+            }
+        }
+
+        SaveConfigurations(configurations);
+        return new BluetoothDiscoveryReport
+        {
+            Endpoints = endpointCatalogs,
+            Headsets = configurations,
+        };
+    }
+
     public Task<BluetoothHandoffState> HandoffAsync(
         string headsetId,
         string targetEndpointId,
         CancellationToken cancellationToken = default) =>
         HandoffCoreAsync(Guid.NewGuid().ToString(), headsetId, targetEndpointId, cancellationToken);
+
+    public Task<BluetoothHandoffResult> ExecuteCommandAsync(
+        string endpointId,
+        BluetoothHandoffCommand command,
+        CancellationToken cancellationToken = default) =>
+        ExecuteEndpointCommandAsync(endpointId, command, cancellationToken);
 
     public void HandleCatalog(PairedDevice sourceDevice, BluetoothDeviceCatalog catalog)
     {

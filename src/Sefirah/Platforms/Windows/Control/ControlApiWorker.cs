@@ -1,0 +1,165 @@
+using System.IO.Pipes;
+using System.Text;
+using Sefirah.Data.Models;
+
+namespace Sefirah.Platforms.Windows.Control;
+
+public sealed class ControlApiWorker(
+    IHeadsetHandoffService handoffService,
+    IDeviceManager deviceManager,
+    ILogger<ControlApiWorker> logger) : BackgroundService
+{
+    public const string PipeName = "Sefirah.Control.v1";
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await using var pipe = new NamedPipeServerStream(
+                    PipeName,
+                    PipeDirection.InOut,
+                    1,
+                    PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                await pipe.WaitForConnectionAsync(stoppingToken);
+                await HandleConnectionAsync(pipe, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Sefirah control API request failed");
+            }
+        }
+    }
+
+    private async Task HandleConnectionAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true)
+        {
+            AutoFlush = true,
+        };
+
+        var line = await reader.ReadLineAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(line)) return;
+
+        ControlResponse response;
+        try
+        {
+            var request = JsonSerializer.Deserialize<ControlRequest>(line, JsonOptions)
+                ?? throw new InvalidOperationException("Request JSON is empty");
+            response = new ControlResponse(true, await DispatchAsync(request, cancellationToken), null);
+        }
+        catch (Exception ex)
+        {
+            response = new ControlResponse(false, null, new ControlError("command_failed", ex.Message));
+        }
+
+        await writer.WriteLineAsync(JsonSerializer.Serialize(response, JsonOptions));
+    }
+
+    private async Task<object?> DispatchAsync(ControlRequest request, CancellationToken cancellationToken)
+    {
+        return request.Command switch
+        {
+            "status" or "bluetooth.endpoints" => await GetStatusAsync(),
+            "bluetooth.catalog" => await GetCatalogAsync(request.Arguments, cancellationToken),
+            "bluetooth.discover" => await handoffService.DiscoverAsync(cancellationToken),
+            "bluetooth.config" => handoffService.Configurations,
+            "bluetooth.handoff" => await HandoffAsync(request.Arguments, cancellationToken),
+            "bluetooth.command" => await ExecuteBluetoothCommandAsync(request.Arguments, cancellationToken),
+            _ => throw new InvalidOperationException($"Unknown command: {request.Command}"),
+        };
+    }
+
+    private async Task<object> GetStatusAsync()
+    {
+        var local = await deviceManager.GetLocalDeviceAsync();
+        return new
+        {
+            local = new { id = local.DeviceId, name = local.DeviceName, connected = true },
+            remotes = deviceManager.PairedDevices.Select(device => new
+            {
+                id = device.Id,
+                name = device.Name,
+                connected = device.IsConnected,
+                capabilities = device.Capabilities.Order().ToArray(),
+            }).ToArray(),
+        };
+    }
+
+    private async Task<object> GetCatalogAsync(JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
+        return new
+        {
+            endpoint = new { id = endpoint.Id, name = endpoint.Name },
+            catalog = await handoffService.GetCatalogAsync(endpoint.Id, cancellationToken),
+        };
+    }
+
+    private async Task<object> HandoffAsync(JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var headsetId = GetRequiredString(arguments, "headsetId");
+        var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
+        return await handoffService.HandoffAsync(headsetId, endpoint.Id, cancellationToken);
+    }
+
+    private async Task<object> ExecuteBluetoothCommandAsync(JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
+        var action = GetRequiredString(arguments, "action");
+        var command = new BluetoothHandoffCommand
+        {
+            OperationId = Guid.NewGuid().ToString(),
+            Action = action,
+            DeviceKey = arguments.TryGetProperty("deviceKey", out var key) ? key.GetString() : null,
+            Enabled = arguments.TryGetProperty("enabled", out var enabled) ? enabled.GetBoolean() : null,
+        };
+        return await handoffService.ExecuteCommandAsync(endpoint.Id, command, cancellationToken);
+    }
+
+    private async Task<(string Id, string Name)> ResolveEndpointAsync(string value)
+    {
+        var local = await deviceManager.GetLocalDeviceAsync();
+        if (value.Equals("local", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("pc", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(local.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(local.DeviceName, StringComparison.OrdinalIgnoreCase))
+        {
+            return (local.DeviceId, local.DeviceName);
+        }
+
+        var connected = deviceManager.PairedDevices.Where(device => device.IsConnected).ToList();
+        if (value.Equals("phone", StringComparison.OrdinalIgnoreCase) && connected.Count == 1)
+        {
+            return (connected[0].Id, connected[0].Name);
+        }
+
+        var remote = deviceManager.PairedDevices.FirstOrDefault(device =>
+            device.Id.Equals(value, StringComparison.OrdinalIgnoreCase) ||
+            device.Name.Equals(value, StringComparison.OrdinalIgnoreCase));
+        return remote is null
+            ? throw new InvalidOperationException($"Bluetooth endpoint was not found: {value}")
+            : (remote.Id, remote.Name);
+    }
+
+    private static string GetRequiredString(JsonElement arguments, string name) =>
+        arguments.TryGetProperty(name, out var value) && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()!
+            : throw new InvalidOperationException($"Missing argument: {name}");
+
+    private sealed record ControlRequest(string Command, JsonElement Arguments);
+    private sealed record ControlResponse(bool Ok, object? Result, ControlError? Error);
+    private sealed record ControlError(string Code, string Message);
+}

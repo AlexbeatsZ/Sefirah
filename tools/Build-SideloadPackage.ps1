@@ -155,6 +155,21 @@ Copy-Item -LiteralPath (Join-Path $root 'packaging\Install.cmd') -Destination $s
 Copy-Item -LiteralPath (Join-Path $root 'packaging\README.txt') -Destination $staging
 Copy-Item -LiteralPath (Join-Path $root 'tools\Migrate-OfficialData.ps1') -Destination $staging
 
+$cliProject = Join-Path $root 'src\Sefirah.Cli\Sefirah.Cli.csproj'
+$cliPublishDirectory = Join-Path $artifactDirectory 'cli'
+if (Test-Path -LiteralPath $cliPublishDirectory) {
+    Remove-Item -LiteralPath $cliPublishDirectory -Recurse -Force
+}
+& dotnet publish $cliProject -c Release --self-contained false -o $cliPublishDirectory
+if ($LASTEXITCODE -ne 0) {
+    throw "sefirahctl publish failed with exit code $LASTEXITCODE"
+}
+$cliPath = Join-Path $cliPublishDirectory 'sefirahctl.exe'
+if (-not (Test-Path -LiteralPath $cliPath -PathType Leaf)) {
+    throw "sefirahctl.exe was not found at $cliPath"
+}
+Copy-Item -LiteralPath $cliPath -Destination (Join-Path $staging 'sefirahctl.exe') -Force
+
 $zipPath = "$staging.zip"
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
@@ -204,4 +219,5 @@ Write-Host "Installer ZIP: $zipPath"
 Write-Host "ZIP SHA256: $($zipHash.Hash)"
 Write-Host "Installer EXE: $exePath"
 Write-Host "EXE SHA256: $($exeHash.Hash)"
+Write-Host "CLI: $cliPath"
 Write-Host "Back up $signingDirectory before deleting or moving the project."
