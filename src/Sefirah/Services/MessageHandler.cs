@@ -120,6 +120,18 @@ public class MessageHandler(
                     headsetHandoffService.HandleRequest(device, handoffRequest);
                     break;
 
+                case BluetoothDisconnectRequest disconnectRequest:
+                    headsetHandoffService.HandleDisconnectRequest(device, disconnectRequest);
+                    break;
+
+                case BluetoothHandoffRefreshRequest refreshRequest:
+                    headsetHandoffService.HandleRefreshRequest(device, refreshRequest);
+                    break;
+
+                case BluetoothHeadsetVisibilityRequest visibilityRequest:
+                    headsetHandoffService.HandleVisibilityRequest(device, visibilityRequest);
+                    break;
+
                 case Disconnect:
                     sessionManager.DisconnectDevice(device, true);
                     break;

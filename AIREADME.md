@@ -19,6 +19,10 @@
 - Windows 3.0.0.2 exposes a current-user-only named-pipe control API (`Sefirah.Control.v1`) and the `sefirahctl` client. It supports status, endpoint/catalog queries, discovery, saved headset configuration, direct endpoint commands, and coordinated handoff without UI automation.
 - Updating the fork package from 3.0.0.1 to 3.0.0.2 preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte. The pre-update copy is under `%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-control-api-3.0.0.2\LocalState`.
 - `sefirahctl bluetooth discover` was physically validated against the installed Windows app and Redmi K70: both QCY headsets were matched across PC and phone, and the active endpoint was reported correctly.
+- Windows 3.0.0.5 presents Bluetooth devices in three selected-endpoint sections, supports per-headset visibility, and exposes matching `view`, `disconnect`, and `visibility` CLI commands for deterministic testing.
+- Windows cannot directly connect or disconnect a single paired audio device through the public API. Handoff uses a short target-radio off/on cycle only when per-device connection control is unavailable; direct Disconnect refuses to disable the whole PC radio.
+- Updating 3.0.0.2 through 3.0.0.5 preserved the fork package identity and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte at every installation boundary. Backups are under `%LOCALAPPDATA%\Temp\.agents\Sefirah`.
+- QCY AilyBuds Lite was physically validated PC to Redmi K70 and Redmi K70 to PC. Both radios returned enabled, the final connection was restored to the PC, and both desktop and Android three-section UIs were visually verified.
 
 # Task Board
 
@@ -30,6 +34,8 @@
 - [x] Add a reproducible signed x64 MSIX Bundle installer with UAC certificate trust, automatic first-run Store data migration, and an in-project artifact/signing layout.
 - [x] Add and validate a directly runnable, Authenticode-signed x64 EXE installer that performs a clean fork install without Store-data migration.
 - [x] Add a current-user-only command-line control API and validate status, Bluetooth catalogs, discovery, and saved configuration end to end.
+- [x] Redesign the Windows Bluetooth card around the selected endpoint with three sections, expandable actions, and visibility settings.
+- [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.

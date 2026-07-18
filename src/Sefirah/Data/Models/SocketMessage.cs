@@ -31,6 +31,9 @@ namespace Sefirah.Data.Models;
 [JsonDerivedType(typeof(BluetoothDeviceCatalogRequest), nameof(BluetoothDeviceCatalogRequest))]
 [JsonDerivedType(typeof(BluetoothDeviceCatalog), nameof(BluetoothDeviceCatalog))]
 [JsonDerivedType(typeof(BluetoothHandoffRequest), nameof(BluetoothHandoffRequest))]
+[JsonDerivedType(typeof(BluetoothDisconnectRequest), nameof(BluetoothDisconnectRequest))]
+[JsonDerivedType(typeof(BluetoothHandoffRefreshRequest), nameof(BluetoothHandoffRefreshRequest))]
+[JsonDerivedType(typeof(BluetoothHeadsetVisibilityRequest), nameof(BluetoothHeadsetVisibilityRequest))]
 [JsonDerivedType(typeof(BluetoothHandoffCommand), nameof(BluetoothHandoffCommand))]
 [JsonDerivedType(typeof(BluetoothHandoffResult), nameof(BluetoothHandoffResult))]
 [JsonDerivedType(typeof(BluetoothHandoffState), nameof(BluetoothHandoffState))]
@@ -106,6 +109,21 @@ public class BluetoothHandoffRequest : SocketMessage
     public required string TargetEndpointId { get; set; }
 }
 
+public class BluetoothDisconnectRequest : SocketMessage
+{
+    public required string OperationId { get; set; }
+    public required string HeadsetId { get; set; }
+    public required string EndpointId { get; set; }
+}
+
+public class BluetoothHandoffRefreshRequest : SocketMessage;
+
+public class BluetoothHeadsetVisibilityRequest : SocketMessage
+{
+    public required string HeadsetId { get; set; }
+    public bool IsVisible { get; set; }
+}
+
 public class BluetoothHandoffCommand : SocketMessage
 {
     public required string OperationId { get; set; }
@@ -146,6 +164,8 @@ public class BluetoothHeadsetDescriptor
 {
     public required string Id { get; set; }
     public required string DisplayName { get; set; }
+    public bool IsVisible { get; set; } = true;
+    public List<string> EndpointIds { get; set; } = [];
     public string? ActiveEndpointId { get; set; }
 }
 

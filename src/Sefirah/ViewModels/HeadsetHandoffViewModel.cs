@@ -8,46 +8,51 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private readonly IDeviceManager deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
     private bool initialized;
 
-    public ObservableCollection<HeadsetConfiguration> Headsets { get; } = [];
     public ObservableCollection<HeadsetEndpointOption> Endpoints { get; } = [];
+    public ObservableCollection<HeadsetDeviceItem> SelectedConnectedDevices { get; } = [];
+    public ObservableCollection<HeadsetDeviceItem> OtherConnectedDevices { get; } = [];
+    public ObservableCollection<HeadsetDeviceItem> SavedDisconnectedDevices { get; } = [];
+    public ObservableCollection<HeadsetVisibilityOption> VisibilityOptions { get; } = [];
+
+    public string? SelectedEndpointId { get; private set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SwitchCommand))]
-    public partial HeadsetConfiguration? SelectedHeadset { get; set; }
+    public partial string SelectedEndpointName { get; set; } = "Selected device";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SwitchCommand))]
-    public partial HeadsetEndpointOption? SelectedEndpoint { get; set; }
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SwitchCommand))]
-    [NotifyCanExecuteChangedFor(nameof(DiscoverCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    public partial string StatusText { get; set; } = "Discover paired headsets to begin.";
+    public partial string StatusText { get; set; } = "Refreshing Bluetooth devices…";
 
     public async Task InitializeAsync()
     {
         if (initialized) return;
         initialized = true;
         handoffService.StateChanged += OnStateChanged;
-        await RefreshEndpointsAsync();
-        ReloadConfigurations();
+        handoffService.ConfigurationsChanged += OnConfigurationsChanged;
+        deviceManager.ActiveDeviceChanged += OnActiveDeviceChanged;
+        await RefreshAsync();
     }
 
-    [RelayCommand(CanExecute = nameof(CanDiscover))]
-    private async Task Discover()
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
+    public async Task RefreshAsync()
     {
+        if (IsBusy) return;
         IsBusy = true;
         try
         {
             await RefreshEndpointsAsync();
-            await handoffService.DiscoverAsync();
-            ReloadConfigurations();
-            StatusText = Headsets.Count == 0
-                ? "No headset paired with at least two endpoints was found."
-                : $"Found {Headsets.Count} headset(s).";
+            var report = await handoffService.DiscoverAsync();
+            ReloadSections(report.Headsets);
+            StatusText = report.Headsets.Count == 0
+                ? "No saved Bluetooth audio devices were found."
+                : $"Updated {report.Headsets.Count} saved Bluetooth device(s).";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Bluetooth refresh failed: {ex.Message}";
         }
         finally
         {
@@ -55,15 +60,15 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanSwitch))]
-    private async Task Switch()
+    public async Task DisconnectAsync(HeadsetDeviceItem item)
     {
-        if (SelectedHeadset is null || SelectedEndpoint is null) return;
+        if (IsBusy) return;
         IsBusy = true;
         try
         {
-            await handoffService.HandoffAsync(SelectedHeadset.Id, SelectedEndpoint.Id);
-            ReloadConfigurations();
+            await handoffService.DisconnectAsync(item.HeadsetId, item.SourceEndpointId);
+            await RefreshEndpointsAsync();
+            ReloadSections(handoffService.Configurations);
         }
         finally
         {
@@ -71,30 +76,106 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         }
     }
 
-    private bool CanDiscover() => !IsBusy;
+    public async Task SwitchAsync(HeadsetDeviceItem item, string targetEndpointId)
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            await handoffService.HandoffAsync(item.HeadsetId, targetEndpointId);
+            await RefreshEndpointsAsync();
+            ReloadSections(handoffService.Configurations);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
-    private bool CanSwitch() => !IsBusy && SelectedHeadset is not null && SelectedEndpoint is not null;
+    public void SetVisibility(HeadsetVisibilityOption option, bool isVisible)
+    {
+        var configurations = handoffService.Configurations.ToList();
+        var headset = configurations.FirstOrDefault(item => item.Id == option.HeadsetId);
+        if (headset is null) return;
+        headset.IsVisible = isVisible;
+        handoffService.SaveConfigurations(configurations);
+        ReloadSections(configurations);
+    }
+
+    public IReadOnlyList<HeadsetEndpointOption> GetSwitchTargets(HeadsetDeviceItem item) =>
+        Endpoints.Where(endpoint =>
+                endpoint.Id != item.SourceEndpointId && item.EndpointIds.Contains(endpoint.Id))
+            .ToList();
+
+    private bool CanRefresh() => !IsBusy;
 
     private async Task RefreshEndpointsAsync()
     {
         var local = await deviceManager.GetLocalDeviceAsync();
-        var selectedEndpointId = SelectedEndpoint?.Id;
         Endpoints.Clear();
         Endpoints.Add(new HeadsetEndpointOption(local.DeviceId, $"{local.DeviceName} (this PC)"));
-        foreach (var device in deviceManager.PairedDevices.Where(d =>
-                     d.IsConnected && d.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1)))
+        foreach (var device in deviceManager.PairedDevices.Where(item =>
+                     item.IsConnected && item.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1)))
         {
             Endpoints.Add(new HeadsetEndpointOption(device.Id, device.Name));
         }
-        SelectedEndpoint = Endpoints.FirstOrDefault(e => e.Id == selectedEndpointId) ?? Endpoints.FirstOrDefault();
+
+        var activeDevice = deviceManager.ActiveDevice;
+        var selected = activeDevice is not null && activeDevice.IsConnected &&
+                       activeDevice.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1)
+            ? Endpoints.FirstOrDefault(endpoint => endpoint.Id == activeDevice.Id)
+            : Endpoints.FirstOrDefault();
+        SelectedEndpointId = selected?.Id;
+        SelectedEndpointName = selected?.DisplayName ?? "No Bluetooth endpoint selected";
     }
 
-    private void ReloadConfigurations()
+    private void ReloadSections(IEnumerable<HeadsetConfiguration> configurations)
     {
-        var selectedHeadsetId = SelectedHeadset?.Id;
-        Headsets.Clear();
-        foreach (var headset in handoffService.Configurations) Headsets.Add(headset);
-        SelectedHeadset = Headsets.FirstOrDefault(h => h.Id == selectedHeadsetId) ?? Headsets.FirstOrDefault();
+        SelectedConnectedDevices.Clear();
+        OtherConnectedDevices.Clear();
+        SavedDisconnectedDevices.Clear();
+        VisibilityOptions.Clear();
+
+        var endpointsById = Endpoints.ToDictionary(item => item.Id, item => item.DisplayName);
+        foreach (var headset in configurations.OrderBy(item => item.DisplayName))
+        {
+            VisibilityOptions.Add(new HeadsetVisibilityOption(headset.Id, headset.DisplayName, headset.IsVisible));
+            if (!headset.IsVisible || SelectedEndpointId is null) continue;
+
+            if (headset.ActiveEndpointId == SelectedEndpointId)
+            {
+                SelectedConnectedDevices.Add(CreateItem(headset, SelectedEndpointId, SelectedEndpointName,
+                    HeadsetDeviceSection.SelectedConnected));
+            }
+            else if (!string.IsNullOrEmpty(headset.ActiveEndpointId))
+            {
+                var endpointName = endpointsById.GetValueOrDefault(headset.ActiveEndpointId, "Another device");
+                OtherConnectedDevices.Add(CreateItem(headset, headset.ActiveEndpointId, endpointName,
+                    HeadsetDeviceSection.OtherConnected));
+            }
+            else if (headset.EndpointDeviceKeys.ContainsKey(SelectedEndpointId))
+            {
+                SavedDisconnectedDevices.Add(CreateItem(headset, SelectedEndpointId, SelectedEndpointName,
+                    HeadsetDeviceSection.SavedDisconnected));
+            }
+        }
+    }
+
+    private static HeadsetDeviceItem CreateItem(
+        HeadsetConfiguration headset,
+        string endpointId,
+        string endpointName,
+        HeadsetDeviceSection section) => new(
+        headset.Id,
+        headset.DisplayName,
+        endpointId,
+        endpointName,
+        headset.EndpointDeviceKeys.Keys.ToList(),
+        section);
+
+    private async void OnActiveDeviceChanged(object? sender, PairedDevice? device)
+    {
+        await RefreshAsync();
     }
 
     private void OnStateChanged(object? sender, BluetoothHandoffState state)
@@ -103,14 +184,54 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         {
             StatusText = state.Message ?? state.Status switch
             {
-                "disconnecting" => "Disconnecting the previous endpoint…",
-                "connecting" => "Connecting the target endpoint…",
-                "completed" => "Headset switched successfully.",
-                "failed" => "Headset switch failed.",
+                "disconnecting" => "Disconnecting Bluetooth device…",
+                "connecting" => "Connecting Bluetooth device…",
+                "completed" => "Bluetooth operation completed.",
+                "failed" => "Bluetooth operation failed.",
                 _ => state.Status,
             };
         });
     }
+
+    private void OnConfigurationsChanged(object? sender, EventArgs eventArgs)
+    {
+        App.MainWindow.DispatcherQueue.TryEnqueue(() => ReloadSections(handoffService.Configurations));
+    }
+}
+
+public enum HeadsetDeviceSection
+{
+    SelectedConnected,
+    OtherConnected,
+    SavedDisconnected,
 }
 
 public sealed partial record HeadsetEndpointOption(string Id, string DisplayName);
+
+public sealed record HeadsetDeviceItem(
+    string HeadsetId,
+    string DisplayName,
+    string SourceEndpointId,
+    string SourceEndpointName,
+    IReadOnlyList<string> EndpointIds,
+    HeadsetDeviceSection Section)
+{
+    public string ConnectionText => Section switch
+    {
+        HeadsetDeviceSection.SelectedConnected => $"Connected to {SourceEndpointName}",
+        HeadsetDeviceSection.OtherConnected => $"Connected to {SourceEndpointName}",
+        _ => $"Saved on {SourceEndpointName}",
+    };
+}
+
+public sealed partial class HeadsetVisibilityOption(
+    string headsetId,
+    string displayName,
+    bool isVisible) : ObservableObject
+{
+    public string HeadsetId { get; } = headsetId;
+    public string DisplayName { get; } = displayName;
+
+    [ObservableProperty]
+    public partial bool IsVisible { get; set; } = isVisible;
+}

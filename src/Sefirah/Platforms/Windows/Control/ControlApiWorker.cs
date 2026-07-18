@@ -76,7 +76,10 @@ public sealed class ControlApiWorker(
             "bluetooth.catalog" => await GetCatalogAsync(request.Arguments, cancellationToken),
             "bluetooth.discover" => await handoffService.DiscoverAsync(cancellationToken),
             "bluetooth.config" => handoffService.Configurations,
+            "bluetooth.view" => await GetBluetoothViewAsync(request.Arguments),
             "bluetooth.handoff" => await HandoffAsync(request.Arguments, cancellationToken),
+            "bluetooth.disconnect" => await DisconnectAsync(request.Arguments, cancellationToken),
+            "bluetooth.visibility" => SetVisibility(request.Arguments),
             "bluetooth.command" => await ExecuteBluetoothCommandAsync(request.Arguments, cancellationToken),
             _ => throw new InvalidOperationException($"Unknown command: {request.Command}"),
         };
@@ -113,6 +116,50 @@ public sealed class ControlApiWorker(
         var headsetId = GetRequiredString(arguments, "headsetId");
         var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
         return await handoffService.HandoffAsync(headsetId, endpoint.Id, cancellationToken);
+    }
+
+    private async Task<object> DisconnectAsync(JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var headsetId = GetRequiredString(arguments, "headsetId");
+        var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
+        return await handoffService.DisconnectAsync(headsetId, endpoint.Id, cancellationToken);
+    }
+
+    private object SetVisibility(JsonElement arguments)
+    {
+        var headsetId = GetRequiredString(arguments, "headsetId");
+        if (!arguments.TryGetProperty("isVisible", out var visibility))
+        {
+            throw new InvalidOperationException("Missing argument: isVisible");
+        }
+
+        var configurations = handoffService.Configurations.ToList();
+        var headset = configurations.FirstOrDefault(item => item.Id == headsetId)
+            ?? throw new InvalidOperationException($"Bluetooth headset was not found: {headsetId}");
+        headset.IsVisible = visibility.GetBoolean();
+        handoffService.SaveConfigurations(configurations);
+        return headset;
+    }
+
+    private async Task<object> GetBluetoothViewAsync(JsonElement arguments)
+    {
+        var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
+        var visible = handoffService.Configurations.Where(item => item.IsVisible).ToList();
+        return new
+        {
+            selectedEndpoint = new { id = endpoint.Id, name = endpoint.Name },
+            selectedConnected = visible.Where(item => item.ActiveEndpointId == endpoint.Id).ToArray(),
+            otherConnected = visible.Where(item =>
+                item.ActiveEndpointId is not null && item.ActiveEndpointId != endpoint.Id).ToArray(),
+            savedDisconnected = visible.Where(item =>
+                item.ActiveEndpointId is null && item.EndpointDeviceKeys.ContainsKey(endpoint.Id)).ToArray(),
+            visibility = handoffService.Configurations.Select(item => new
+            {
+                headsetId = item.Id,
+                item.DisplayName,
+                item.IsVisible,
+            }).ToArray(),
+        };
     }
 
     private async Task<object> ExecuteBluetoothCommandAsync(JsonElement arguments, CancellationToken cancellationToken)

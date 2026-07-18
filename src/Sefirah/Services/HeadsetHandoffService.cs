@@ -19,10 +19,12 @@ public sealed class HeadsetHandoffService(
     public BluetoothHandoffState? CurrentState { get; private set; }
 
     public event EventHandler<BluetoothHandoffState>? StateChanged;
+    public event EventHandler? ConfigurationsChanged;
 
     public void SaveConfigurations(IEnumerable<HeadsetConfiguration> configurations)
     {
         userSettingsService.GeneralSettingsService.Headsets = configurations.ToList();
+        ConfigurationsChanged?.Invoke(this, EventArgs.Empty);
         _ = SendConfigurationAsync();
     }
 
@@ -35,6 +37,8 @@ public sealed class HeadsetHandoffService(
             {
                 Id = h.Id,
                 DisplayName = h.DisplayName,
+                IsVisible = h.IsVisible,
+                EndpointIds = h.EndpointDeviceKeys.Keys.ToList(),
                 ActiveEndpointId = h.ActiveEndpointId,
             }).ToList(),
             Endpoints =
@@ -122,6 +126,10 @@ public sealed class HeadsetHandoffService(
             .ToList();
 
         var configurations = Configurations.ToList();
+        foreach (var configuration in configurations)
+        {
+            configuration.ActiveEndpointId = null;
+        }
         foreach (var group in grouped)
         {
             var configuration = configurations.FirstOrDefault(headset =>
@@ -139,6 +147,14 @@ public sealed class HeadsetHandoffService(
             }
         }
 
+        foreach (var configuration in configurations)
+        {
+            var connectedEndpoint = endpointCatalogs.FirstOrDefault(endpoint =>
+                configuration.EndpointDeviceKeys.TryGetValue(endpoint.EndpointId, out var deviceKey) &&
+                endpoint.Catalog.Devices.Any(device => device.DeviceKey == deviceKey && device.IsConnected));
+            configuration.ActiveEndpointId = connectedEndpoint?.EndpointId;
+        }
+
         SaveConfigurations(configurations);
         return new BluetoothDiscoveryReport
         {
@@ -152,6 +168,12 @@ public sealed class HeadsetHandoffService(
         string targetEndpointId,
         CancellationToken cancellationToken = default) =>
         HandoffCoreAsync(Guid.NewGuid().ToString(), headsetId, targetEndpointId, cancellationToken);
+
+    public Task<BluetoothHandoffState> DisconnectAsync(
+        string headsetId,
+        string endpointId,
+        CancellationToken cancellationToken = default) =>
+        DisconnectCoreAsync(Guid.NewGuid().ToString(), headsetId, endpointId, cancellationToken);
 
     public Task<BluetoothHandoffResult> ExecuteCommandAsync(
         string endpointId,
@@ -189,6 +211,87 @@ public sealed class HeadsetHandoffService(
         catch (Exception ex)
         {
             logger.Error("Bluetooth handoff request failed", ex);
+        }
+    }
+
+    public async void HandleDisconnectRequest(PairedDevice sourceDevice, BluetoothDisconnectRequest request)
+    {
+        try
+        {
+            await DisconnectCoreAsync(
+                request.OperationId,
+                request.HeadsetId,
+                request.EndpointId,
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.Error("Bluetooth disconnect request failed", ex);
+        }
+    }
+
+    public async void HandleRefreshRequest(PairedDevice sourceDevice, BluetoothHandoffRefreshRequest request)
+    {
+        try
+        {
+            await DiscoverAsync();
+            await SendConfigurationAsync(sourceDevice);
+        }
+        catch (Exception ex)
+        {
+            logger.Error("Bluetooth refresh request failed", ex);
+        }
+    }
+
+    public async void HandleVisibilityRequest(PairedDevice sourceDevice, BluetoothHeadsetVisibilityRequest request)
+    {
+        var configurations = Configurations.ToList();
+        var headset = configurations.FirstOrDefault(item => item.Id == request.HeadsetId);
+        if (headset is null) return;
+        headset.IsVisible = request.IsVisible;
+        SaveConfigurations(configurations);
+        await SendConfigurationAsync();
+    }
+
+    private async Task<BluetoothHandoffState> DisconnectCoreAsync(
+        string operationId,
+        string headsetId,
+        string endpointId,
+        CancellationToken cancellationToken)
+    {
+        await operationLock.WaitAsync(cancellationToken);
+        try
+        {
+            var headset = Configurations.FirstOrDefault(item => item.Id == headsetId);
+            if (headset is null || !headset.EndpointDeviceKeys.ContainsKey(endpointId))
+            {
+                return Publish(operationId, headsetId, "failed", endpointId, endpointId, headset?.ActiveEndpointId,
+                    "Bluetooth device is not saved on this endpoint");
+            }
+
+            Publish(operationId, headsetId, "disconnecting", endpointId, endpointId, headset.ActiveEndpointId);
+            if (!await TryPerDeviceActionAsync(operationId, headset, endpointId, "disconnect", cancellationToken))
+            {
+                return Publish(operationId, headsetId, "failed", endpointId, endpointId, headset.ActiveEndpointId,
+                    "This endpoint does not support disconnecting one Bluetooth device");
+            }
+
+            if (headset.ActiveEndpointId == endpointId)
+            {
+                headset.ActiveEndpointId = null;
+                SaveConfigurations(Configurations);
+            }
+            return Publish(operationId, headsetId, "completed", endpointId, endpointId, null,
+                "Bluetooth device disconnected");
+        }
+        catch (Exception ex)
+        {
+            logger.Warn($"Bluetooth disconnect {operationId} failed: {ex}");
+            return Publish(operationId, headsetId, "failed", endpointId, endpointId, null, ex.Message);
+        }
+        finally
+        {
+            operationLock.Release();
         }
     }
 
@@ -238,6 +341,22 @@ public sealed class HeadsetHandoffService(
                 operationId, headset, targetEndpointId, "connect", cancellationToken);
             if (!connectedPerDevice)
             {
+                var targetCatalog = await GetCatalogAsync(targetEndpointId, cancellationToken);
+                if (!targetCatalog.SupportsPerDeviceControl && targetCatalog.RadioEnabled)
+                {
+                    var disable = await ExecuteEndpointCommandAsync(
+                        targetEndpointId,
+                        new BluetoothHandoffCommand
+                        {
+                            OperationId = operationId,
+                            Action = "setRadio",
+                            Enabled = false,
+                        },
+                        cancellationToken);
+                    if (!disable.Success) throw new InvalidOperationException("Failed to cycle Bluetooth on target endpoint");
+                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                }
+
                 var result = await ExecuteEndpointCommandAsync(
                     targetEndpointId,
                     new BluetoothHandoffCommand
