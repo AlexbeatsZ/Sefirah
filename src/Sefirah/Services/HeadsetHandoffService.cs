@@ -43,7 +43,11 @@ public sealed class HeadsetHandoffService(
             }).ToList(),
             Endpoints =
             [
-                new BluetoothEndpointDescriptor { Id = local.DeviceId, DisplayName = $"{local.DeviceName} (PC)" },
+                new BluetoothEndpointDescriptor
+                {
+                    Id = local.DeviceId,
+                    DisplayName = string.Format("BluetoothPc".GetLocalizedResource(), local.DeviceName),
+                },
                 .. deviceManager.PairedDevices.Select(d => new BluetoothEndpointDescriptor
                 {
                     Id = d.Id,
@@ -102,7 +106,11 @@ public sealed class HeadsetHandoffService(
         var local = await deviceManager.GetLocalDeviceAsync();
         var endpoints = new List<BluetoothEndpointDescriptor>
         {
-            new() { Id = local.DeviceId, DisplayName = $"{local.DeviceName} (this PC)" },
+            new()
+            {
+                Id = local.DeviceId,
+                DisplayName = string.Format("BluetoothThisPc".GetLocalizedResource(), local.DeviceName),
+            },
         };
         endpoints.AddRange(deviceManager.PairedDevices
             .Where(device => device.IsConnected && device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))

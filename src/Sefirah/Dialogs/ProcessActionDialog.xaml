@@ -10,7 +10,7 @@
     PrimaryButtonClick="ContentDialog_PrimaryButtonClick"
     PrimaryButtonText="{helpers:ResourceString Name=Save}"
     SecondaryButtonClick="ContentDialog_SecondaryButtonClick"
-    SecondaryButtonText="Cancel"
+    SecondaryButtonText="{helpers:ResourceString Name=Cancel}"
     Style="{ThemeResource DefaultContentDialogStyle}">
 
     <ScrollViewer MaxHeight="500">

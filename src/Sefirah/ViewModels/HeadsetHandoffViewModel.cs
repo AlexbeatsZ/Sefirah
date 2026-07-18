@@ -14,17 +14,18 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     public ObservableCollection<HeadsetDeviceItem> SavedDisconnectedDevices { get; } = [];
     public ObservableCollection<HeadsetVisibilityOption> VisibilityOptions { get; } = [];
 
+    public string? LocalEndpointId { get; private set; }
     public string? SelectedEndpointId { get; private set; }
 
     [ObservableProperty]
-    public partial string SelectedEndpointName { get; set; } = "Selected device";
+    public partial string SelectedEndpointName { get; set; } = "BluetoothSelectedDevice".GetLocalizedResource();
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    public partial string StatusText { get; set; } = "Refreshing Bluetooth devices…";
+    public partial string StatusText { get; set; } = "BluetoothStatusRefreshing".GetLocalizedResource();
 
     public async Task InitializeAsync()
     {
@@ -47,12 +48,12 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
             var report = await handoffService.DiscoverAsync();
             ReloadSections(report.Headsets);
             StatusText = report.Headsets.Count == 0
-                ? "No saved Bluetooth audio devices were found."
-                : $"Updated {report.Headsets.Count} saved Bluetooth device(s).";
+                ? "BluetoothStatusNone".GetLocalizedResource()
+                : string.Format("BluetoothStatusUpdated".GetLocalizedResource(), report.Headsets.Count);
         }
         catch (Exception ex)
         {
-            StatusText = $"Bluetooth refresh failed: {ex.Message}";
+            StatusText = string.Format("BluetoothStatusRefreshFailed".GetLocalizedResource(), ex.Message);
         }
         finally
         {
@@ -102,18 +103,35 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         ReloadSections(configurations);
     }
 
-    public IReadOnlyList<HeadsetEndpointOption> GetSwitchTargets(HeadsetDeviceItem item) =>
+    public bool CanSwitchTo(HeadsetDeviceItem item, string? endpointId) =>
+        endpointId is not null &&
+        (item.Section == HeadsetDeviceSection.SavedDisconnected || endpointId != item.SourceEndpointId) &&
+        item.EndpointIds.Contains(endpointId);
+
+    public IReadOnlyList<HeadsetEndpointOption> GetOtherSwitchTargets(HeadsetDeviceItem item) =>
         Endpoints.Where(endpoint =>
-                endpoint.Id != item.SourceEndpointId && item.EndpointIds.Contains(endpoint.Id))
+                item.EndpointIds.Contains(endpoint.Id) &&
+                endpoint.Id != item.SourceEndpointId &&
+                endpoint.Id != LocalEndpointId &&
+                endpoint.Id != SelectedEndpointId)
             .ToList();
+
+    public IReadOnlyList<PairedDevice> GetOtherSwitchDevices(HeadsetDeviceItem item)
+    {
+        var targetIds = GetOtherSwitchTargets(item).Select(endpoint => endpoint.Id).ToHashSet();
+        return deviceManager.PairedDevices.Where(device => targetIds.Contains(device.Id)).ToList();
+    }
 
     private bool CanRefresh() => !IsBusy;
 
     private async Task RefreshEndpointsAsync()
     {
         var local = await deviceManager.GetLocalDeviceAsync();
+        LocalEndpointId = local.DeviceId;
         Endpoints.Clear();
-        Endpoints.Add(new HeadsetEndpointOption(local.DeviceId, $"{local.DeviceName} (this PC)"));
+        Endpoints.Add(new HeadsetEndpointOption(
+            local.DeviceId,
+            string.Format("BluetoothThisPc".GetLocalizedResource(), local.DeviceName)));
         foreach (var device in deviceManager.PairedDevices.Where(item =>
                      item.IsConnected && item.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1)))
         {
@@ -126,7 +144,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
             ? Endpoints.FirstOrDefault(endpoint => endpoint.Id == activeDevice.Id)
             : Endpoints.FirstOrDefault();
         SelectedEndpointId = selected?.Id;
-        SelectedEndpointName = selected?.DisplayName ?? "No Bluetooth endpoint selected";
+        SelectedEndpointName = selected?.DisplayName ?? "BluetoothNoSelectedDevice".GetLocalizedResource();
     }
 
     private void ReloadSections(IEnumerable<HeadsetConfiguration> configurations)
@@ -182,12 +200,14 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     {
         App.MainWindow.DispatcherQueue.TryEnqueue(() =>
         {
-            StatusText = state.Message ?? state.Status switch
+            StatusText = state.Status switch
             {
-                "disconnecting" => "Disconnecting Bluetooth device…",
-                "connecting" => "Connecting Bluetooth device…",
-                "completed" => "Bluetooth operation completed.",
-                "failed" => "Bluetooth operation failed.",
+                "disconnecting" => "BluetoothStatusDisconnecting".GetLocalizedResource(),
+                "connecting" => "BluetoothStatusConnecting".GetLocalizedResource(),
+                "completed" => "BluetoothStatusCompleted".GetLocalizedResource(),
+                "failed" when !string.IsNullOrWhiteSpace(state.Message) =>
+                    string.Format("BluetoothStatusFailedDetail".GetLocalizedResource(), state.Message),
+                "failed" => "BluetoothStatusFailed".GetLocalizedResource(),
                 _ => state.Status,
             };
         });
@@ -216,6 +236,8 @@ public sealed record HeadsetDeviceItem(
     IReadOnlyList<string> EndpointIds,
     HeadsetDeviceSection Section)
 {
+    public bool CanDisconnect => Section != HeadsetDeviceSection.SavedDisconnected;
+
     public string ConnectionText => Section switch
     {
         HeadsetDeviceSection.SelectedConnected => $"Connected to {SourceEndpointName}",

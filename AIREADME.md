@@ -23,6 +23,9 @@
 - Windows cannot directly connect or disconnect a single paired audio device through the public API. Handoff uses a short target-radio off/on cycle only when per-device connection control is unavailable; direct Disconnect refuses to disable the whole PC radio.
 - Updating 3.0.0.2 through 3.0.0.5 preserved the fork package identity and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte at every installation boundary. Backups are under `%LOCALAPPDATA%\Temp\.agents\Sefirah`.
 - QCY AilyBuds Lite was physically validated PC to Redmi K70 and Redmi K70 to PC. Both radios returned enabled, the final connection was restored to the PC, and both desktop and Android three-section UIs were visually verified.
+- Windows 3.0.0.9 localizes the complete desktop resource set into Simplified Chinese and aligns the Bluetooth module hierarchy with Notifications: the module heading remains outside the cards, while the three device sections use separate cards and per-device context actions.
+- Removing `Language` from `AppxBundleAutoResourcePackageQualifiers` requires the complete `AppxDefaultResourceQualifiers` union, including the original `Scale=200`. Omitting it collapsed the scale resource-package graph and caused an in-place update to fail in Windows MRT `SystemRegisterRemove` with `0x80073CF9`/`0x8007000D`.
+- The corrected 3.0.0.9 bundle embeds all 15 UI languages in the main package while preserving the prior `split.scale-100/125/150/300/400` graph. Updating from 3.0.0.7 succeeded and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte; the backup is under `%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-ui-3.0.0.9-20260718-231936\LocalState`.
 
 # Task Board
 
@@ -36,6 +39,7 @@
 - [x] Add a current-user-only command-line control API and validate status, Bluetooth catalogs, discovery, and saved configuration end to end.
 - [x] Redesign the Windows Bluetooth card around the selected endpoint with three sections, expandable actions, and visibility settings.
 - [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
+- [x] Localize the Windows UI into Simplified Chinese, align Bluetooth with the Notifications visual hierarchy, reuse the device selector for handoff targets, and ship the data-preserving 3.0.0.9 update.
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.

@@ -72,7 +72,7 @@
             </Grid.RowDefinitions>
 
             <TextBlock
-                Text="Calls"
+                Text="{helpers:ResourceString Name=Calls}"
                 FontSize="24"
                 FontWeight="SemiBold"
                 Margin="16,16,0,0"/>
@@ -204,7 +204,7 @@
                     FontSize="14"
                     Foreground="{ThemeResource TextFillColorSecondary}" />
                 <Button
-                    Content="Turn on Bluetooth"
+                    Content="{helpers:ResourceString Name=TurnOnBluetooth}"
                     Click="EnableBluetoothButton_Click"
                     Style="{ThemeResource AccentButtonStyle}"
                     HorizontalAlignment="Center"

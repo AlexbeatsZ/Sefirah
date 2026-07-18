@@ -154,7 +154,7 @@
     <value>保存位置</value>
   </data>
   <data name="RemoteStorageLocation" xml:space="preserve">
-    <value>Remote storage location</value>
+    <value>远程存储位置</value>
   </data>
   <data name="ShowClipboardToast" xml:space="preserve">
     <value>显示剪贴板提示</value>
@@ -175,10 +175,10 @@
     <value>禁用</value>
   </data>
   <data name="NotificationFilterFeed.Content" xml:space="preserve">
-    <value>Notification feed</value>
+    <value>通知流</value>
   </data>
   <data name="NotificationFilterToastFeed.Content" xml:space="preserve">
-    <value>Notification feed + toast</value>
+    <value>通知流 + 系统弹窗</value>
   </data>
   <data name="AvailableDevices.Title" xml:space="preserve">
     <value>可用设备</value>
@@ -244,10 +244,10 @@
     <value>连接您的设备</value>
   </data>
   <data name="OnboardingDevice.Subtitle" xml:space="preserve">
-    <value>Scan the QR code or pair directly from the discovered devices below</value>
+    <value>扫描二维码，或直接与下方发现的设备配对</value>
   </data>
   <data name="ConnectionRequest.Title" xml:space="preserve">
-    <value>Device connection request</value>
+    <value>设备连接请求</value>
   </data>
   <data name="ConnectionRequest.Subtitle" xml:space="preserve">
     <value>请验证两台设备上的配对密钥是否匹配：</value>
@@ -326,7 +326,7 @@
     <value>视频设置</value>
   </data>
   <data name="AudioSettings" xml:space="preserve">
-    <value>Audio settings</value>
+    <value>音频设置</value>
   </data>
   <data name="OpenApp" xml:space="preserve">
     <value>在应用程序中打开</value>
@@ -482,7 +482,7 @@
     <value>shell 命令帮助</value>
   </data>
   <data name="UnlockDeviceHelpDescription" xml:space="preserve">
-    <value>The shell commands in the text box will be executed before launching scrcpy. Enter commands that work on your device, separated by line.</value>
+    <value>文本框中的 shell 命令会在启动 scrcpy 前执行。请输入适用于此设备的命令，每行一条。</value>
   </data>
   <data name="UnlockDeviceHelpExample" xml:space="preserve">
     <value>例子：</value>
@@ -500,7 +500,7 @@
     <value>ADB 设备未连接</value>
   </data>
   <data name="AdbNoDeviceSubtitle" xml:space="preserve">
-    <value>Turn on ADB and connect your device via USB or Wi-Fi to see it here</value>
+    <value>开启 ADB 并通过 USB 或 Wi-Fi 连接设备后，即可在此处看到它</value>
   </data>
   <data name="ClipboardSettings" xml:space="preserve">
     <value>粘贴板设置</value>
@@ -569,7 +569,7 @@
     <value>参数</value>
   </data>
   <data name="StartInDirectory" xml:space="preserve">
-    <value>Start in directory</value>
+    <value>起始目录</value>
   </data>
   <data name="EnterActionName" xml:space="preserve">
     <value>输入动作名称</value>
@@ -611,43 +611,43 @@
     <value>保存</value>
   </data>
   <data name="FileTransferNotification.Receiving" xml:space="preserve">
-    <value>Receiving from {0}</value>
+    <value>正在从 {0} 接收</value>
   </data>
   <data name="FileTransferNotification.Sending" xml:space="preserve">
-    <value>Sending to {0}</value>
+    <value>正在发送到 {0}</value>
   </data>
   <data name="FileTransferNotification.ReceivingBulk" xml:space="preserve">
-    <value>Receiving {0} files from {1}</value>
+    <value>正在从 {1} 接收 {0} 个文件</value>
   </data>
   <data name="FileTransferNotification.SendingBulk" xml:space="preserve">
-    <value>Sending {0} files to {1}</value>
+    <value>正在向 {1} 发送 {0} 个文件</value>
   </data>
   <data name="FileTransferNotification.Completed" xml:space="preserve">
-    <value>File transfer completed</value>
+    <value>文件传输已完成</value>
   </data>
   <data name="FileTransferNotification.CompletedSingle" xml:space="preserve">
-    <value>Received {0} from {1}</value>
+    <value>已从 {1} 接收 {0}</value>
   </data>
   <data name="FileTransferNotification.CompletedBulk" xml:space="preserve">
-    <value>Received {0} files from {1}</value>
+    <value>已从 {1} 接收 {0} 个文件</value>
   </data>
   <data name="FileTransferNotification.SentSingle" xml:space="preserve">
-    <value>Sent {0} to {1}</value>
+    <value>已将 {0} 发送到 {1}</value>
   </data>
   <data name="FileTransferNotification.SentBulk" xml:space="preserve">
-    <value>Sent {0} files to {1}</value>
+    <value>已将 {0} 个文件发送到 {1}</value>
   </data>
   <data name="FileTransferNotificationAction.Cancel" xml:space="preserve">
     <value>取消</value>
   </data>
   <data name="NoPairedDevices" xml:space="preserve">
-    <value>No paired devices</value>
+    <value>没有已配对设备</value>
   </data>
   <data name="Add" xml:space="preserve">
-    <value>Add</value>
+    <value>添加</value>
   </data>
   <data name="HostnamePlaceholder" xml:space="preserve">
-    <value>Enter hostname or IP address</value>
+    <value>输入主机名或 IP 地址</value>
   </data>
   <data name="UnlockCommandsPlaceholder" xml:space="preserve">
     <value>input keyevent 26
@@ -658,16 +658,16 @@ input text %pwd%</value>
     <value>拖动要发送文件</value>
   </data>
   <data name="DeviceAddresses" xml:space="preserve">
-    <value>Device addresses</value>
+    <value>设备地址</value>
   </data>
   <data name="ManageAddressesAndPriority" xml:space="preserve">
-    <value>Manage addresses and connection priority</value>
+    <value>管理地址和连接优先级</value>
   </data>
   <data name="StorageAccess" xml:space="preserve">
-    <value>Show device in File Explorer</value>
+    <value>在文件资源管理器中显示设备</value>
   </data>
   <data name="StorageAccessDescription" xml:space="preserve">
-    <value>Enables or disables storage access for this device in the File Explorer</value>
+    <value>启用或禁用文件资源管理器对此设备的存储访问</value>
   </data>
   <data name="AudioSilent" xml:space="preserve">
     <value>静音</value>
@@ -676,37 +676,37 @@ input text %pwd%</value>
     <value>振动</value>
   </data>
   <data name="AudioRing" xml:space="preserve">
-    <value>Ring</value>
+    <value>铃声</value>
   </data>
   <data name="AudioMedia" xml:space="preserve">
-    <value>Media</value>
+    <value>媒体</value>
   </data>
   <data name="AudioNotification" xml:space="preserve">
-    <value>Notification</value>
+    <value>通知</value>
   </data>
   <data name="AudioCall" xml:space="preserve">
-    <value>Call</value>
+    <value>通话</value>
   </data>
   <data name="AudioAlarm" xml:space="preserve">
-    <value>Alarm</value>
+    <value>闹钟</value>
   </data>
   <data name="AdbSettingsDescription" xml:space="preserve">
     <value>设置 ADB 连接和地址</value>
   </data>
   <data name="ScreenMirrorSettingsDescription" xml:space="preserve">
-    <value>Configure scrcpy flags and screen mirroring options</value>
+    <value>配置 scrcpy 参数和屏幕镜像选项</value>
   </data>
   <data name="MediaSessionDescription" xml:space="preserve">
-    <value>Sync media playback information with this device</value>
+    <value>与此设备同步媒体播放信息</value>
   </data>
   <data name="AudioControl" xml:space="preserve">
-    <value>Audio device control</value>
+    <value>音频设备控制</value>
   </data>
   <data name="MediaSession" xml:space="preserve">
-    <value>Media playback session</value>
+    <value>媒体播放会话</value>
   </data>
   <data name="AudioControlDescription" xml:space="preserve">
-    <value>Allow audio device control with this device</value>
+    <value>允许与此设备互相控制音频设备</value>
   </data>
   <data name="ClipboardIncludeImagesDescription" xml:space="preserve">
     <value>启用通过粘贴板实现的图片同步</value>
@@ -715,168 +715,250 @@ input text %pwd%</value>
     <value>在剪贴板监视器中包含图像</value>
   </data>
   <data name="Language" xml:space="preserve">
-    <value>Language</value>
+    <value>语言</value>
   </data>
   <data name="LanguageDescription" xml:space="preserve">
-    <value>Choose your preferred display language</value>
+    <value>选择首选的显示语言</value>
   </data>
   <data name="UseSystemSetting" xml:space="preserve">
-    <value>Use system setting</value>
+    <value>使用系统设置</value>
   </data>
   <data name="ScrcpyLocation" xml:space="preserve">
-    <value>Scrcpy location</value>
+    <value>Scrcpy 位置</value>
   </data>
   <data name="AdbLocation" xml:space="preserve">
-    <value>Adb location</value>
+    <value>ADB 位置</value>
   </data>
   <data name="CallMissed" xml:space="preserve">
-    <value>Missed call</value>
+    <value>未接来电</value>
   </data>
   <data name="UpdateNotification.Title" xml:space="preserve">
-    <value>Update available</value>
+    <value>有可用更新</value>
   </data>
   <data name="UpdateNotification.Action" xml:space="preserve">
-    <value>Download update</value>
+    <value>下载更新</value>
   </data>
   <data name="UpdateNotification.Subtitle" xml:space="preserve">
-    <value>A new version is available</value>
+    <value>有新版本可用</value>
   </data>
   <data name="ClipboardNotification.Title" xml:space="preserve">
-    <value>Clipboard received</value>
+    <value>已收到剪贴板内容</value>
   </data>
   <data name="OpenInBrowser" xml:space="preserve">
-    <value>Open in browser</value>
+    <value>在浏览器中打开</value>
   </data>
   <data name="PhoneFrameScrollTip" xml:space="preserve">
-    <value>Scroll on the phone preview to change the active device</value>
+    <value>在手机预览上滚动以切换当前设备</value>
   </data>
   <data name="AddAppShortcut" xml:space="preserve">
-    <value>Add shortcut</value>
+    <value>添加快捷方式</value>
   </data>
   <data name="RemoveAppShortcut" xml:space="preserve">
-    <value>Remove shortcut</value>
+    <value>移除快捷方式</value>
   </data>
   <data name="DeviceAudio" xml:space="preserve">
-    <value>Device audio</value>
+    <value>设备音频</value>
   </data>
   <data name="DndToggle" xml:space="preserve">
-    <value>Toggle Do not disturb</value>
+    <value>切换勿扰模式</value>
   </data>
   <data name="StartScreenMirroring" xml:space="preserve">
-    <value>Start screen mirroring</value>
+    <value>开始屏幕镜像</value>
   </data>
   <data name="PreviousTrack" xml:space="preserve">
-    <value>Previous track</value>
+    <value>上一首</value>
   </data>
   <data name="PlayOrPause" xml:space="preserve">
-    <value>Play or pause</value>
+    <value>播放或暂停</value>
   </data>
   <data name="NextTrack" xml:space="preserve">
-    <value>Next track</value>
+    <value>下一首</value>
   </data>
   <data name="MediaVolume" xml:space="preserve">
-    <value>Media volume</value>
+    <value>媒体音量</value>
   </data>
   <data name="SendNotificationReply" xml:space="preserve">
-    <value>Send notification reply</value>
+    <value>发送通知回复</value>
   </data>
   <data name="RefreshApps" xml:space="preserve">
-    <value>Refresh apps</value>
+    <value>刷新应用</value>
   </data>
   <data name="ContextMenu" xml:space="preserve">
-    <value>Context menu</value>
+    <value>上下文菜单</value>
   </data>
   <data name="ShareFiles" xml:space="preserve">
-    <value>Share files</value>
+    <value>共享文件</value>
   </data>
   <data name="ReceiveClipboard" xml:space="preserve">
-    <value>Receive clipboard</value>
+    <value>接收剪贴板</value>
   </data>
   <data name="SendClipboard" xml:space="preserve">
-    <value>Send clipboard</value>
+    <value>发送剪贴板</value>
   </data>
   <data name="ReceiveMediaSessions" xml:space="preserve">
-    <value>Receive media sessions</value>
+    <value>接收媒体会话</value>
   </data>
   <data name="SendMediaSessions" xml:space="preserve">
-    <value>Send media sessions</value>
+    <value>发送媒体会话</value>
   </data>
   <data name="SecondaryCallOnHold" xml:space="preserve">
-    <value>On hold. Select to resume</value>
+    <value>通话保持中。选择以恢复</value>
   </data>
   <data name="CallLogDisabled.Description" xml:space="preserve">
-    <value>Enable call log sync for this device on the phone.</value>
+    <value>请在手机上为此设备启用通话记录同步。</value>
   </data>
   <data name="BluetoothCallingUnsupported" xml:space="preserve">
-    <value>Bluetooth calling is not supported</value>
+    <value>不支持蓝牙通话</value>
   </data>
   <data name="BluetoothCallingUnavailable.Description" xml:space="preserve">
-    <value>Connect or enable a Bluetooth adapter on your PC to continue.</value>
+    <value>请连接或启用电脑上的蓝牙适配器后继续。</value>
   </data>
   <data name="BluetoothDisabled.Description" xml:space="preserve">
-    <value>Enable Bluetooth to continue.</value>
+    <value>请启用蓝牙后继续。</value>
   </data>
   <data name="BluetoothPairing.Title" xml:space="preserve">
-    <value>Pair mobile device and PC</value>
+    <value>配对手机与电脑</value>
   </data>
   <data name="BluetoothPairing.Description" xml:space="preserve">
-    <value>Make sure your device is nearby and has Bluetooth turned on.</value>
+    <value>请确保设备在附近并已开启蓝牙。</value>
   </data>
   <data name="BluetoothPairingAction" xml:space="preserve">
-    <value>Pair device</value>
+    <value>配对设备</value>
   </data>
   <data name="BluetoothRegistrationFailed.Description" xml:space="preserve">
-    <value>Unpair the device from other apps and try again.</value>
+    <value>请先在其他应用中取消配对此设备，然后重试。</value>
   </data>
   <data name="TryAgain" xml:space="preserve">
-    <value>Try again</value>
+    <value>重试</value>
   </data>
   <data name="SearchContacts" xml:space="preserve">
-    <value>Search contacts</value>
+    <value>搜索联系人</value>
   </data>
   <data name="BluetoothRegistrationFailed.Title" xml:space="preserve">
-    <value>Registration failed</value>
+    <value>注册失败</value>
   </data>
   <data name="BluetoothCallingUnavailable.Title" xml:space="preserve">
-    <value>Bluetooth calling is not available</value>
+    <value>蓝牙通话不可用</value>
   </data>
   <data name="BluetoothDisabled.Title" xml:space="preserve">
-    <value>Bluetooth is turned off</value>
+    <value>蓝牙已关闭</value>
   </data>
   <data name="Calls" xml:space="preserve">
-    <value>Calls</value>
+    <value>通话</value>
   </data>
   <data name="Unmute" xml:space="preserve">
-    <value>Unmute</value>
+    <value>取消静音</value>
   </data>
   <data name="Resume" xml:space="preserve">
-    <value>Resume</value>
+    <value>恢复</value>
   </data>
   <data name="Mute" xml:space="preserve">
-    <value>Mute</value>
+    <value>静音</value>
   </data>
   <data name="Hold" xml:space="preserve">
-    <value>Hold</value>
+    <value>保持</value>
   </data>
   <data name="End" xml:space="preserve">
-    <value>End</value>
+    <value>结束</value>
   </data>
   <data name="CallOnHold" xml:space="preserve">
-    <value>On hold</value>
+    <value>保持中</value>
   </data>
   <data name="CallIncoming" xml:space="preserve">
-    <value>Incoming call</value>
+    <value>来电</value>
   </data>
   <data name="CallDialing" xml:space="preserve">
-    <value>Dialing</value>
+    <value>正在拨号</value>
   </data>
   <data name="CallConnecting" xml:space="preserve">
-    <value>Connecting</value>
+    <value>正在连接</value>
   </data>
   <data name="CallAudioRouteToPhone" xml:space="preserve">
-    <value>Transfer to phone</value>
+    <value>转到手机</value>
   </data>
   <data name="CallAudioRouteToPc" xml:space="preserve">
-    <value>Transfer to PC</value>
+    <value>转到电脑</value>
   </data>
+  <data name="BluetoothDevices" xml:space="preserve"><value>蓝牙设备</value></data>
+  <data name="BluetoothRefresh" xml:space="preserve"><value>刷新蓝牙设备</value></data>
+  <data name="BluetoothVisibleDevices" xml:space="preserve"><value>显示的蓝牙设备</value></data>
+  <data name="BluetoothVisibilityDescription" xml:space="preserve"><value>选择要在此卡片中显示的已保存设备。</value></data>
+  <data name="BluetoothConnectedSelected" xml:space="preserve"><value>已连接到选定设备</value></data>
+  <data name="BluetoothConnectedOther" xml:space="preserve"><value>已连接到其他设备</value></data>
+  <data name="BluetoothSavedDisconnected" xml:space="preserve"><value>已保存但未连接</value></data>
+  <data name="BluetoothSwitchDevice" xml:space="preserve"><value>切换设备</value></data>
+  <data name="BluetoothSwitchTitle" xml:space="preserve"><value>切换 {0}</value></data>
+  <data name="BluetoothSelectedDevice" xml:space="preserve"><value>选定设备</value></data>
+  <data name="BluetoothNoSelectedDevice" xml:space="preserve"><value>未选择设备</value></data>
+  <data name="BluetoothPc" xml:space="preserve"><value>{0}（电脑）</value></data>
+  <data name="BluetoothThisPc" xml:space="preserve"><value>{0}（本机）</value></data>
+  <data name="BluetoothStatusRefreshing" xml:space="preserve"><value>正在刷新蓝牙设备…</value></data>
+  <data name="BluetoothStatusNone" xml:space="preserve"><value>未找到已保存的蓝牙音频设备。</value></data>
+  <data name="BluetoothStatusUpdated" xml:space="preserve"><value>已更新 {0} 个蓝牙设备。</value></data>
+  <data name="BluetoothStatusRefreshFailed" xml:space="preserve"><value>刷新蓝牙设备失败：{0}</value></data>
+  <data name="BluetoothStatusDisconnecting" xml:space="preserve"><value>正在断开蓝牙设备…</value></data>
+  <data name="BluetoothStatusConnecting" xml:space="preserve"><value>正在连接蓝牙设备…</value></data>
+  <data name="BluetoothStatusCompleted" xml:space="preserve"><value>蓝牙操作已完成。</value></data>
+  <data name="BluetoothStatusFailed" xml:space="preserve"><value>蓝牙操作失败。</value></data>
+  <data name="BluetoothStatusFailedDetail" xml:space="preserve"><value>蓝牙操作失败：{0}</value></data>
+  <data name="Disconnect" xml:space="preserve"><value>断开连接</value></data>
+  <data name="BluetoothSwitchToThisDevice" xml:space="preserve"><value>切换到本设备</value></data>
+  <data name="BluetoothSwitchToSelectedDevice" xml:space="preserve"><value>切换到选定设备</value></data>
+  <data name="BluetoothSwitchToOtherDevice" xml:space="preserve"><value>切换到其他设备</value></data>
+  <data name="BluetoothConnectToSelectedDevice" xml:space="preserve"><value>连接到选定设备</value></data>
+  <data name="BackdropMaterial" xml:space="preserve"><value>背景材质</value></data>
+  <data name="BackdropMaterialMica" xml:space="preserve"><value>云母</value></data>
+  <data name="BackdropMaterialAcrylic" xml:space="preserve"><value>亚克力</value></data>
+  <data name="LowBatteryAlerts" xml:space="preserve"><value>低电量提醒</value></data>
+  <data name="LowBatteryAlertsDescription" xml:space="preserve"><value>当此设备的电量达到或低于选定百分比时显示通知</value></data>
+  <data name="LowBatteryThreshold" xml:space="preserve"><value>低电量阈值</value></data>
+  <data name="LowBatteryThresholdDescription" xml:space="preserve"><value>选择触发此设备低电量提醒的电量百分比</value></data>
+  <data name="BatteryNotification.Title" xml:space="preserve"><value>电量不足</value></data>
+  <data name="BatteryNotification.Text" xml:space="preserve"><value>{0} 的电量为 {1}%。</value></data>
+  <data name="Connect" xml:space="preserve"><value>连接</value></data>
+  <data name="InstallApp" xml:space="preserve"><value>安装应用</value></data>
+  <data name="FlexDisplay" xml:space="preserve"><value>自适应显示</value></data>
+  <data name="VideoBitratePlaceholder" xml:space="preserve"><value>8M</value></data>
+  <data name="VideoBitrateToolTip" xml:space="preserve"><value>格式：8M、8000000</value></data>
+  <data name="AudioBitratePlaceholder" xml:space="preserve"><value>128K</value></data>
+  <data name="AudioBitrateToolTip" xml:space="preserve"><value>格式：128K、128000</value></data>
+  <data name="CropPlaceholder" xml:space="preserve"><value>不裁剪</value></data>
+  <data name="CropToolTip" xml:space="preserve"><value>格式：1224:1440:0:0</value></data>
+  <data name="VirtualDisplaySizePlaceholder" xml:space="preserve"><value>设备默认值</value></data>
+  <data name="VirtualDisplaySizeToolTip" xml:space="preserve"><value>格式：1920x1080</value></data>
+  <data name="VideoBitrateMbps" xml:space="preserve"><value>Mbps</value></data>
+  <data name="RemoveAllSyncRoots" xml:space="preserve"><value>移除所有同步根目录</value></data>
+  <data name="RemoveAllSyncRootsDescription" xml:space="preserve"><value>取消注册此应用注册的所有同步根目录</value></data>
+  <data name="Continue" xml:space="preserve"><value>继续</value></data>
+  <data name="Yes" xml:space="preserve"><value>是</value></data>
+  <data name="No" xml:space="preserve"><value>否</value></data>
+  <data name="Error" xml:space="preserve"><value>错误</value></data>
+  <data name="ScanQrCode" xml:space="preserve"><value>扫描二维码</value></data>
+  <data name="ScanQrCodeToConnect" xml:space="preserve"><value>扫描此二维码以连接</value></data>
+  <data name="TurnOnBluetooth" xml:space="preserve"><value>开启蓝牙</value></data>
+  <data name="CopyVersion" xml:space="preserve"><value>复制版本号</value></data>
+  <data name="ScreenMirror" xml:space="preserve"><value>屏幕镜像</value></data>
+  <data name="SwitchDevices" xml:space="preserve"><value>切换设备</value></data>
+  <data name="PasswordCacheTimeout" xml:space="preserve"><value>密码缓存超时</value></data>
+  <data name="PasswordCacheTimeoutDescription" xml:space="preserve"><value>设为 0 时每次都会要求输入密码；大于 0 时会按指定分钟数缓存密码并自动复用。</value></data>
+  <data name="RemoteStorageWarningTitle" xml:space="preserve"><value>警告：远程存储位置</value></data>
+  <data name="RemoteStorageWarningMessage" xml:space="preserve"><value>请勿将远程存储位置设为已有文件夹，否则其中内容会被删除。确定要继续吗？</value></data>
+  <data name="RemoveActionTitle" xml:space="preserve"><value>移除操作</value></data>
+  <data name="RemoveActionMessage" xml:space="preserve"><value>确定要移除操作“{0}”吗？</value></data>
+  <data name="RemoveDeviceFailed" xml:space="preserve"><value>移除设备失败：{0}</value></data>
+  <data name="BluetoothSetupIntro" xml:space="preserve"><value>我们会请求手机允许蓝牙发现，然后在此电脑上匹配它。</value></data>
+  <data name="BluetoothSetupPermissionFailed" xml:space="preserve"><value>蓝牙发现失败。请解锁手机，并在提示时允许蓝牙发现。</value></data>
+  <data name="BluetoothSetupCheckDevice" xml:space="preserve"><value>检查你的设备</value></data>
+  <data name="BluetoothSetupPermissionHint" xml:space="preserve"><value>设备可能会要求你开启蓝牙权限。</value></data>
+  <data name="BluetoothSetupSearching" xml:space="preserve"><value>正在查找手机…</value></data>
+  <data name="BluetoothSetupOff" xml:space="preserve"><value>蓝牙已关闭。请开启蓝牙后重试。</value></data>
+  <data name="BluetoothSetupNotFound" xml:space="preserve"><value>没有发现匹配的蓝牙设备。请让手机进入配对模式后重试。</value></data>
+  <data name="BluetoothSetupPairingFailed" xml:space="preserve"><value>配对未完成，请重试。</value></data>
+  <data name="BluetoothSetupPinPrefix" xml:space="preserve"><value>设备 </value></data>
+  <data name="BluetoothSetupPinSuffix" xml:space="preserve"><value> 上的 PIN 是否与下方 PIN 一致？</value></data>
+  <data name="MessagesSearch" xml:space="preserve"><value>搜索消息</value></data>
+  <data name="NewConversationAddress" xml:space="preserve"><value>新对话地址</value></data>
+  <data name="MessageInput" xml:space="preserve"><value>消息输入框</value></data>
+  <data name="SendMessage" xml:space="preserve"><value>发送消息</value></data>
+  <data name="CallWindowTitle" xml:space="preserve"><value>通话</value></data>
 </root>

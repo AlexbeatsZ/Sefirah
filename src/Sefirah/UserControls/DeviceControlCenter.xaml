@@ -118,7 +118,7 @@
                         Glyph="&#xEC15;"
                         Visibility="{x:Bind ViewModel.LoadingScrcpy, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
                     <ToolTipService.ToolTip>
-                        <ToolTip Content="Screen Mirror" />
+                        <ToolTip Content="{helpers:ResourceString Name=ScreenMirror}" />
                     </ToolTipService.ToolTip>
                 </Grid>
                 <Grid Visibility="{x:Bind ViewModel.LoadingScrcpy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -408,6 +408,6 @@
             PreferredPlacement="Right"
             Subtitle="{helpers:ResourceString Name=PhoneFrameScrollTip}"
             Target="{x:Bind PhoneFrameGrid}"
-            Title="Switch devices" />
+            Title="{helpers:ResourceString Name=SwitchDevices}" />
     </Grid>
 </UserControl>

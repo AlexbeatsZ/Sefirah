@@ -89,10 +89,10 @@ public sealed partial class ActionsViewModel : BaseViewModel
     {
         var dialog = new ContentDialog
         {
-            Title = "Remove Action",
-            Content = $"Are you sure you want to remove the action '{action.Name}'?",
-            PrimaryButtonText = "Remove",
-            CloseButtonText = "Cancel",
+            Title = "RemoveActionTitle".GetLocalizedResource(),
+            Content = string.Format("RemoveActionMessage".GetLocalizedResource(), action.Name),
+            PrimaryButtonText = "Remove".GetLocalizedResource(),
+            CloseButtonText = "Cancel".GetLocalizedResource(),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = App.MainWindow.Content!.XamlRoot
         };

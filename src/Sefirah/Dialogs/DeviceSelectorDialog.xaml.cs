@@ -11,25 +11,25 @@ public sealed partial class DeviceSelectorDialog : UserControl
         private set => DataContext = value;
     }
 
-    public DeviceSelectorDialog(List<PairedDevice> devices)
+    public DeviceSelectorDialog(List<PairedDevice> devices, bool singleSelection = false)
     {
         InitializeComponent();
-        ViewModel = new DeviceSelectorViewModel(devices);
+        ViewModel = new DeviceSelectorViewModel(devices, singleSelection);
     }
 
     private void DeviceCheckBox_Checked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        if (sender is CheckBox cb && cb.Tag is PairedDevice device)
+        if (sender is CheckBox cb && cb.Tag is DeviceSelectorOption option)
         {
-            ViewModel.SetDeviceSelected(device, true);
+            ViewModel.SetDeviceSelected(option, true);
         }
     }
 
     private void DeviceCheckBox_Unchecked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        if (sender is CheckBox cb && cb.Tag is PairedDevice device)
+        if (sender is CheckBox cb && cb.Tag is DeviceSelectorOption option)
         {
-            ViewModel.SetDeviceSelected(device, false);
+            ViewModel.SetDeviceSelected(option, false);
         }
     }
 }

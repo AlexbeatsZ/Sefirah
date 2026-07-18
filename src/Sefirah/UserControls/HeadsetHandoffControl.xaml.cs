@@ -1,3 +1,6 @@
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Sefirah.Dialogs;
 using Sefirah.ViewModels;
 
 namespace Sefirah.UserControls;
@@ -17,48 +20,114 @@ public sealed partial class HeadsetHandoffControl : UserControl
         await ViewModel.InitializeAsync();
     }
 
-    private async void DisconnectButton_Click(object sender, RoutedEventArgs e)
+    private void DeviceButton_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        if (sender is Button { Tag: HeadsetDeviceItem item })
+        if (sender is not Button { Tag: HeadsetDeviceItem item } button) return;
+
+        var menu = new MenuFlyout();
+        switch (item.Section)
         {
-            await ViewModel.DisconnectAsync(item);
+            case HeadsetDeviceSection.SelectedConnected:
+                menu.Items.Add(CreateEndpointAction(
+                    "BluetoothSwitchToThisDevice",
+                    item,
+                    ViewModel.LocalEndpointId));
+                menu.Items.Add(CreateOtherDeviceAction(item));
+                menu.Items.Add(new MenuFlyoutSeparator());
+                menu.Items.Add(CreateDisconnectAction(item));
+                break;
+
+            case HeadsetDeviceSection.OtherConnected:
+                menu.Items.Add(CreateEndpointAction(
+                    "BluetoothSwitchToThisDevice",
+                    item,
+                    ViewModel.LocalEndpointId));
+                menu.Items.Add(CreateEndpointAction(
+                    "BluetoothSwitchToSelectedDevice",
+                    item,
+                    ViewModel.SelectedEndpointId));
+                menu.Items.Add(CreateOtherDeviceAction(item));
+                menu.Items.Add(new MenuFlyoutSeparator());
+                menu.Items.Add(CreateDisconnectAction(item));
+                break;
+
+            case HeadsetDeviceSection.SavedDisconnected:
+                menu.Items.Add(CreateEndpointAction(
+                    "BluetoothConnectToSelectedDevice",
+                    item,
+                    ViewModel.SelectedEndpointId));
+                break;
         }
+
+        menu.ShowAt(button, new FlyoutShowOptions
+        {
+            Position = e.GetPosition(button),
+            Placement = FlyoutPlacementMode.BottomEdgeAlignedRight,
+            ShowMode = FlyoutShowMode.Standard,
+        });
     }
 
-    private async void SwitchButton_Click(object sender, RoutedEventArgs e)
+    private MenuFlyoutItem CreateEndpointAction(
+        string resourceName,
+        HeadsetDeviceItem item,
+        string? targetEndpointId)
     {
-        if (sender is not Button { Tag: HeadsetDeviceItem item }) return;
-
-        if (item.Section is HeadsetDeviceSection.OtherConnected or HeadsetDeviceSection.SavedDisconnected)
+        var action = new MenuFlyoutItem
         {
-            if (ViewModel.SelectedEndpointId is not null)
-            {
-                await ViewModel.SwitchAsync(item, ViewModel.SelectedEndpointId);
-            }
-            return;
-        }
-
-        var targets = ViewModel.GetSwitchTargets(item);
-        if (targets.Count == 0) return;
-        var selector = new ComboBox
-        {
-            Header = "Connect to",
-            ItemsSource = targets,
-            DisplayMemberPath = nameof(HeadsetEndpointOption.DisplayName),
-            SelectedIndex = 0,
-            MinWidth = 280,
+            Text = resourceName.GetLocalizedResource(),
+            IsEnabled = ViewModel.CanSwitchTo(item, targetEndpointId),
         };
+        action.Click += async (_, _) =>
+        {
+            if (targetEndpointId is not null)
+            {
+                await ViewModel.SwitchAsync(item, targetEndpointId);
+            }
+        };
+        return action;
+    }
+
+    private MenuFlyoutItem CreateOtherDeviceAction(HeadsetDeviceItem item)
+    {
+        var targets = ViewModel.GetOtherSwitchDevices(item);
+        var action = new MenuFlyoutItem
+        {
+            Text = "BluetoothSwitchToOtherDevice".GetLocalizedResource(),
+            IsEnabled = targets.Count > 0,
+        };
+        action.Click += async (_, _) => await ShowOtherDeviceDialogAsync(item, targets);
+        return action;
+    }
+
+    private MenuFlyoutItem CreateDisconnectAction(HeadsetDeviceItem item)
+    {
+        var action = new MenuFlyoutItem
+        {
+            Text = "Disconnect".GetLocalizedResource(),
+            IsEnabled = item.CanDisconnect,
+        };
+        action.Click += async (_, _) => await ViewModel.DisconnectAsync(item);
+        return action;
+    }
+
+    private async Task ShowOtherDeviceDialogAsync(
+        HeadsetDeviceItem item,
+        IReadOnlyList<Data.Models.PairedDevice> targets)
+    {
+        if (targets.Count == 0) return;
+
+        var selector = new DeviceSelectorDialog(targets.ToList(), singleSelection: true);
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = $"Switch {item.DisplayName}",
+            Title = string.Format("BluetoothSwitchTitle".GetLocalizedResource(), item.DisplayName),
             Content = selector,
-            PrimaryButtonText = "Switch",
-            CloseButtonText = "Cancel",
+            PrimaryButtonText = "BluetoothSwitchDevice".GetLocalizedResource(),
+            CloseButtonText = "Cancel".GetLocalizedResource(),
             DefaultButton = ContentDialogButton.Primary,
         };
         if (await dialog.ShowAsync() is ContentDialogResult.Primary &&
-            selector.SelectedItem is HeadsetEndpointOption target)
+            selector.ViewModel.SelectedDevices.FirstOrDefault() is { } target)
         {
             await ViewModel.SwitchAsync(item, target.Id);
         }

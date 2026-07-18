@@ -97,9 +97,9 @@ public partial class DevicesViewModel : ObservableObject
                 // Show error dialog
                 var errorDialog = new ContentDialog
                 {
-                    Title = "Error",
-                    Content = $"Failed to remove device: {ex.Message}",
-                    CloseButtonText = "OK",
+                    Title = "Error".GetLocalizedResource(),
+                    Content = string.Format("RemoveDeviceFailed".GetLocalizedResource(), ex.Message),
+                    CloseButtonText = "OK".GetLocalizedResource(),
                     XamlRoot = App.MainWindow.Content!.XamlRoot
                 };
                 await errorDialog.ShowAsync();

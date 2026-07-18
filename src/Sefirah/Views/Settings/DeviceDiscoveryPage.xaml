@@ -54,7 +54,7 @@
                     Padding="8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon FontSize="14" Glyph="&#xED14;" />
-                        <TextBlock Text="Scan QR Code" />
+                        <TextBlock Text="{helpers:ResourceString Name=ScanQrCode}" />
                     </StackPanel>
 
                     <Button.Flyout>
@@ -94,7 +94,7 @@
                                     Click="ConnectButton_Click"
                                     Tag="{x:Bind}">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="Connect" />
+                                        <TextBlock Text="{helpers:ResourceString Name=Connect}" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>

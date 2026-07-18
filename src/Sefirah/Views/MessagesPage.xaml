@@ -194,7 +194,7 @@
                     Grid.Row="1"
                     Margin="16,0,16,12"
                     VerticalAlignment="Center"
-                    AutomationProperties.Name="Messages AutoSuggestBox"
+                    AutomationProperties.Name="{helpers:ResourceString Name=MessagesSearch}"
                     ItemTemplate="{StaticResource ConversationSearchSuggestionTemplate}"
                     PlaceholderText="{helpers:ResourceString Name=SearchMessages}"
                     QueryIcon="Find"
@@ -314,7 +314,7 @@
                     Visibility="{x:Bind ViewModel.IsNewConversation, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <AutoSuggestBox
                         x:Name="AddressInput"
-                        AutomationProperties.Name="New conversation address input"
+                        AutomationProperties.Name="{helpers:ResourceString Name=NewConversationAddress}"
                         ItemTemplate="{StaticResource ContactSearchSuggestionTemplate}"
                         PlaceholderText="{helpers:ResourceString Name=AddressInputPlaceholder}"
                         QuerySubmitted="AddressInput_QuerySubmitted"
@@ -576,7 +576,7 @@
                     MinHeight="36"
                     MaxHeight="100"
                     AcceptsReturn="True"
-                    AutomationProperties.Name="Message input"
+                    AutomationProperties.Name="{helpers:ResourceString Name=MessageInput}"
                     PlaceholderText="{helpers:ResourceString Name=MessagePlaceholder}"
                     PreviewKeyDown="MessageTextBox_KeyDown"
                     ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -629,7 +629,7 @@
                     x:Name="SendButton"
                     Grid.Column="2"
                     VerticalAlignment="Bottom"
-                    AutomationProperties.Name="Send message"
+                    AutomationProperties.Name="{helpers:ResourceString Name=SendMessage}"
                     Click="SendButton_Click">
                     <SymbolIcon Symbol="Send" />
                 </Button>

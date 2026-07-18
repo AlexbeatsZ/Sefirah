@@ -18,7 +18,7 @@ public sealed partial class CallWindow : Window
         InitializeComponent();
         Content = new CallView(ViewModel);
 
-        Title = "Call window";
+        Title = "CallWindowTitle".GetLocalizedResource();
         this.SetWindowIcon();
 
         var overlapped = (AppWindow.Presenter as OverlappedPresenter) ?? OverlappedPresenter.Create();

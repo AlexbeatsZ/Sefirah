@@ -73,6 +73,11 @@
     <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100'">
         <StartupObject>Sefirah.Platforms.Windows.Program</StartupObject>
         <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+        <!-- Keep every UI language in the main package so in-app language switching works. -->
+        <AppxBundleAutoResourcePackageQualifiers>Scale</AppxBundleAutoResourcePackageQualifiers>
+        <!-- Required when Language is not split into resource packages. Keep the scale
+             resource-package graph stable across upgrades while embedding this union. -->
+        <AppxDefaultResourceQualifiers>Language=en;en-US;cs-CZ;de-DE;fr-FR;he-IL;hi-IN;hu-HU;id-ID;ja-JP;ko-KR;nl-NL;ru-RU;vi-VN;zh-CN|Contrast=standard|Scale=200|HomeRegion=001|TargetSize=256|LayoutDirection=LTR|DXFeatureLevel=DX9|Configuration=|AlternateForm=</AppxDefaultResourceQualifiers>
     </PropertyGroup>
     <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-desktop'">
         <StartupObject>Program</StartupObject>

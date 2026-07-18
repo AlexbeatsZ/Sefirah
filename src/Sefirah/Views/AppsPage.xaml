@@ -152,7 +152,7 @@
             VerticalAlignment="Center"
             FontSize="24"
             FontWeight="SemiBold"
-            Text="Apps" />
+            Text="{helpers:ResourceString Name=Apps}" />
 
         <Button
             Grid.Row="0"

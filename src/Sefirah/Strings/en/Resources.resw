@@ -951,4 +951,62 @@ input text %pwd%</value>
   <data name="RemoveAllSyncRootsDescription" xml:space="preserve">
     <value>Unregister all sync roots registered by the app</value>
    </data>
+  <data name="BluetoothDevices" xml:space="preserve"><value>Bluetooth devices</value></data>
+  <data name="BluetoothRefresh" xml:space="preserve"><value>Refresh Bluetooth devices</value></data>
+  <data name="BluetoothVisibleDevices" xml:space="preserve"><value>Visible Bluetooth devices</value></data>
+  <data name="BluetoothVisibilityDescription" xml:space="preserve"><value>Choose which saved devices appear in this card.</value></data>
+  <data name="BluetoothConnectedSelected" xml:space="preserve"><value>Connected to selected device</value></data>
+  <data name="BluetoothConnectedOther" xml:space="preserve"><value>Connected to other devices</value></data>
+  <data name="BluetoothSavedDisconnected" xml:space="preserve"><value>Saved but not connected</value></data>
+  <data name="BluetoothSwitchDevice" xml:space="preserve"><value>Switch device</value></data>
+  <data name="BluetoothSwitchTitle" xml:space="preserve"><value>Switch {0}</value></data>
+  <data name="BluetoothSelectedDevice" xml:space="preserve"><value>Selected device</value></data>
+  <data name="BluetoothNoSelectedDevice" xml:space="preserve"><value>No device selected</value></data>
+  <data name="BluetoothPc" xml:space="preserve"><value>{0} (PC)</value></data>
+  <data name="BluetoothThisPc" xml:space="preserve"><value>{0} (this PC)</value></data>
+  <data name="BluetoothStatusRefreshing" xml:space="preserve"><value>Refreshing Bluetooth devices…</value></data>
+  <data name="BluetoothStatusNone" xml:space="preserve"><value>No saved Bluetooth audio devices were found.</value></data>
+  <data name="BluetoothStatusUpdated" xml:space="preserve"><value>Updated {0} saved Bluetooth device(s).</value></data>
+  <data name="BluetoothStatusRefreshFailed" xml:space="preserve"><value>Bluetooth refresh failed: {0}</value></data>
+  <data name="BluetoothStatusDisconnecting" xml:space="preserve"><value>Disconnecting Bluetooth device…</value></data>
+  <data name="BluetoothStatusConnecting" xml:space="preserve"><value>Connecting Bluetooth device…</value></data>
+  <data name="BluetoothStatusCompleted" xml:space="preserve"><value>Bluetooth operation completed.</value></data>
+  <data name="BluetoothStatusFailed" xml:space="preserve"><value>Bluetooth operation failed.</value></data>
+  <data name="BluetoothStatusFailedDetail" xml:space="preserve"><value>Bluetooth operation failed: {0}</value></data>
+  <data name="BluetoothSwitchToThisDevice" xml:space="preserve"><value>Switch to this device</value></data>
+  <data name="BluetoothSwitchToSelectedDevice" xml:space="preserve"><value>Switch to selected device</value></data>
+  <data name="BluetoothSwitchToOtherDevice" xml:space="preserve"><value>Switch to another device</value></data>
+  <data name="BluetoothConnectToSelectedDevice" xml:space="preserve"><value>Connect to selected device</value></data>
+  <data name="Continue" xml:space="preserve"><value>Continue</value></data>
+  <data name="Yes" xml:space="preserve"><value>Yes</value></data>
+  <data name="No" xml:space="preserve"><value>No</value></data>
+  <data name="Error" xml:space="preserve"><value>Error</value></data>
+  <data name="ScanQrCode" xml:space="preserve"><value>Scan QR code</value></data>
+  <data name="ScanQrCodeToConnect" xml:space="preserve"><value>Scan this QR code to connect</value></data>
+  <data name="TurnOnBluetooth" xml:space="preserve"><value>Turn on Bluetooth</value></data>
+  <data name="CopyVersion" xml:space="preserve"><value>Copy version</value></data>
+  <data name="ScreenMirror" xml:space="preserve"><value>Screen mirror</value></data>
+  <data name="SwitchDevices" xml:space="preserve"><value>Switch devices</value></data>
+  <data name="PasswordCacheTimeout" xml:space="preserve"><value>Password cache timeout</value></data>
+  <data name="PasswordCacheTimeoutDescription" xml:space="preserve"><value>When set to 0, you will be prompted for a password every time. A value greater than 0 caches the password for that many minutes and reuses it automatically.</value></data>
+  <data name="RemoteStorageWarningTitle" xml:space="preserve"><value>Warning: Remote storage location</value></data>
+  <data name="RemoteStorageWarningMessage" xml:space="preserve"><value>Do not set the remote storage location to an existing folder because its contents will be deleted. Do you want to continue?</value></data>
+  <data name="RemoveActionTitle" xml:space="preserve"><value>Remove action</value></data>
+  <data name="RemoveActionMessage" xml:space="preserve"><value>Are you sure you want to remove the action “{0}”?</value></data>
+  <data name="RemoveDeviceFailed" xml:space="preserve"><value>Failed to remove device: {0}</value></data>
+  <data name="BluetoothSetupIntro" xml:space="preserve"><value>We will ask your phone to allow Bluetooth discovery, then match it on this PC.</value></data>
+  <data name="BluetoothSetupPermissionFailed" xml:space="preserve"><value>Bluetooth discovery failed. Unlock your phone and allow Bluetooth discovery when prompted.</value></data>
+  <data name="BluetoothSetupCheckDevice" xml:space="preserve"><value>Check your device</value></data>
+  <data name="BluetoothSetupPermissionHint" xml:space="preserve"><value>You may be asked to enable Bluetooth permissions on your device.</value></data>
+  <data name="BluetoothSetupSearching" xml:space="preserve"><value>Looking for your phone…</value></data>
+  <data name="BluetoothSetupOff" xml:space="preserve"><value>Bluetooth is off. Enable Bluetooth and try again.</value></data>
+  <data name="BluetoothSetupNotFound" xml:space="preserve"><value>No matching Bluetooth device appeared. Put the phone in pairing mode and try again.</value></data>
+  <data name="BluetoothSetupPairingFailed" xml:space="preserve"><value>Pairing did not complete. Try again.</value></data>
+  <data name="BluetoothSetupPinPrefix" xml:space="preserve"><value>Does the PIN on </value></data>
+  <data name="BluetoothSetupPinSuffix" xml:space="preserve"><value> match the PIN below?</value></data>
+  <data name="MessagesSearch" xml:space="preserve"><value>Search messages</value></data>
+  <data name="NewConversationAddress" xml:space="preserve"><value>New conversation address</value></data>
+  <data name="MessageInput" xml:space="preserve"><value>Message input</value></data>
+  <data name="SendMessage" xml:space="preserve"><value>Send message</value></data>
+  <data name="CallWindowTitle" xml:space="preserve"><value>Call</value></data>
 </root>

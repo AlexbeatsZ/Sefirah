@@ -135,7 +135,7 @@
                                     VerticalAlignment="Center"
                                     Orientation="Horizontal"
                                     Spacing="8">
-                                    <TextBlock Text="Password cache timeout" />
+                                    <TextBlock Text="{helpers:ResourceString Name=PasswordCacheTimeout}" />
                                     <Button
                                         Padding="4"
                                         Background="Transparent"
@@ -150,10 +150,10 @@
                                                     <TextBlock
                                                         FontWeight="SemiBold"
                                                         Foreground="{ThemeResource AccentAAFillColorDefaultBrush}"
-                                                        Text="Password Cache Timeout" />
+                                                        Text="{helpers:ResourceString Name=PasswordCacheTimeout}" />
                                                     <TextBlock
                                                         FontSize="13"
-                                                        Text="When set to 0, you'll be prompted for password every time. When set to a value greater than 0, your password will be cached for the specified number of minutes and reused automatically."
+                                                        Text="{helpers:ResourceString Name=PasswordCacheTimeoutDescription}"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
                                             </Flyout>
