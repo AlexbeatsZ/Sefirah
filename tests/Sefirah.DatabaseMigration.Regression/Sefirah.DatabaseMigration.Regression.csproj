@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="sqlite-net-pcl" Version="1.11.272-beta" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\Sefirah\Data\AppDatabase\Migrations\IMigration.cs" Link="Migrations\IMigration.cs" />
+    <Compile Include="..\..\src\Sefirah\Data\AppDatabase\Migrations\SchemaVersion5Migration.cs" Link="Migrations\SchemaVersion5Migration.cs" />
+  </ItemGroup>
+</Project>

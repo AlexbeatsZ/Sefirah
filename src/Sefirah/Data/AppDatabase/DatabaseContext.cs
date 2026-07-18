@@ -11,6 +11,7 @@ public class DatabaseContext
     private static readonly IMigration[] Migrations = 
     [
         new SchemaVersion2Migration(),
+        new SchemaVersion5Migration(),
     ];
 
     public SQLiteConnection Database { get; private set; }

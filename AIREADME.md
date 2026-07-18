@@ -26,6 +26,9 @@
 - Windows 3.0.0.9 localizes the complete desktop resource set into Simplified Chinese and aligns the Bluetooth module hierarchy with Notifications: the module heading remains outside the cards, while the three device sections use separate cards and per-device context actions.
 - Removing `Language` from `AppxBundleAutoResourcePackageQualifiers` requires the complete `AppxDefaultResourceQualifiers` union, including the original `Scale=200`. Omitting it collapsed the scale resource-package graph and caused an in-place update to fail in Windows MRT `SystemRegisterRemove` with `0x80073CF9`/`0x8007000D`.
 - The corrected 3.0.0.9 bundle embeds all 15 UI languages in the main package while preserving the prior `split.scale-100/125/150/300/400` graph. Updating from 3.0.0.7 succeeded and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte; the backup is under `%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-ui-3.0.0.9-20260718-231936\LocalState`.
+- The official 2.4.0 server database is schema 3. sqlite-net cannot add the schema 5 primary-key columns during `CreateTable`, so legacy content tables now use an explicit transactional rebuild migration; paired-device, local-device, and certificate rows are left in place.
+- The schema 3 to 5 migration passes both a synthetic regression fixture and a read-only copy of the server database containing 3 pairings, 261 conversations, and 612 messages.
+- Server `META-ROGALLY` now runs fork package `Meta.Sefirah.Fork` 3.0.0.10 in console session 1. The original Store package was removed only after a complete LocalState backup, and the fork PFX hash remained `7DD1AD685076DCF6362B186D194558CD806344F55280847654FB4F339286791C`. The immediate pre-3.0.0.10 backup is `%LOCALAPPDATA%\Temp\.agents\Sefirah\server-deploy\pre-3.0.0.10-20260718-235628\LocalState` on the server.
 
 # Task Board
 
@@ -40,6 +43,8 @@
 - [x] Redesign the Windows Bluetooth card around the selected endpoint with three sections, expandable actions, and visibility settings.
 - [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
 - [x] Localize the Windows UI into Simplified Chinese, align Bluetooth with the Notifications visual hierarchy, reuse the device selector for handoff targets, and ship the data-preserving 3.0.0.9 update.
+- [x] Add an explicit schema 3 to 5 primary-key migration with regression coverage and deploy the data-preserving 3.0.0.10 fork to the Windows server.
+- [ ] Replace the tablet installation after its USB ADB interface is enabled and authorized; Windows currently sees Xiaomi Pad 6 Pro only as an MTP/WPD device.
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.
