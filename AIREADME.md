@@ -15,6 +15,7 @@
 - The Microsoft Store package publisher is Microsoft-controlled, so a self-signed fork cannot update it in place. The fork uses the side-by-side identity `Meta.Sefirah.Fork`; its installer backs up and migrates the complete Store `LocalState` before first launch.
 - Windows fork signing material lives only in the ignored project-local `.signing` directory. The PFX password is DPAPI-protected for the current Windows user and is passed to MSBuild through an environment property, not process arguments. Back up the whole directory before deleting the checkout.
 - The x64 sideload build can report APPX certificate-store warnings because the project key is deliberately not imported during builds. The build script independently rejects a bundle whose Authenticode signer thumbprint does not match the project certificate.
+- The user-facing Windows artifact is now a self-contained x64 EXE bootstrapper. It embeds the signed bundle and public certificate, requests UAC, installs the package, and intentionally does not import Microsoft Store data; only future updates of the same fork identity preserve fork `LocalState` in place.
 
 # Task Board
 
@@ -24,6 +25,7 @@
 - [x] Add desktop discovery and handoff UI.
 - [x] Add non-destructive schema upgrades and validated Store-data migration tooling.
 - [x] Add a reproducible signed x64 MSIX Bundle installer with UAC certificate trust, automatic first-run Store data migration, and an in-project artifact/signing layout.
+- [x] Add and validate a directly runnable, Authenticode-signed x64 EXE installer that performs a clean fork install without Store-data migration.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.
 - [x] Commit and push the feature branch.

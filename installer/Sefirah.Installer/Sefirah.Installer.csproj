@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Sefirah-Fork-Setup</AssemblyName>
+    <RootNamespace>Sefirah.Installer</RootNamespace>
+    <Version>3.0.0.1</Version>
+    <AssemblyVersion>3.0.0.1</AssemblyVersion>
+    <FileVersion>3.0.0.1</FileVersion>
+    <Product>Sefirah Fork Installer</Product>
+    <Company>Meta (forked from shrimqy)</Company>
+    <Description>Installs the signed Sefirah Fork Windows package.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\src\Sefirah\Assets\Icons\SefirahLight.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(BundlePath)') and Exists('$(CertificatePath)')">
+    <EmbeddedResource Include="$(BundlePath)" LogicalName="SefirahInstaller.Payload.msixbundle" />
+    <EmbeddedResource Include="$(CertificatePath)" LogicalName="SefirahInstaller.SigningCertificate.cer" />
+  </ItemGroup>
+
+  <Target Name="ValidateInstallerPayload" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(BundlePath)')" Text="BundlePath must point to the signed Sefirah .msixbundle." />
+    <Error Condition="!Exists('$(CertificatePath)')" Text="CertificatePath must point to its public signing certificate." />
+  </Target>
+</Project>

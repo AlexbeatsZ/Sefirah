@@ -163,8 +163,45 @@ Compress-Archive -LiteralPath $staging -DestinationPath $zipPath -CompressionLev
 
 $bundleHash = Get-FileHash -LiteralPath $outputBundle -Algorithm SHA256
 $zipHash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
+
+$installerProject = Join-Path $root 'installer\Sefirah.Installer\Sefirah.Installer.csproj'
+$installerPublishDirectory = Join-Path $artifactDirectory '.exe-publish'
+if (Test-Path -LiteralPath $installerPublishDirectory) {
+    Remove-Item -LiteralPath $installerPublishDirectory -Recurse -Force
+}
+$installerArguments = @(
+    'publish', $installerProject,
+    '-c', 'Release',
+    '-r', 'win-x64',
+    '--self-contained', 'true',
+    '-o', $installerPublishDirectory,
+    "-p:BundlePath=$outputBundle",
+    "-p:CertificatePath=$cerPath"
+)
+& dotnet @installerArguments
+if ($LASTEXITCODE -ne 0) {
+    throw "EXE installer publish failed with exit code $LASTEXITCODE"
+}
+
+$unsignedInstaller = Join-Path $installerPublishDirectory 'Sefirah-Fork-Setup.exe'
+if (-not (Test-Path -LiteralPath $unsignedInstaller -PathType Leaf)) {
+    throw "EXE installer was not found at $unsignedInstaller"
+}
+$exePath = Join-Path $artifactDirectory "Sefirah-Fork-Setup_${version}_${Architecture}.exe"
+Copy-Item -LiteralPath $unsignedInstaller -Destination $exePath -Force
+$exeSignature = Set-AuthenticodeSignature -LiteralPath $exePath -Certificate $certificate -HashAlgorithm SHA256
+if ($exeSignature.SignerCertificate.Thumbprint -ne $certificate.Thumbprint) {
+    throw 'The generated EXE installer is not signed by the expected fork certificate.'
+}
+$exeHash = Get-FileHash -LiteralPath $exePath -Algorithm SHA256
+if (Test-Path -LiteralPath $installerPublishDirectory) {
+    Remove-Item -LiteralPath $installerPublishDirectory -Recurse -Force
+}
+
 Write-Host "Bundle: $outputBundle"
 Write-Host "Bundle SHA256: $($bundleHash.Hash)"
 Write-Host "Installer ZIP: $zipPath"
 Write-Host "ZIP SHA256: $($zipHash.Hash)"
+Write-Host "Installer EXE: $exePath"
+Write-Host "EXE SHA256: $($exeHash.Hash)"
 Write-Host "Back up $signingDirectory before deleting or moving the project."
