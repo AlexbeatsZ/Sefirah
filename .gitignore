@@ -393,8 +393,13 @@ FodyWeavers.xsd
 *.cab
 *.msi
 *.msix
+*.msixbundle
 *.msm
 *.msp
+
+# Local fork signing key and packaged release artifacts
+/.signing/
+/artifacts/
 
 # JetBrains Rider
 *.sln.iml

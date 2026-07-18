@@ -6,22 +6,33 @@ the certificate or database invalidates existing peer trust.
 
 ## First migration from the Microsoft Store build
 
-1. Install the fork side by side and record its empty `LocalState` path.
-2. Close both Sefirah builds. The migration script refuses to run while a
+1. Close both Sefirah builds. The installer refuses to continue while a
    `Sefirah` process exists.
-3. Run `tools/Migrate-OfficialData.ps1 -DestinationLocalState <path>`.
-4. The script copies the complete official `LocalState` into a validated backup
+2. Run `Install.ps1` from the sideload ZIP. It installs the fork side by side
+   under the package identity `Meta.Sefirah.Fork` and then invokes the migration
+   script automatically.
+3. The migration script copies the complete official `LocalState` into a validated backup
    under `%LOCALAPPDATA%\Temp\.agents\Sefirah\official-data-import\` before it
    writes the empty fork destination. It refuses to overwrite an existing
    database or certificate.
-5. Start the fork and verify every paired endpoint before uninstalling the Store
+4. Start the fork and verify every paired endpoint before uninstalling the Store
    build.
+
+Pass `-SkipOfficialDataMigration` to `Install.ps1` only when a clean fork profile
+is intentional. The standalone `tools/Migrate-OfficialData.ps1` remains
+available for a manual migration.
 
 ## Future desktop updates
 
 Database upgrades are additive and backed up under
 `%LOCALAPPDATA%\Temp\.agents\Sefirah\database-backups\`. Missing migrations or
 newer unknown schemas stop startup instead of deleting pairing data.
+
+`tools/Build-SideloadPackage.ps1` keeps the signing private key and its
+current-user DPAPI-protected password in the project-local, ignored `.signing`
+directory. Back up that entire directory securely before deleting the checkout.
+The build does not import the certificate into a Windows certificate store.
+Future packages retain `Meta.Sefirah.Fork` and update its `LocalState` in place.
 
 ## Android signing
 

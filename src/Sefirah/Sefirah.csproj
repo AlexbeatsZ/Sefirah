@@ -6,7 +6,7 @@
         <UnoSingleProject>true</UnoSingleProject>
 
         <!-- Display name -->
-        <ApplicationTitle>Sefirah</ApplicationTitle>
+        <ApplicationTitle>Sefirah Fork</ApplicationTitle>
         <!-- App Identifier -->
         <ApplicationId>com.sefirah.castle</ApplicationId>
         <!-- Versions -->
@@ -58,8 +58,9 @@
 
     <PropertyGroup Condition="'$(UapAppxPackageBuildMode)' == 'Sideloading'">
         <GenerateTemporaryStoreCertificate>False</GenerateTemporaryStoreCertificate>
-        <PackageCertificateKeyFile>Sefirah_TemporaryKey.pfx</PackageCertificateKeyFile>
-        <PackageCertificateThumbprint>15cbc5825d3fe452c20ec20aa3191c836a6e302d</PackageCertificateThumbprint>
+        <!-- tools/Build-SideloadPackage.ps1 supplies the local, untracked key. -->
+        <PackageCertificateKeyFile></PackageCertificateKeyFile>
+        <PackageCertificateThumbprint></PackageCertificateThumbprint>
     </PropertyGroup>
 
     <PropertyGroup>
