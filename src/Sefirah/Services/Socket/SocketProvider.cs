@@ -25,7 +25,7 @@ public partial class ServerSession(SslServer server, ITcpServerProvider socketPr
 
     protected override void OnError(SocketError error)
     {
-        socketProvider.OnError(error);
+        socketProvider.OnError(this, error);
     }
 }
 
@@ -38,7 +38,7 @@ public partial class Server(SslContext context, IPAddress address, int port, ITc
 
     protected override void OnError(SocketError error)
     {
-        socketProvider.OnError(error);
+        socketProvider.OnServerError(error);
     }
 }
 

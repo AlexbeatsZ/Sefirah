@@ -250,7 +250,17 @@ public partial class SendFileHandler(
         }
     }
 
-    public void OnError(SocketError error)
+    public void OnError(ServerSession failedSession, SocketError error)
+    {
+        logger.Error($"File transfer session {failedSession.Id} socket error: {error}");
+        transferCompletionSource?.TrySetException(new SocketException((int)error));
+        if (session == failedSession)
+            session = null;
+        failedSession.Disconnect();
+        failedSession.Dispose();
+    }
+
+    public void OnServerError(SocketError error)
     {
         logger.Error($"Server socket error: {error}");
     }

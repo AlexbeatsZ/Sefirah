@@ -33,7 +33,8 @@
 - Existing paired inbound connections must receive both the authentication response and current `DeviceInfo`; otherwise one side can look connected while the initiating side waits, lacks capabilities, and repeatedly reconnects.
 - Remote `ActionInfo` execution is now denied unless the sender explicitly advertises `remote-actions-controller-v1`; Bluetooth catalog and command messages are independently gated by `bluetooth-handoff-v1`.
 - Desktop peers can legitimately send `BluetoothHandoffConfiguration` and `BluetoothHandoffState`, but these are companion-facing state messages and should be recognized without mutating the receiving desktop's local configuration.
-- Windows 3.0.0.25 handles Bluetooth catalog requests and commands on both desktop peers. It was installed on `Meta-OMEN` and `META-ROGALLY` with each machine's `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` preserved byte-for-byte. A live `sefirahctl bluetooth list Meta-ROG` returned the remote catalog, and post-upgrade logs contained no new unknown-message or `NotConnected` socket errors.
+- Windows 3.0.0.27 handles Bluetooth catalog requests and commands on both desktop peers and routes session-level socket failures back to the owning `ServerSession` for immediate cleanup. `NotConnected` on an already-closed transient session is normal close-race telemetry and is kept at debug level; other server and session socket faults remain warnings/errors.
+- 3.0.0.27 was installed on `Meta-OMEN` and `META-ROGALLY` with each machine's `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` preserved byte-for-byte at every package update boundary. A live `sefirahctl bluetooth list Meta-ROG` returned the remote catalog, and a 75-second post-upgrade observation contained no new warning/error, unknown-message, or `NotConnected` entries.
 
 # Task Board
 
@@ -49,7 +50,7 @@
 - [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
 - [x] Localize the Windows UI into Simplified Chinese, align Bluetooth with the Notifications visual hierarchy, reuse the device selector for handoff targets, and ship the data-preserving 3.0.0.9 update.
 - [x] Add an explicit schema 3 to 5 primary-key migration with regression coverage and deploy the data-preserving 3.0.0.10 fork to the Windows server.
-- [x] Stabilize simultaneous Windows peer connections, add capability-gated remote actions, route desktop Bluetooth catalog/command messages, and deploy the data-preserving 3.0.0.25 update to both Windows peers.
+- [x] Stabilize simultaneous Windows peer connections, add capability-gated remote actions, route desktop Bluetooth catalog/command messages, clean failed sessions, and deploy the data-preserving 3.0.0.27 update to both Windows peers.
 - [ ] Replace the tablet installation after its USB ADB interface is enabled and authorized; Windows currently sees Xiaomi Pad 6 Pro only as an MTP/WPD device.
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.

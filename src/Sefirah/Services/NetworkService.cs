@@ -223,9 +223,18 @@ public class NetworkService(
         DisconnectSession(session);
     }
 
-    public void OnError(SocketError error)
+    public void OnError(ServerSession session, SocketError error)
     {
-        logger.Error($"Error on socket {error}");
+        if (error == SocketError.NotConnected)
+            logger.Debug($"Removing closed server session {session.Id}");
+        else
+            logger.Warn($"Server session {session.Id} encountered socket error {error}; removing the failed session");
+        DisconnectSession(session);
+    }
+
+    public void OnServerError(SocketError error)
+    {
+        logger.Error($"TCP server socket error {error}");
     }
 
     public void OnReceived(ServerSession session, byte[] buffer, long offset, long size)
@@ -791,7 +800,10 @@ public class NetworkService(
     {
         if (handshakeCompletion.TryRemove(client.Id, out var tcs))
             tcs.TrySetException(new IOException($"Socket error before TLS handshake completed: {error}"));
-        logger.Error($"Error on client socket {error}");
+        if (error == SocketError.NotConnected)
+            logger.Debug($"Removing closed client socket {client.Id}");
+        else
+            logger.Error($"Error on client socket {error}");
         DisconnectClient(client);
     }
 
