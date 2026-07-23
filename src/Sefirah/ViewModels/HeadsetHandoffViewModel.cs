@@ -8,12 +8,18 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private readonly IDeviceManager deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
     private bool initialized;
     private DispatcherTimer? refreshTimer;
+    private List<HeadsetConfiguration> latestConfigurations = [];
 
     public ObservableCollection<HeadsetEndpointOption> Endpoints { get; } = [];
     public ObservableCollection<HeadsetDeviceItem> SelectedConnectedDevices { get; } = [];
     public ObservableCollection<HeadsetDeviceItem> OtherConnectedDevices { get; } = [];
     public ObservableCollection<HeadsetDeviceItem> SavedDisconnectedDevices { get; } = [];
     public ObservableCollection<HeadsetVisibilityOption> VisibilityOptions { get; } = [];
+    public IReadOnlyList<string> FilterOptions { get; } =
+    [
+        "BluetoothFilterAll".GetLocalizedResource(),
+        "BluetoothFilterHeadsets".GetLocalizedResource(),
+    ];
 
     public string? LocalEndpointId { get; private set; }
     public string? SelectedEndpointId { get; private set; }
@@ -27,6 +33,9 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = "BluetoothStatusRefreshing".GetLocalizedResource();
+
+    [ObservableProperty]
+    public partial int SelectedFilterIndex { get; set; }
 
     public async Task InitializeAsync()
     {
@@ -51,9 +60,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
             await RefreshEndpointsAsync();
             var report = await handoffService.DiscoverAsync();
             ReloadSections(report.Headsets);
-            StatusText = report.Headsets.Count == 0
-                ? "BluetoothStatusNone".GetLocalizedResource()
-                : string.Format("BluetoothStatusUpdated".GetLocalizedResource(), report.Headsets.Count);
+            UpdateCountStatus();
         }
         catch (Exception ex)
         {
@@ -153,16 +160,17 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
 
     private void ReloadSections(IEnumerable<HeadsetConfiguration> configurations)
     {
+        latestConfigurations = configurations.ToList();
         SelectedConnectedDevices.Clear();
         OtherConnectedDevices.Clear();
         SavedDisconnectedDevices.Clear();
         VisibilityOptions.Clear();
 
         var endpointsById = Endpoints.ToDictionary(item => item.Id, item => item.DisplayName);
-        foreach (var headset in configurations.OrderBy(item => item.DisplayName))
+        foreach (var headset in latestConfigurations.OrderBy(item => item.DisplayName))
         {
             VisibilityOptions.Add(new HeadsetVisibilityOption(headset.Id, headset.DisplayName, headset.IsVisible));
-            if (!headset.IsVisible || SelectedEndpointId is null) continue;
+            if (!headset.IsVisible || !MatchesFilter(headset) || SelectedEndpointId is null) continue;
 
             if (headset.ActiveEndpointId == SelectedEndpointId)
             {
@@ -181,6 +189,28 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
                     HeadsetDeviceSection.SavedDisconnected));
             }
         }
+    }
+
+    private bool MatchesFilter(HeadsetConfiguration configuration) =>
+        SelectedFilterIndex == 0 || configuration.IsHeadset;
+
+    partial void OnSelectedFilterIndexChanged(int value)
+    {
+        if (value is < 0 or > 1)
+        {
+            SelectedFilterIndex = 0;
+            return;
+        }
+        ReloadSections(latestConfigurations);
+        UpdateCountStatus();
+    }
+
+    private void UpdateCountStatus()
+    {
+        var visibleCount = latestConfigurations.Count(item => item.IsVisible && MatchesFilter(item));
+        StatusText = visibleCount == 0
+            ? "BluetoothStatusNone".GetLocalizedResource()
+            : string.Format("BluetoothStatusUpdated".GetLocalizedResource(), visibleCount);
     }
 
     private static HeadsetDeviceItem CreateItem(

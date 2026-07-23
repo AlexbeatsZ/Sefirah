@@ -953,6 +953,9 @@ input text %pwd%</value>
    </data>
   <data name="BluetoothDevices" xml:space="preserve"><value>Bluetooth devices</value></data>
   <data name="BluetoothRefresh" xml:space="preserve"><value>Refresh Bluetooth devices</value></data>
+  <data name="BluetoothFilterAll" xml:space="preserve"><value>All devices</value></data>
+  <data name="BluetoothFilterHeadsets" xml:space="preserve"><value>Headsets only</value></data>
+  <data name="BluetoothFilterDescription" xml:space="preserve"><value>Filter the displayed Bluetooth devices</value></data>
   <data name="BluetoothVisibleDevices" xml:space="preserve"><value>Visible Bluetooth devices</value></data>
   <data name="BluetoothVisibilityDescription" xml:space="preserve"><value>Choose which saved devices appear in this card.</value></data>
   <data name="BluetoothConnectedSelected" xml:space="preserve"><value>Connected to selected device</value></data>
@@ -965,7 +968,7 @@ input text %pwd%</value>
   <data name="BluetoothPc" xml:space="preserve"><value>{0} (PC)</value></data>
   <data name="BluetoothThisPc" xml:space="preserve"><value>{0} (this PC)</value></data>
   <data name="BluetoothStatusRefreshing" xml:space="preserve"><value>Refreshing Bluetooth devices…</value></data>
-  <data name="BluetoothStatusNone" xml:space="preserve"><value>No saved Bluetooth audio devices were found.</value></data>
+  <data name="BluetoothStatusNone" xml:space="preserve"><value>No Bluetooth devices match the current filter.</value></data>
   <data name="BluetoothStatusUpdated" xml:space="preserve"><value>Updated {0} saved Bluetooth device(s).</value></data>
   <data name="BluetoothStatusRefreshFailed" xml:space="preserve"><value>Bluetooth refresh failed: {0}</value></data>
   <data name="BluetoothStatusDisconnecting" xml:space="preserve"><value>Disconnecting Bluetooth device…</value></data>

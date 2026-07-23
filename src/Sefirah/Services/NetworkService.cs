@@ -30,7 +30,9 @@ public class NetworkService(
     private readonly HashSet<string> connectingDeviceIds = [];
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> handshakeCompletion = [];
     private readonly ConcurrentDictionary<string, CancellationTokenSource> connectionCancellationTokens = [];
+    private readonly ConcurrentDictionary<string, byte> adbConnectionAttempts = [];
     private readonly ConnectionAuthenticationGate connectionAuthenticationGate = new();
+    private int heartbeatLoopStarted;
 
     private ObservableCollection<PairedDevice> PairedDevices => deviceManager.PairedDevices;
     private ObservableCollection<DiscoveredDevice> DiscoveredDevices => deviceManager.DiscoveredDevices;
@@ -64,6 +66,8 @@ public class NetworkService(
                 {
                     ServerPort = port;
                     isRunning = true;
+                    if (Interlocked.Exchange(ref heartbeatLoopStarted, 1) == 0)
+                        _ = RunAndroidHeartbeatLoopAsync();
                     logger.Info($"Server started on port: {port}");
                     return;
                 }
@@ -80,13 +84,65 @@ public class NetworkService(
         logger.Error($"Failed to start server");
     }
 
+    private async Task RunAndroidHeartbeatLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        while (await timer.WaitForNextTickAsync())
+        {
+            try
+            {
+                var bytes = EncodeMessage(new ConnectionHeartbeat());
+                foreach (var device in PairedDevices
+                             .Where(d => d.IsConnected &&
+                                         d.SupportsCapability(ProtocolCapabilities.RemoteActionsControllerV1))
+                             .ToList())
+                {
+                    var flushed = device.Session is not null
+                        ? device.Session.SendControlAndFlush(bytes)
+                        : device.Client is not null && device.Client.SendControlAndFlush(bytes);
+
+                    if (!flushed)
+                        logger.Warn($"Proactive heartbeat did not flush for Android endpoint {device.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Device discovery can update the observable collection while this
+                // background loop takes its snapshot. Keep the long-lived loop alive
+                // and retry on the next tick instead of silently losing heartbeats.
+                logger.Warn("Android heartbeat loop iteration failed", ex);
+            }
+        }
+    }
+
     private async void ConnectionStatusChangedEvent(object? sender, PairedDevice device)
     {
-        if (device.IsConnected)
+        if (!device.IsConnected) return;
+
+        await SendDeviceInfo(device);
+
+        // ADB-over-TCP is optional and may block for minutes when port 5555 is
+        // unavailable. Never run it inline with a socket callback, and do not probe
+        // devices whose per-device ADB TCP/IP setting is disabled.
+        if (!device.DeviceSettings.AdbTcpipModeEnabled ||
+            !adbConnectionAttempts.TryAdd(device.Id, 0))
+            return;
+
+        _ = Task.Run(async () =>
         {
-            await SendDeviceInfo(device);
-            await adbService.TryConnectTcp(device.Address, device.Model);
-        }
+            try
+            {
+                await adbService.TryConnectTcp(device.Address, device.Model);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn($"Background ADB connection failed for {device.Name}", ex);
+            }
+            finally
+            {
+                adbConnectionAttempts.TryRemove(device.Id, out _);
+            }
+        });
     }
 
     private async Task SendDeviceInfo(PairedDevice device)
@@ -125,7 +181,8 @@ public class NetworkService(
         try
         {
             var bytes = EncodeMessage(message);
-            session.SendAsync(bytes);
+            if (!session.SendApplicationAsync(bytes))
+                logger.Warn($"Failed to send {message.GetType().Name} to server session {session.Id}");
         }
         catch (Exception ex)
         {
@@ -138,7 +195,8 @@ public class NetworkService(
         try
         {
             var bytes = EncodeMessage(message);
-            client.SendAsync(bytes);
+            if (!client.SendApplicationAsync(bytes))
+                logger.Warn($"Failed to send {message.GetType().Name} to client {client.Id}");
         }
         catch (Exception ex)
         {
@@ -279,7 +337,21 @@ public class NetworkService(
                 // Do not depend on the asynchronously applied DeviceInfo capabilities here:
                 // a slow initial feature sync could otherwise suppress every response until the
                 // Android peer declares the connection stale and reconnects.
-                pairedDevice.SendMessage(new ConnectionHeartbeat());
+                logger.Debug($"Heartbeat received from {pairedDevice.Name}; replying on {guid}");
+                if (pairedDevice.Session?.Id == guid)
+                {
+                    var bytes = EncodeMessage(new ConnectionHeartbeat());
+                    if (!pairedDevice.Session.SendControlAndFlush(bytes))
+                        logger.Warn($"Heartbeat reply did not flush for server session {guid}");
+                }
+                else if (pairedDevice.Client?.Id == guid)
+                {
+                    var bytes = EncodeMessage(new ConnectionHeartbeat());
+                    if (!pairedDevice.Client.SendControlAndFlush(bytes))
+                        logger.Warn($"Heartbeat reply did not flush for client {guid}");
+                }
+                else
+                    logger.Warn($"Heartbeat source {guid} is no longer the active connection for {pairedDevice.Name}");
                 return;
             }
             messageHandler.Value.HandleMessageAsync(pairedDevice, message);
@@ -788,6 +860,7 @@ public class NetworkService(
 
     public void OnDisconnected(Client client)
     {
+        logger.Debug($"Client disconnected: {client.Id}");
         if (handshakeCompletion.TryRemove(client.Id, out var tcs))
             tcs.TrySetException(new IOException("Disconnected before TLS handshake completed"));
 

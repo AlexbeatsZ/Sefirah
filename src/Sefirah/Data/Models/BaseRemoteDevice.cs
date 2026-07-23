@@ -39,8 +39,8 @@ public abstract partial class BaseRemoteDevice : ObservableObject
         {
             var stringMessage = JsonMessageSerializer.Serialize(message);
             var messageBytes = Encoding.UTF8.GetBytes(stringMessage + "\n");
-            Session?.SendAsync(messageBytes);
-            Client?.SendAsync(messageBytes);
+            Session?.SendApplicationAsync(messageBytes);
+            Client?.SendApplicationAsync(messageBytes);
         }
         catch { }
     }

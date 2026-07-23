@@ -37,7 +37,7 @@ static object BuildRequest(string[] args)
             sefirahctl bluetooth list [local|phone|endpoint-id]
             sefirahctl bluetooth discover
             sefirahctl bluetooth config
-            sefirahctl bluetooth view <local|phone|endpoint-id>
+            sefirahctl bluetooth view <local|phone|endpoint-id> [all|headsets]
             sefirahctl bluetooth switch <headset-id> <endpoint>
             sefirahctl bluetooth disconnect <headset-id> <endpoint>
             sefirahctl bluetooth visibility <headset-id> <show|hide>
@@ -60,7 +60,10 @@ static object BuildRequest(string[] args)
     if (args is ["bluetooth", "config"])
         return Request("bluetooth.config", new { });
     if (args is ["bluetooth", "view", var selectedEndpoint])
-        return Request("bluetooth.view", new { endpoint = selectedEndpoint });
+        return Request("bluetooth.view", new { endpoint = selectedEndpoint, filter = "all" });
+    if (args is ["bluetooth", "view", var filteredEndpoint, var filter] &&
+        filter is "all" or "headsets")
+        return Request("bluetooth.view", new { endpoint = filteredEndpoint, filter });
     if (args is ["bluetooth", "switch", var headsetId, var target])
         return Request("bluetooth.handoff", new { headsetId, endpoint = target });
     if (args is ["bluetooth", "disconnect", var disconnectHeadsetId, var disconnectEndpoint])

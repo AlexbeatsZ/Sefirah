@@ -56,3 +56,32 @@
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.
 - [x] Commit and push the feature branch.
+# 2026-07-24 Fork Bluetooth Catalog and Connection Work
+
+## Project Goal
+
+- 蓝牙卡片默认显示全部已配对设备，并提供“全部 / 仅耳机”筛选。
+- 统一电脑、Windows 服务器、平板和手机的蓝牙端点目录与切换协议。
+
+## Lessons Learned
+
+- Windows 设备目录需要枚举并合并 Classic 与 BLE；规范化蓝牙地址比名称匹配可靠。
+- `SendAsync` 已复制到 NetCoreServer 内部缓冲；原始回调 buffer 生命周期不是平板断流根因。
+- `SendControlAndFlush` 的“未清空”警告只说明 250 ms 内发送队列仍有数据，不等同于心跳未排队。
+- Android 回调内同步执行 ADB TCP 可达性探测会阻塞 socket 处理，必须按设备设置在后台去重执行。
+- 平板断流在同一设备的无线 ADB TLS 上也复现，因此不能继续只修改 Windows 心跳来猜根因。
+
+## Task Board
+
+- [done] 全设备蓝牙目录、Classic/BLE 合并、地址身份与精确耳机分类。
+- [done] UI 和 CLI 支持默认 `all` 与可选 `headsets`。
+- [done] Android 心跳响应、主动心跳、串行收包和 ADB TCP 回调解耦。
+- [done] `Sefirah.BluetoothCatalog.Regression` 通过。
+- [done] Windows v40 构建、打包并部署至电脑和服务器；服务器证书保留。
+- [paused] Xiaomi Pad 6 Pro 的 20–30 秒系统层断流，留待取得稳定 USB logcat 后继续。
+
+## Evidence
+
+- Bundle SHA-256: `DFAD6466D3E373AE76C57174274D7F8F13698BF94EAD01DA05B72BBBB4ECBF2B`
+- 实机“全部”目录包含键盘、鼠标、手写笔和耳机；“仅耳机”只保留 QCY AilyBuds Lite 与 QCY-T13。
+- 服务器 v40 安装状态 `Ok`，PFX 文件哈希保持 `7DD1AD685076DCF6362B186D194558CD806344F55280847654FB4F339286791C`。

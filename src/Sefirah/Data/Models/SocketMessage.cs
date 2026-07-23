@@ -93,16 +93,18 @@ public class BluetoothDeviceCatalog : SocketMessage
     public bool ControllerAvailable { get; set; }
     public bool RadioEnabled { get; set; }
     public bool SupportsPerDeviceControl { get; set; }
-    public List<BluetoothAudioDevice> Devices { get; set; } = [];
+    public List<BluetoothCatalogDevice> Devices { get; set; } = [];
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
 }
 
-public class BluetoothAudioDevice
+public class BluetoothCatalogDevice
 {
     public required string DeviceKey { get; set; }
     public required string DisplayName { get; set; }
     public bool IsConnected { get; set; }
+    public string? BluetoothAddress { get; set; }
+    public bool IsHeadset { get; set; }
 }
 
 public class BluetoothHandoffRequest : SocketMessage
@@ -169,6 +171,8 @@ public class BluetoothHeadsetDescriptor
     public required string Id { get; set; }
     public required string DisplayName { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool IsHeadset { get; set; }
+    public string? BluetoothAddress { get; set; }
     public List<string> EndpointIds { get; set; } = [];
     public string? ActiveEndpointId { get; set; }
 }

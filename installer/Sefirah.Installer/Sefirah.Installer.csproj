@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Sefirah-Fork-Setup</AssemblyName>
     <RootNamespace>Sefirah.Installer</RootNamespace>
-    <Version>3.0.0.27</Version>
+    <Version>3.0.0.40</Version>
     <AssemblyVersion>3.0.0.27</AssemblyVersion>
     <FileVersion>3.0.0.27</FileVersion>
     <Product>Sefirah Fork Installer</Product>

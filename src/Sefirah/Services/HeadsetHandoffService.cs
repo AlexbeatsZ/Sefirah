@@ -40,6 +40,8 @@ public sealed class HeadsetHandoffService(
                 Id = h.Id,
                 DisplayName = h.DisplayName,
                 IsVisible = h.IsVisible,
+                IsHeadset = h.IsHeadset,
+                BluetoothAddress = h.BluetoothAddress,
                 EndpointIds = h.EndpointDeviceKeys.Keys.ToList(),
                 ActiveEndpointId = h.ActiveEndpointId,
             }).ToList(),
@@ -109,64 +111,109 @@ public sealed class HeadsetHandoffService(
         try
         {
             var local = await deviceManager.GetLocalDeviceAsync();
-        var endpoints = new List<BluetoothEndpointDescriptor>
-        {
-            new()
+            var endpoints = new List<BluetoothEndpointDescriptor>
             {
-                Id = local.DeviceId,
-                DisplayName = string.Format("BluetoothThisPc".GetLocalizedResource(), local.DeviceName),
-            },
-        };
-        endpoints.AddRange(deviceManager.PairedDevices
-            .Where(device => device.IsConnected && device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
-            .Select(device => new BluetoothEndpointDescriptor { Id = device.Id, DisplayName = device.Name }));
+                new()
+                {
+                    Id = local.DeviceId,
+                    DisplayName = string.Format("BluetoothThisPc".GetLocalizedResource(), local.DeviceName),
+                },
+            };
+            endpoints.AddRange(deviceManager.PairedDevices
+                .Where(device => device.IsConnected &&
+                                 device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
+                .Select(device => new BluetoothEndpointDescriptor { Id = device.Id, DisplayName = device.Name }));
 
-        var endpointCatalogs = new List<BluetoothEndpointCatalog>();
-        foreach (var endpoint in endpoints)
-        {
-            endpointCatalogs.Add(new BluetoothEndpointCatalog
+            var endpointCatalogs = new List<BluetoothEndpointCatalog>();
+            foreach (var endpoint in endpoints)
             {
-                EndpointId = endpoint.Id,
-                DisplayName = endpoint.DisplayName,
-                Catalog = await GetCatalogAsync(endpoint.Id, cancellationToken),
-            });
-        }
-
-        var grouped = endpointCatalogs
-            .SelectMany(item => item.Catalog.Devices.Select(device => (Endpoint: item, Device: device)))
-            .GroupBy(item => item.Device.DisplayName.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Select(item => item.Endpoint.EndpointId).Distinct().Count() >= 2)
-            .ToList();
-
-        var configurations = Configurations.ToList();
-        foreach (var configuration in configurations)
-        {
-            configuration.ActiveEndpointId = null;
-        }
-        foreach (var group in grouped)
-        {
-            var configuration = configurations.FirstOrDefault(headset =>
-                headset.DisplayName.Equals(group.Key, StringComparison.OrdinalIgnoreCase));
-            if (configuration is null)
-            {
-                configuration = new HeadsetConfiguration { DisplayName = group.Key };
-                configurations.Add(configuration);
+                endpointCatalogs.Add(new BluetoothEndpointCatalog
+                {
+                    EndpointId = endpoint.Id,
+                    DisplayName = endpoint.DisplayName,
+                    Catalog = await GetCatalogAsync(endpoint.Id, cancellationToken),
+                });
             }
 
-            foreach (var item in group)
-            {
-                configuration.EndpointDeviceKeys[item.Endpoint.EndpointId] = item.Device.DeviceKey;
-                if (item.Device.IsConnected) configuration.ActiveEndpointId = item.Endpoint.EndpointId;
-            }
-        }
+            var grouped = endpointCatalogs
+                .SelectMany(item => item.Catalog.Devices.Select(device => (Endpoint: item, Device: device)))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Device.DisplayName))
+                .GroupBy(item => BluetoothDeviceIdentity.CatalogKey(
+                        item.Device.BluetoothAddress,
+                        item.Device.DeviceKey,
+                        item.Device.DisplayName),
+                    StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(group => group.Select(item => item.Endpoint.EndpointId).Distinct().Count())
+                .ThenByDescending(group => group.Any(item => item.Device.IsConnected))
+                .ToList();
 
-        foreach (var configuration in configurations)
-        {
-            var connectedEndpoint = endpointCatalogs.FirstOrDefault(endpoint =>
-                configuration.EndpointDeviceKeys.TryGetValue(endpoint.EndpointId, out var deviceKey) &&
-                endpoint.Catalog.Devices.Any(device => device.DeviceKey == deviceKey && device.IsConnected));
-            configuration.ActiveEndpointId = connectedEndpoint?.EndpointId;
-        }
+            var configurations = Configurations.ToList();
+            foreach (var configuration in configurations)
+            {
+                configuration.ActiveEndpointId = null;
+            }
+
+            var claimedConfigurationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in grouped)
+            {
+                var devices = group.ToList();
+                var address = devices
+                    .Select(item => BluetoothDeviceIdentity.ResolveAddress(
+                        item.Device.BluetoothAddress,
+                        item.Device.DeviceKey))
+                    .FirstOrDefault(value => value is not null);
+                var displayName = devices
+                    .OrderByDescending(item => item.Device.IsConnected)
+                    .Select(item => item.Device.DisplayName.Trim())
+                    .First();
+
+                var configuration = configurations.FirstOrDefault(item =>
+                    !claimedConfigurationIds.Contains(item.Id) &&
+                    address is not null &&
+                    ResolveAddress(item) == address);
+                configuration ??= configurations
+                    .Where(item =>
+                        !claimedConfigurationIds.Contains(item.Id) &&
+                        item.DisplayName.Equals(displayName, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(item => devices.Count(device =>
+                        item.EndpointDeviceKeys.TryGetValue(device.Endpoint.EndpointId, out var key) &&
+                        key.Equals(device.Device.DeviceKey, StringComparison.OrdinalIgnoreCase)))
+                    .FirstOrDefault();
+                if (configuration is null)
+                {
+                    configuration = new HeadsetConfiguration { DisplayName = displayName };
+                    configurations.Add(configuration);
+                }
+
+                claimedConfigurationIds.Add(configuration.Id);
+                configuration.DisplayName = displayName;
+                configuration.BluetoothAddress = address ?? configuration.BluetoothAddress;
+                configuration.IsHeadset |= devices.Any(item => item.Device.IsHeadset);
+
+                foreach (var endpointGroup in devices.GroupBy(item => item.Endpoint.EndpointId))
+                {
+                    var selected = endpointGroup
+                        .OrderByDescending(item => item.Device.IsConnected)
+                        .ThenBy(item => item.Device.DeviceKey, StringComparer.OrdinalIgnoreCase)
+                        .First();
+                    configuration.EndpointDeviceKeys[selected.Endpoint.EndpointId] =
+                        selected.Device.DeviceKey;
+                    if (selected.Device.IsConnected)
+                    {
+                        configuration.ActiveEndpointId = selected.Endpoint.EndpointId;
+                    }
+                }
+            }
+
+            foreach (var configuration in configurations)
+            {
+                var connectedEndpoint = endpointCatalogs.FirstOrDefault(endpoint =>
+                    configuration.EndpointDeviceKeys.TryGetValue(endpoint.EndpointId, out var deviceKey) &&
+                    endpoint.Catalog.Devices.Any(device =>
+                        device.DeviceKey.Equals(deviceKey, StringComparison.OrdinalIgnoreCase) &&
+                        device.IsConnected));
+                configuration.ActiveEndpointId = connectedEndpoint?.EndpointId;
+            }
 
             SaveConfigurations(configurations);
             return new BluetoothDiscoveryReport
@@ -180,6 +227,12 @@ public sealed class HeadsetHandoffService(
             discoveryLock.Release();
         }
     }
+
+    private static string? ResolveAddress(HeadsetConfiguration configuration) =>
+        BluetoothDeviceIdentity.NormalizeAddress(configuration.BluetoothAddress) ??
+        configuration.EndpointDeviceKeys.Values
+            .Select(BluetoothDeviceIdentity.ExtractAddress)
+            .FirstOrDefault(value => value is not null);
 
     public Task<BluetoothHandoffState> HandoffAsync(
         string headsetId,

@@ -144,9 +144,20 @@ public sealed class ControlApiWorker(
     private async Task<object> GetBluetoothViewAsync(JsonElement arguments)
     {
         var endpoint = await ResolveEndpointAsync(GetRequiredString(arguments, "endpoint"));
-        var visible = handoffService.Configurations.Where(item => item.IsVisible).ToList();
+        var filter = arguments.TryGetProperty("filter", out var filterValue)
+            ? filterValue.GetString()
+            : "all";
+        if (filter is not ("all" or "headsets"))
+        {
+            throw new InvalidOperationException("Bluetooth filter must be all or headsets.");
+        }
+
+        var visible = handoffService.Configurations
+            .Where(item => item.IsVisible && (filter == "all" || item.IsHeadset))
+            .ToList();
         return new
         {
+            filter,
             selectedEndpoint = new { id = endpoint.Id, name = endpoint.Name },
             selectedConnected = visible.Where(item => item.ActiveEndpointId == endpoint.Id).ToArray(),
             otherConnected = visible.Where(item =>
@@ -158,6 +169,7 @@ public sealed class ControlApiWorker(
                 headsetId = item.Id,
                 item.DisplayName,
                 item.IsVisible,
+                item.IsHeadset,
             }).ToArray(),
         };
     }
