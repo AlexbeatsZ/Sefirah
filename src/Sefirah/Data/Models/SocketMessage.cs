@@ -15,6 +15,7 @@ namespace Sefirah.Data.Models;
 [JsonDerivedType(typeof(ClearNotifications), nameof(ClearNotifications))]
 [JsonDerivedType(typeof(ClipboardInfo), nameof(ClipboardInfo))]
 [JsonDerivedType(typeof(ConnectionAck), nameof(ConnectionAck))]
+[JsonDerivedType(typeof(ConnectionHeartbeat), nameof(ConnectionHeartbeat))]
 [JsonDerivedType(typeof(ContactInfo), nameof(ContactInfo))]
 [JsonDerivedType(typeof(ConversationInfo), nameof(ConversationInfo))]
 [JsonDerivedType(typeof(DeviceInfo), nameof(DeviceInfo))]
@@ -48,6 +49,8 @@ namespace Sefirah.Data.Models;
 public class SocketMessage;
 
 public class ConnectionAck : SocketMessage;
+
+public class ConnectionHeartbeat : SocketMessage;
 
 public class Disconnect : SocketMessage;
 
@@ -158,6 +161,7 @@ public class BluetoothHandoffConfiguration : SocketMessage
 {
     public List<BluetoothHeadsetDescriptor> Headsets { get; set; } = [];
     public List<BluetoothEndpointDescriptor> Endpoints { get; set; } = [];
+    public long Revision { get; set; }
 }
 
 public class BluetoothHeadsetDescriptor

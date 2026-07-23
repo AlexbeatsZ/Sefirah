@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\Sefirah\Data\Contracts\ProtocolCapabilities.cs" Link="ProtocolCapabilities.cs" />
+    <Compile Include="..\..\src\Sefirah\Services\RemoteActionPolicy.cs" Link="RemoteActionPolicy.cs" />
+    <Compile Include="..\..\src\Sefirah\Services\ConnectionCollisionPolicy.cs" Link="ConnectionCollisionPolicy.cs" />
+    <Compile Include="..\..\src\Sefirah\Services\ConnectionAuthenticationGate.cs" Link="ConnectionAuthenticationGate.cs" />
+  </ItemGroup>
+</Project>

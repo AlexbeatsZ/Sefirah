@@ -30,6 +30,7 @@ public class NetworkService(
     private readonly HashSet<string> connectingDeviceIds = [];
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> handshakeCompletion = [];
     private readonly ConcurrentDictionary<string, CancellationTokenSource> connectionCancellationTokens = [];
+    private readonly ConnectionAuthenticationGate connectionAuthenticationGate = new();
 
     private ObservableCollection<PairedDevice> PairedDevices => deviceManager.PairedDevices;
     private ObservableCollection<DiscoveredDevice> DiscoveredDevices => deviceManager.DiscoveredDevices;
@@ -53,6 +54,10 @@ public class NetworkService(
                 {
                     OptionReuseAddress = true,
                     OptionDualMode = true,
+                    OptionKeepAlive = true,
+                    OptionTcpKeepAliveTime = 10,
+                    OptionTcpKeepAliveInterval = 5,
+                    OptionTcpKeepAliveRetryCount = 3,
                 };
 
                 if (server.Start())
@@ -259,6 +264,15 @@ public class NetworkService(
                 ConnectionStatusChanged?.Invoke(this, pairedDevice);
                 return;
             }
+            if (message is ConnectionHeartbeat)
+            {
+                // Receiving the dedicated heartbeat already proves that this peer supports it.
+                // Do not depend on the asynchronously applied DeviceInfo capabilities here:
+                // a slow initial feature sync could otherwise suppress every response until the
+                // Android peer declares the connection stale and reconnects.
+                pairedDevice.SendMessage(new ConnectionHeartbeat());
+                return;
+            }
             messageHandler.Value.HandleMessageAsync(pairedDevice, message);
             return;
         }
@@ -330,13 +344,37 @@ public class NetworkService(
     {
         logger.Info($"Paired device {pairedDevice.Name} verified, updating connection");
 
-        if (pairedDevice.IsConnected && pairedDevice.Session is not null)
+        var localDevice = await deviceManager.GetLocalDeviceAsync();
+        Client? replacedClient = null;
+        ServerSession? replacedSession = null;
+        var accepted = connectionAuthenticationGate.Execute(pairedDevice.Id, () =>
         {
-            DisconnectSession(pairedDevice.Session);
-        }
+            var existingDirection = pairedDevice.Client is not null
+                ? ConnectionDirection.Outgoing
+                : pairedDevice.Session is not null
+                    ? ConnectionDirection.Incoming
+                    : (ConnectionDirection?)null;
+            if (!ConnectionCollisionPolicy.ShouldAcceptCandidate(
+                    localDevice.DeviceId,
+                    pairedDevice.Id,
+                    existingDirection,
+                    ConnectionDirection.Incoming))
+                return false;
 
-        pairedDevice.Session = session;
-        pairedDevice.Address = address;
+            replacedClient = pairedDevice.Client;
+            replacedSession = pairedDevice.Session == session ? null : pairedDevice.Session;
+            pairedDevice.Client = null;
+            pairedDevice.Session = session;
+            pairedDevice.Address = address;
+            return true;
+        });
+
+        if (!accepted)
+        {
+            logger.Info($"Rejecting duplicate incoming connection from {pairedDevice.Name}");
+            DisconnectSession(session);
+            return;
+        }
 
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
@@ -345,7 +383,13 @@ public class NetworkService(
             deviceManager.ActiveDevice = pairedDevice;
         });
 
+        // Existing paired peers still need our Authentication response. Without it,
+        // the inbound side appears connected while the initiating peer waits forever
+        // and keeps stale connection/capability state.
+        SendAuthenticationMessage(m => SendMessage(session, m));
+
         await deviceManager.UpdateDevice(pairedDevice);
+        await SendDeviceInfo(pairedDevice);
 
         if (connectionCancellationTokens.TryRemove(pairedDevice.Id, out var cts))
         {
@@ -353,8 +397,10 @@ public class NetworkService(
             cts.Dispose();
         }
 
-        if (pairedDevice.Client is not null)
-            DisconnectClient(pairedDevice.Client);
+        if (replacedClient is not null)
+            DisconnectClient(replacedClient);
+        if (replacedSession is not null)
+            DisconnectSession(replacedSession);
     }
 
     private async Task AddDiscoveredDevice(ServerSession session, Authentication authMessage, string address, byte[] certificate)
@@ -436,14 +482,26 @@ public class NetworkService(
             session.Disconnect();
             session.Dispose();
             
-            var pairedDevice = PairedDevices.FirstOrDefault(d => d.Session == session);   
+            var pairedDevice = PairedDevices.FirstOrDefault(d => d.Session == session);
             if (pairedDevice is not null)
             {
-                pairedDevice.Session = null;
-                if (pairedDevice.Client is null)
+                var markDisconnected = connectionAuthenticationGate.Execute(pairedDevice.Id, () =>
                 {
-                    App.MainWindow.DispatcherQueue.EnqueueAsync(() => pairedDevice.ConnectionStatus = new Disconnected(forcedDisconnect));
-                    ConnectionStatusChanged?.Invoke(this, pairedDevice);
+                    if (pairedDevice.Session != session) return false;
+                    pairedDevice.Session = null;
+                    return pairedDevice.Client is null;
+                });
+                if (markDisconnected)
+                {
+                    _ = App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+                    {
+                        var stillDisconnected = connectionAuthenticationGate.Execute(
+                            pairedDevice.Id,
+                            () => pairedDevice.Session is null && pairedDevice.Client is null);
+                        if (!stillDisconnected) return;
+                        pairedDevice.ConnectionStatus = new Disconnected(forcedDisconnect);
+                        ConnectionStatusChanged?.Invoke(this, pairedDevice);
+                    });
                 }
             }
             else
@@ -474,11 +532,23 @@ public class NetworkService(
             var device = PairedDevices.FirstOrDefault(d => d.Client == client);
             if (device is not null)
             {
-                device.Client = null;
-                if (device.Session is null)
+                var markDisconnected = connectionAuthenticationGate.Execute(device.Id, () =>
                 {
-                    App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected(forcedDisconnect));
-                    ConnectionStatusChanged?.Invoke(this, device);
+                    if (device.Client != client) return false;
+                    device.Client = null;
+                    return device.Session is null;
+                });
+                if (markDisconnected)
+                {
+                    _ = App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+                    {
+                        var stillDisconnected = connectionAuthenticationGate.Execute(
+                            device.Id,
+                            () => device.Session is null && device.Client is null);
+                        if (!stillDisconnected) return;
+                        device.ConnectionStatus = new Disconnected(forcedDisconnect);
+                        ConnectionStatusChanged?.Invoke(this, device);
+                    });
                 }
             }
 
@@ -522,7 +592,13 @@ public class NetworkService(
         {
             logger.Info($"Connecting to {address}:{port}");
 
-            client = new Client(SslHelper.GetSslContext(), address, port, this);
+            client = new Client(SslHelper.GetSslContext(), address, port, this)
+            {
+                OptionKeepAlive = true,
+                OptionTcpKeepAliveTime = 10,
+                OptionTcpKeepAliveInterval = 5,
+                OptionTcpKeepAliveRetryCount = 3,
+            };
             var tcs = new TaskCompletionSource<bool>();
             handshakeCompletion[client.Id] = tcs;
 
@@ -560,7 +636,16 @@ public class NetworkService(
             removedCts.Cancel();
             removedCts.Dispose();
             if (device.IsConnecting)
-                App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected());
+            {
+                _ = App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+                {
+                    var stillDisconnected = connectionAuthenticationGate.Execute(
+                        device.Id,
+                        () => device.Client is null && device.Session is null);
+                    if (stillDisconnected && device.IsConnecting)
+                        device.ConnectionStatus = new Disconnected();
+                });
+            }
             return;
         }
 
@@ -600,7 +685,13 @@ public class NetworkService(
                 var clientContext = SslHelper.CreateSslContext(device.Certificate);
 
                 logger.Info($"Connecting to {address}:{device.Port}");
-                var client = new Client(clientContext, address, device.Port, this);
+                var client = new Client(clientContext, address, device.Port, this)
+                {
+                    OptionKeepAlive = true,
+                    OptionTcpKeepAliveTime = 10,
+                    OptionTcpKeepAliveInterval = 5,
+                    OptionTcpKeepAliveRetryCount = 3,
+                };
                 var tcs = new TaskCompletionSource<bool>();
                 handshakeCompletion[client.Id] = tcs;
 
@@ -650,12 +741,17 @@ public class NetworkService(
                 connectingDeviceIds.Remove(device.Id);
             }
 
-            if (device.IsConnecting)
+            await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
             {
-                await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected());
-            }
+                var stillDisconnected = connectionAuthenticationGate.Execute(
+                    device.Id,
+                    () => device.Client is null && device.Session is null);
+                if (stillDisconnected && device.IsConnecting)
+                    device.ConnectionStatus = new Disconnected();
+            });
 
-            if (connectionCancellationTokens.TryRemove(device.Id, out var cancellationTokenSource))
+            if (device is not null &&
+                connectionCancellationTokens.TryRemove(device.Id, out var cancellationTokenSource))
             {
                 cancellationTokenSource.Dispose();
             }
@@ -761,15 +857,38 @@ public class NetworkService(
 
     private async Task AuthenticatePairedDeviceServer(Client client, PairedDevice pairedDevice, string address)
     {
-        if (pairedDevice.IsConnected && pairedDevice.Client is not null)
+        var localDevice = await deviceManager.GetLocalDeviceAsync();
+        Client? replacedClient = null;
+        ServerSession? replacedSession = null;
+        var accepted = connectionAuthenticationGate.Execute(pairedDevice.Id, () =>
         {
-            logger.Warn($"Device {pairedDevice.Name} is already connected, disconnect the current client");
-            DisconnectClient(pairedDevice.Client);
-        }
+            var existingDirection = pairedDevice.Session is not null
+                ? ConnectionDirection.Incoming
+                : pairedDevice.Client is not null && pairedDevice.Client != client
+                    ? ConnectionDirection.Outgoing
+                    : (ConnectionDirection?)null;
+            if (!ConnectionCollisionPolicy.ShouldAcceptCandidate(
+                    localDevice.DeviceId,
+                    pairedDevice.Id,
+                    existingDirection,
+                    ConnectionDirection.Outgoing))
+                return false;
 
-        pairedDevice.Client = client;
-        pairedDevice.Address = address;
-        pairedDevice.Port = client.Port;
+            replacedSession = pairedDevice.Session;
+            replacedClient = pairedDevice.Client == client ? null : pairedDevice.Client;
+            pairedDevice.Session = null;
+            pairedDevice.Client = client;
+            pairedDevice.Address = address;
+            pairedDevice.Port = client.Port;
+            return true;
+        });
+
+        if (!accepted)
+        {
+            logger.Info($"Rejecting duplicate outgoing connection to {pairedDevice.Name}");
+            DisconnectClient(client);
+            return;
+        }
 
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
@@ -778,10 +897,13 @@ public class NetworkService(
             deviceManager.ActiveDevice = pairedDevice;
         });
 
-        if (pairedDevice.Session is not null)
-            DisconnectSession(pairedDevice.Session);
+        if (replacedSession is not null)
+            DisconnectSession(replacedSession);
+        if (replacedClient is not null)
+            DisconnectClient(replacedClient);
 
         await deviceManager.UpdateDevice(pairedDevice);
+        await SendDeviceInfo(pairedDevice);
 
         logger.Info($"Paired device {pairedDevice.Name} connected successfully");
     }

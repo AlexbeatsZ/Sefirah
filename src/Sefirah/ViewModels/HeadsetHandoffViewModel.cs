@@ -7,6 +7,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private readonly IHeadsetHandoffService handoffService = Ioc.Default.GetRequiredService<IHeadsetHandoffService>();
     private readonly IDeviceManager deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
     private bool initialized;
+    private DispatcherTimer? refreshTimer;
 
     public ObservableCollection<HeadsetEndpointOption> Endpoints { get; } = [];
     public ObservableCollection<HeadsetDeviceItem> SelectedConnectedDevices { get; } = [];
@@ -35,6 +36,9 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         handoffService.ConfigurationsChanged += OnConfigurationsChanged;
         deviceManager.ActiveDeviceChanged += OnActiveDeviceChanged;
         await RefreshAsync();
+        refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+        refreshTimer.Tick += async (_, _) => await RefreshAsync();
+        refreshTimer.Start();
     }
 
     [RelayCommand(CanExecute = nameof(CanRefresh))]

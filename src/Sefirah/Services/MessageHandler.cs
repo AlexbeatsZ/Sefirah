@@ -20,6 +20,7 @@ public class MessageHandler(
     ISessionManager sessionManager,
     ICallFeature callFeature,
     IBluetoothPairingService bluetoothPairingService,
+    ILocalBluetoothController localBluetoothController,
     IHeadsetHandoffService headsetHandoffService,
     ILogger<MessageHandler> logger) : IMessageHandler
 {
@@ -79,7 +80,14 @@ public class MessageHandler(
                     break;
 
                 case ActionInfo action:
-                    actionFeature.HandleActionMessage(action);
+                    if (RemoteActionPolicy.CanExecute(device.Capabilities))
+                    {
+                        actionFeature.HandleActionMessage(action);
+                    }
+                    else
+                    {
+                        logger.Warn($"Ignored remote action from device without controller capability: {device.Name}");
+                    }
                     break;
 
                 case SftpServerInfo sftpServerInfo:
@@ -108,8 +116,26 @@ public class MessageHandler(
                     bluetoothPairingService.HandleBluetoothPairingResult(device, pairingResult);
                     break;
 
+                case BluetoothDeviceCatalogRequest catalogRequest:
+                    if (!device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
+                    {
+                        logger.Warn($"Ignored Bluetooth catalog request from unsupported device: {device.Name}");
+                        break;
+                    }
+                    device.SendMessage(await localBluetoothController.GetCatalogAsync(catalogRequest.RequestId));
+                    break;
+
                 case BluetoothDeviceCatalog catalog:
                     headsetHandoffService.HandleCatalog(device, catalog);
+                    break;
+
+                case BluetoothHandoffCommand command:
+                    if (!device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
+                    {
+                        logger.Warn($"Ignored Bluetooth command from unsupported device: {device.Name}");
+                        break;
+                    }
+                    device.SendMessage(await localBluetoothController.ExecuteAsync(command));
                     break;
 
                 case BluetoothHandoffResult handoffResult:
@@ -130,6 +156,13 @@ public class MessageHandler(
 
                 case BluetoothHeadsetVisibilityRequest visibilityRequest:
                     headsetHandoffService.HandleVisibilityRequest(device, visibilityRequest);
+                    break;
+
+                case BluetoothHandoffConfiguration:
+                case BluetoothHandoffState:
+                    // Desktop peers own their local configuration and state. These messages
+                    // are companion-facing, but are valid between capability-compatible peers.
+                    logger.Debug($"Ignored companion Bluetooth state from desktop peer: {device.Name}");
                     break;
 
                 case Disconnect:

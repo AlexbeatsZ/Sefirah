@@ -8,6 +8,8 @@ public sealed class LocalBluetoothController(
     BluetoothRadioManager radioManager,
     ILogger<LocalBluetoothController> logger) : ILocalBluetoothController
 {
+    private const string IsConnectedProperty = "System.Devices.Aep.IsConnected";
+
     public async Task<BluetoothDeviceCatalog> GetCatalogAsync(string requestId)
     {
         try
@@ -23,17 +25,22 @@ public sealed class LocalBluetoothController(
             if (!available || !radioManager.IsBluetoothRadioOn) return result;
 
             var selector = BluetoothDevice.GetDeviceSelectorFromPairingState(true);
-            var pairedDevices = await DeviceInformation.FindAllAsync(selector);
+            var pairedDevices = await DeviceInformation.FindAllAsync(selector, [IsConnectedProperty]);
             foreach (var deviceInfo in pairedDevices)
             {
                 using var device = await BluetoothDevice.FromIdAsync(deviceInfo.Id);
                 if (device?.ClassOfDevice.MajorClass is not BluetoothMajorClass.AudioVideo) continue;
 
+                var isConnected = deviceInfo.Properties.TryGetValue(IsConnectedProperty, out var propertyValue) &&
+                                  propertyValue is bool connected
+                    ? connected
+                    : device.ConnectionStatus is BluetoothConnectionStatus.Connected;
+
                 result.Devices.Add(new BluetoothAudioDevice
                 {
                     DeviceKey = deviceInfo.Id,
                     DisplayName = string.IsNullOrWhiteSpace(device.Name) ? deviceInfo.Name : device.Name,
-                    IsConnected = device.ConnectionStatus is BluetoothConnectionStatus.Connected,
+                    IsConnected = isConnected,
                 });
             }
             return result;

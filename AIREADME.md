@@ -29,6 +29,11 @@
 - The official 2.4.0 server database is schema 3. sqlite-net cannot add the schema 5 primary-key columns during `CreateTable`, so legacy content tables now use an explicit transactional rebuild migration; paired-device, local-device, and certificate rows are left in place.
 - The schema 3 to 5 migration passes both a synthetic regression fixture and a read-only copy of the server database containing 3 pairings, 261 conversations, and 612 messages.
 - Server `META-ROGALLY` now runs fork package `Meta.Sefirah.Fork` 3.0.0.10 in console session 1. The original Store package was removed only after a complete LocalState backup, and the fork PFX hash remained `7DD1AD685076DCF6362B186D194558CD806344F55280847654FB4F339286791C`. The immediate pre-3.0.0.10 backup is `%LOCALAPPDATA%\Temp\.agents\Sefirah\server-deploy\pre-3.0.0.10-20260718-235628\LocalState` on the server.
+- A stable peer connection needs deterministic collision handling when both Windows peers initiate simultaneously. Choose one direction from the two device IDs, authenticate the accepted socket atomically, keep the survivor alive with TCP keepalive, and ignore stale disconnect callbacks belonging to a replaced socket.
+- Existing paired inbound connections must receive both the authentication response and current `DeviceInfo`; otherwise one side can look connected while the initiating side waits, lacks capabilities, and repeatedly reconnects.
+- Remote `ActionInfo` execution is now denied unless the sender explicitly advertises `remote-actions-controller-v1`; Bluetooth catalog and command messages are independently gated by `bluetooth-handoff-v1`.
+- Desktop peers can legitimately send `BluetoothHandoffConfiguration` and `BluetoothHandoffState`, but these are companion-facing state messages and should be recognized without mutating the receiving desktop's local configuration.
+- Windows 3.0.0.25 handles Bluetooth catalog requests and commands on both desktop peers. It was installed on `Meta-OMEN` and `META-ROGALLY` with each machine's `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` preserved byte-for-byte. A live `sefirahctl bluetooth list Meta-ROG` returned the remote catalog, and post-upgrade logs contained no new unknown-message or `NotConnected` socket errors.
 
 # Task Board
 
@@ -44,6 +49,7 @@
 - [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
 - [x] Localize the Windows UI into Simplified Chinese, align Bluetooth with the Notifications visual hierarchy, reuse the device selector for handoff targets, and ship the data-preserving 3.0.0.9 update.
 - [x] Add an explicit schema 3 to 5 primary-key migration with regression coverage and deploy the data-preserving 3.0.0.10 fork to the Windows server.
+- [x] Stabilize simultaneous Windows peer connections, add capability-gated remote actions, route desktop Bluetooth catalog/command messages, and deploy the data-preserving 3.0.0.25 update to both Windows peers.
 - [ ] Replace the tablet installation after its USB ADB interface is enabled and authorized; Windows currently sees Xiaomi Pad 6 Pro only as an MTP/WPD device.
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.

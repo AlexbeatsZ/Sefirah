@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Sefirah-Fork-Setup</AssemblyName>
     <RootNamespace>Sefirah.Installer</RootNamespace>
-    <Version>3.0.0.10</Version>
-    <AssemblyVersion>3.0.0.10</AssemblyVersion>
-    <FileVersion>3.0.0.10</FileVersion>
+    <Version>3.0.0.25</Version>
+    <AssemblyVersion>3.0.0.25</AssemblyVersion>
+    <FileVersion>3.0.0.25</FileVersion>
     <Product>Sefirah Fork Installer</Product>
     <Company>Meta (forked from shrimqy)</Company>
     <Description>Installs the signed Sefirah Fork Windows package.</Description>
