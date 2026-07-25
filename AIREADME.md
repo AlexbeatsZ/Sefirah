@@ -37,6 +37,9 @@
 - 3.0.0.27 was installed on `Meta-OMEN` and `META-ROGALLY` with each machine's `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` preserved byte-for-byte at every package update boundary. A live `sefirahctl bluetooth list Meta-ROG` returned the remote catalog, and a 75-second post-upgrade observation contained no new warning/error, unknown-message, or `NotConnected` entries.
 - Remote storage already uses Windows Cloud Files API placeholders backed by Android SFTP. On 2026-07-25, Explorer error `0x8007016A` was reproduced three times on both tablet roots and the old phone root while both devices had `StorageAccess=true` and live TCP sessions.
 - `SyncProviderPool.CancellableThread` wraps an async delegate in `new Task(async () => ...)`, so its tracked task completes at the first await and `Stop()` does not await the provider. A stale provider's unconditional `Stopped` handler can then remove the replacement from `_threads`. Reconnect churn produced 586 tablet and 944 phone SFTP initializations in one log, versus 358 tracked stops, and the main process grew to about 851 threads and 49,751 handles.
+- Windows v41 replaces that lifecycle with an awaitable, serialized, generation-safe async session pool. The task and shell-command queues now track their actual async loops, and the SFTP watcher exposes an awaitable `StartAsync`, so provider shutdown waits for every owned loop before releasing the Cloud Files connection.
+- `Sefirah.SyncProviderLifecycle.Regression` exercises 50 delayed provider replacements plus queue shutdown. It guards both single-generation ownership and the former nested-task early-completion bug.
+- On-device validation after installing v41 opened both formerly failing sync roots, listed the tablet and phone `Download` directories (including QQ/WeChat placeholders), and hydrated one 32-byte file from each device. A 106-second observation held at 85–91 threads and 2,211–2,719 handles instead of the prior 851 threads/~50,000 handles.
 - Unregistered/abandoned sync roots remain as Cloud Files directory reparse points (`0x9000101a`) and return `ERROR_CLOUD_FILE_PROVIDER_NOT_RUNNING`; device renames created duplicate old/new root directories. Recovery must preserve hydrated user data and must not recursively delete an unknown non-empty destination.
 - Android currently accepts every SFTP public key. Windows remote-storage work must not be treated as production-safe until authentication and server-side shared-path confinement are fixed.
 
@@ -59,7 +62,7 @@
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.
-- [ ] Fix remote-storage provider lifecycle with a truly awaitable task, generation-safe dictionary removal, serialized per-root replacement, and reconnect stress coverage.
+- [x] Fix remote-storage provider lifecycle with a truly awaitable task, generation-safe dictionary removal, serialized per-root replacement, and reconnect stress coverage; deploy and validate Windows v41.
 - [ ] Add safe orphan-sync-root detection/recovery and device-rename reconciliation without deleting hydrated or unrelated local files.
 - [ ] Add selected remote shares (Download/QQ/WeChat) and a unified shortcut hub while retaining Cloud Files on-demand hydration.
 - [x] Commit and push the feature branch.
@@ -92,3 +95,29 @@
 - Bundle SHA-256: `DFAD6466D3E373AE76C57174274D7F8F13698BF94EAD01DA05B72BBBB4ECBF2B`
 - 实机“全部”目录包含键盘、鼠标、手写笔和耳机；“仅耳机”只保留 QCY AilyBuds Lite 与 QCY-T13。
 - 服务器 v40 安装状态 `Ok`，PFX 文件哈希保持 `7DD1AD685076DCF6362B186D194558CD806344F55280847654FB4F339286791C`。
+
+# 2026-07-25 Remote Storage Provider Lifecycle Fix
+
+## Project Goal
+
+- 修复资源管理器访问手机/平板云文件根目录时的 `0x8007016A`（云文件提供程序未运行）。
+
+## Lessons Learned
+
+- `new Task(async () => ...)` 与 `Task.Factory.StartNew(async () => ...)` 只跟踪外层任务；提供器、任务队列和 shell 命令队列都必须保存真正可等待的异步任务。
+- 同一 sync-root 的替换必须串行等待旧代退出，并以对象身份检查结束回调，避免旧代删除新代。
+- SFTP watcher 不能以 `async void` 启动；它的运行任务必须由 sync provider 一直持有并在取消后等待。
+
+## Task Board
+
+- [done] 新增 50 代替换与队列停止回归测试。
+- [done] Windows 工程与全部四组回归测试通过。
+- [done] 构建、签名并安装 v41，保留数据库、PFX 和用户设置。
+- [done] 实机验证平板/手机根目录、Download/QQ/WeChat 占位符和按需下载。
+
+## Evidence
+
+- Bundle SHA-256: `D79AB451EFFE067DB38660C2D12AE22FA92AF98325579B9CD87835C098A45E82`
+- Installer EXE SHA-256: `8B65CA59697FE36A15AA8DA5F285429301A5D938C261E27590F796B84E037FFB`
+- 数据备份：`%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-remote-storage-v41-20260725-212039\LocalState`
+- `sefirah.db`、`Sefirah.pfx`、`user_settings.json` 在 v40 → v41 更新边界的 SHA-256 均保持一致。

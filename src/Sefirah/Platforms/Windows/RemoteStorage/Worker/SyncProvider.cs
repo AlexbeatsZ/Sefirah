@@ -22,34 +22,39 @@ public class SyncProvider(
     {
         taskQueue.Start(cancellation);
         shellCommandQueue.Start(cancellation);
-
-        // Hook up callback methods (in this class) for transferring files between client and server
-        using var connectDisposable = new Disposable<CF_CONNECTION_KEY>(syncProvider.Connect(), syncProvider.Disconnect);
-
-        // Create the placeholders in the client folder so the user sees something
-        if (contextAccessor.Context.PopulationPolicy is PopulationPolicy.AlwaysFull)
+        try
         {
-            placeholdersService.CreateBulk(string.Empty);
+            // Hook up callback methods (in this class) for transferring files between client and server
+            using var connectDisposable = new Disposable<CF_CONNECTION_KEY>(syncProvider.Connect(), syncProvider.Disconnect);
+
+            // Create the placeholders in the client folder so the user sees something
+            if (contextAccessor.Context.PopulationPolicy is PopulationPolicy.AlwaysFull)
+            {
+                placeholdersService.CreateBulk(string.Empty);
+            }
+
+            // update local placeholders with the remote
+            syncProvider.RemoveStalePlaceholders(contextAccessor.Context.RootDirectory);
+
+            // Stage 2: Running
+            //--------------------------------------------------------------------------------------------
+            // The file watcher loop for this sample will run until the user presses Ctrl-C.
+            // The file watcher will look for any changes on the files in the client (syncroot) in order
+            // to let the cloud know.
+            clientWatcher.Start();
+            var remoteWatcherTask = remoteWatcher.StartAsync(cancellation);
+
+            // Run until SIGTERM
+            await cancellation;
+            await remoteWatcherTask;
         }
+        finally
+        {
+            await shellCommandQueue.Stop();
 
-        // update local placeholders with the remote
-        syncProvider.RemoveStalePlaceholders(contextAccessor.Context.RootDirectory);
+            await taskQueue.Stop();
 
-        // Stage 2: Running
-        //--------------------------------------------------------------------------------------------
-        // The file watcher loop for this sample will run until the user presses Ctrl-C.
-        // The file watcher will look for any changes on the files in the client (syncroot) in order
-        // to let the cloud know.
-        clientWatcher.Start();
-        remoteWatcher.Start(cancellation);
-
-        // Run until SIGTERM
-        await cancellation;
-
-        await shellCommandQueue.Stop();
-
-        await taskQueue.Stop();
-
-        logger.Debug("Disconnecting...");
+            logger.Debug("Disconnecting...");
+        }
     }
 }

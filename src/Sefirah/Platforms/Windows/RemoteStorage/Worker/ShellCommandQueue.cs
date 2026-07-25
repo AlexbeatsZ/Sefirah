@@ -19,83 +19,102 @@ public sealed partial class ShellCommandQueue(
 {
     private string RootDirectory => contextAccessor.Context.RootDirectory;
     private readonly CancellationTokenSource _disposeTokenSource = new();
+    private CancellationTokenSource? _linkedTokenSource;
     private Task? _runningTask = null;
 
     public void Start(CancellationToken stoppingToken)
     {
-        var cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _disposeTokenSource.Token).Token;
-        _runningTask = Task.Factory.StartNew(async () =>
+        if (_runningTask is not null)
         {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var shellCommand = await taskReader.ReadAsync(cancellationToken);
-                try
-                {
-                    if (!shellCommand.FullPath.StartsWith(RootDirectory, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+            throw new InvalidOperationException("Shell command queue is already running.");
+        }
 
-                    var state = CloudFilter.GetPlaceholderState(shellCommand.FullPath);                    
-                    // Broken upload, state is just "No State"
-                    logger.Info($"placeholder state {state}");
-                    if (state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_NO_STATES ||
-                        state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC ||
-                        state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER)
+        _linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+            stoppingToken,
+            _disposeTokenSource.Token);
+        _runningTask = RunAsync(_linkedTokenSource.Token);
+    }
+
+    private async Task RunAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (await taskReader.WaitToReadAsync(cancellationToken))
+            {
+                while (taskReader.TryRead(out var shellCommand))
+                {
+                    try
                     {
-                        var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
-                        var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
-                        using var locker = await fileLocker.Lock(relativePath);
-                        
-                        if (isDirectory)
+                        if (!shellCommand.FullPath.StartsWith(RootDirectory, StringComparison.OrdinalIgnoreCase))
                         {
-                            await placeholderService.CreateOrUpdateDirectory(relativePath);
+                            continue;
                         }
-                        else
+
+                        var state = CloudFilter.GetPlaceholderState(shellCommand.FullPath);
+                        // Broken upload, state is just "No State"
+                        logger.Info($"placeholder state {state}");
+                        if (state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_NO_STATES ||
+                            state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC ||
+                            state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER)
                         {
-                            var fileInfo = new FileInfo(shellCommand.FullPath);
-                            if (remoteService.Exists(relativePath))
+                            var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
+                            var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
+                            using var locker = await fileLocker.Lock(relativePath);
+
+                            if (isDirectory)
                             {
-                                await placeholderService.CreateOrUpdateFile(relativePath);
+                                await placeholderService.CreateOrUpdateDirectory(relativePath);
                             }
                             else
                             {
-                                await remoteService.CreateFile(fileInfo, relativePath);
+                                var fileInfo = new FileInfo(shellCommand.FullPath);
+                                if (remoteService.Exists(relativePath))
+                                {
+                                    await placeholderService.CreateOrUpdateFile(relativePath);
+                                }
+                                else
+                                {
+                                    await remoteService.CreateFile(fileInfo, relativePath);
+                                }
+
+                                // Add explicit sync state setting here
+                                try
+                                {
+                                    if (!CloudFilter.IsPlaceholder(shellCommand.FullPath))
+                                        CloudFilter.ConvertToPlaceholder(shellCommand.FullPath);
+                                    CloudFilter.SetInSyncState(shellCommand.FullPath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    logger.Error($"Failed to set sync state for {shellCommand.FullPath}", ex);
+                                }
                             }
-                            
-                            // Add explicit sync state setting here
-                            try
+                        }
+                        else if (state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK))
+                        {
+                            var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
+                            var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
+                            if (isDirectory)
                             {
-                                if (!CloudFilter.IsPlaceholder(shellCommand.FullPath))
-                                    CloudFilter.ConvertToPlaceholder(shellCommand.FullPath);
-                                CloudFilter.SetInSyncState(shellCommand.FullPath);
+                                await placeholderService.CreateOrUpdateDirectory(relativePath);
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                logger.Error($"Failed to set sync state for {shellCommand.FullPath}", ex);
+                                await placeholderService.CreateOrUpdateFile(relativePath);
                             }
                         }
                     }
-                    else if (state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK))
+                    catch (Exception ex)
                     {
-                        var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
-                        var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
-                        if (isDirectory)
-                        {
-                            await placeholderService.CreateOrUpdateDirectory(relativePath);
-                        }
-                        else
-                        {
-                            await placeholderService.CreateOrUpdateFile(relativePath);
-                        }
+                        logger.Error("Error in handling shell command", ex);
                     }
-                }
-                catch (Exception ex)
-                {
-                    logger.Error("Error in handling shell command", ex);
                 }
             }
-        });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Expected shutdown.
+        }
     }
 
     public Task Stop()
@@ -107,6 +126,7 @@ public sealed partial class ShellCommandQueue(
     public void Dispose()
     {
         _disposeTokenSource.Cancel();
+        _linkedTokenSource?.Dispose();
         _disposeTokenSource.Dispose();
     }
 }

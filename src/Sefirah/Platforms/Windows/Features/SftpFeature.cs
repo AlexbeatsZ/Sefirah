@@ -141,7 +141,7 @@ public class SftpFeature(
             var syncRootInfo = registrar.Register(registerCommand, storageFolder, context);
             if (syncRootInfo is not null)
             {
-                syncProviderPool.Start(syncRootInfo);
+                await syncProviderPool.StartAsync(syncRootInfo);
                 logger.Debug($"Started sync provider for {name} ({accountId})");
             }
         }

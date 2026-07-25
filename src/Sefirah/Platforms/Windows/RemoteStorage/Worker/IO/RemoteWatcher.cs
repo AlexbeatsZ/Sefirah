@@ -15,13 +15,13 @@ public sealed partial class RemoteWatcher(
     ILogger logger
 ) : IDisposable
 {
-    public void Start(CancellationToken stoppingToken)
+    public Task StartAsync(CancellationToken stoppingToken)
     {
         remoteWatcher.Created += HandleCreated;
         remoteWatcher.Changed += HandleChanged;
         remoteWatcher.Renamed += HandleRenamed;
         remoteWatcher.Deleted += HandleDeleted;
-        remoteWatcher.Start(stoppingToken);
+        return remoteWatcher.StartAsync(stoppingToken);
     }
 
     private async Task HandleCreated(string relativePath)

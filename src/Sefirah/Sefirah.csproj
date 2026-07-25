@@ -11,7 +11,7 @@
         <ApplicationId>com.sefirah.castle</ApplicationId>
         <!-- Versions -->
         <ApplicationDisplayVersion>3.0.0</ApplicationDisplayVersion>
-        <ApplicationVersion>40</ApplicationVersion>
+        <ApplicationVersion>41</ApplicationVersion>
         <!-- Package Publisher -->
         <ApplicationPublisher>shrimqy</ApplicationPublisher>
         <!-- Package Description -->

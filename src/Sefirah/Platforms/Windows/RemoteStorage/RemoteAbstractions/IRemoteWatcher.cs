@@ -3,7 +3,7 @@ namespace Sefirah.Platforms.Windows.RemoteStorage.RemoteAbstractions;
 /// <summary>Watches a storage provider and raises events for changes.</summary>
 public interface IRemoteWatcher : IDisposable
 {
-    void Start(CancellationToken stoppingToken = default);
+    Task StartAsync(CancellationToken stoppingToken = default);
     event RemoteCreateHandler? Created;
     event RemoteChangeHandler? Changed;
     event RemoteRenameHandler? Renamed;
