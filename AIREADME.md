@@ -35,6 +35,10 @@
 - Desktop peers can legitimately send `BluetoothHandoffConfiguration` and `BluetoothHandoffState`, but these are companion-facing state messages and should be recognized without mutating the receiving desktop's local configuration.
 - Windows 3.0.0.27 handles Bluetooth catalog requests and commands on both desktop peers and routes session-level socket failures back to the owning `ServerSession` for immediate cleanup. `NotConnected` on an already-closed transient session is normal close-race telemetry and is kept at debug level; other server and session socket faults remain warnings/errors.
 - 3.0.0.27 was installed on `Meta-OMEN` and `META-ROGALLY` with each machine's `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` preserved byte-for-byte at every package update boundary. A live `sefirahctl bluetooth list Meta-ROG` returned the remote catalog, and a 75-second post-upgrade observation contained no new warning/error, unknown-message, or `NotConnected` entries.
+- Remote storage already uses Windows Cloud Files API placeholders backed by Android SFTP. On 2026-07-25, Explorer error `0x8007016A` was reproduced three times on both tablet roots and the old phone root while both devices had `StorageAccess=true` and live TCP sessions.
+- `SyncProviderPool.CancellableThread` wraps an async delegate in `new Task(async () => ...)`, so its tracked task completes at the first await and `Stop()` does not await the provider. A stale provider's unconditional `Stopped` handler can then remove the replacement from `_threads`. Reconnect churn produced 586 tablet and 944 phone SFTP initializations in one log, versus 358 tracked stops, and the main process grew to about 851 threads and 49,751 handles.
+- Unregistered/abandoned sync roots remain as Cloud Files directory reparse points (`0x9000101a`) and return `ERROR_CLOUD_FILE_PROVIDER_NOT_RUNNING`; device renames created duplicate old/new root directories. Recovery must preserve hydrated user data and must not recursively delete an unknown non-empty destination.
+- Android currently accepts every SFTP public key. Windows remote-storage work must not be treated as production-safe until authentication and server-side shared-path confinement are fixed.
 
 # Task Board
 
@@ -55,6 +59,9 @@
 - [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
 - [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
 - [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.
+- [ ] Fix remote-storage provider lifecycle with a truly awaitable task, generation-safe dictionary removal, serialized per-root replacement, and reconnect stress coverage.
+- [ ] Add safe orphan-sync-root detection/recovery and device-rename reconciliation without deleting hydrated or unrelated local files.
+- [ ] Add selected remote shares (Download/QQ/WeChat) and a unified shortcut hub while retaining Cloud Files on-demand hydration.
 - [x] Commit and push the feature branch.
 # 2026-07-24 Fork Bluetooth Catalog and Connection Work
 
