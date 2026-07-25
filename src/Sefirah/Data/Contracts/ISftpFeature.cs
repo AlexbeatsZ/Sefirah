@@ -6,7 +6,7 @@ public interface ISftpFeature : IFeature
 {
     Task InitializeAsync(PairedDevice device, SftpServerInfo info);
 
-    void Remove(string deviceId);
+    Task RemoveAsync(string deviceId);
 
     void RemoveAll();
 }

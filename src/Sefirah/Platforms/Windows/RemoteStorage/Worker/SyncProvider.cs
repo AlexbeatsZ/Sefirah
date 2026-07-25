@@ -30,11 +30,25 @@ public class SyncProvider(
             // Create the placeholders in the client folder so the user sees something
             if (contextAccessor.Context.PopulationPolicy is PopulationPolicy.AlwaysFull)
             {
-                placeholdersService.CreateBulk(string.Empty);
+                try
+                {
+                    placeholdersService.CreateBulk(string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn("Initial placeholder population deferred until remote storage reconnects", ex);
+                }
             }
 
             // update local placeholders with the remote
-            syncProvider.RemoveStalePlaceholders(contextAccessor.Context.RootDirectory);
+            try
+            {
+                syncProvider.RemoveStalePlaceholders(contextAccessor.Context.RootDirectory);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Stale placeholder cleanup deferred until remote storage reconnects", ex);
+            }
 
             // Stage 2: Running
             //--------------------------------------------------------------------------------------------

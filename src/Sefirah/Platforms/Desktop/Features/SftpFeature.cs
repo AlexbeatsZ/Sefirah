@@ -69,16 +69,17 @@ public class SftpFeature(ILogger<SftpFeature> logger) : ISftpFeature
 
     public void RemoveAll() { }
 
-    public void Remove(string deviceId)
+    public Task RemoveAsync(string deviceId)
     {
         if (!_mountedDevices.TryGetValue(deviceId, out var sftpUri))
         {
             logger.Debug($"Device {deviceId} is not mounted");
-            return;
+            return Task.CompletedTask;
         }
         
         logger.Info($"Unmounting SFTP for device {deviceId}");
         ProcessExecutor.ExecuteProcess("gio", $"mount -u \"{sftpUri}\"");
         _mountedDevices.Remove(deviceId);
+        return Task.CompletedTask;
     }
 }

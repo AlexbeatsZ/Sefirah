@@ -11,34 +11,21 @@ public class SftpFeature(
     ILogger logger,
     SyncRootRegistrar registrar,
     SyncProviderPool syncProviderPool,
-    IUserSettingsService userSettingsService,
-    ISessionManager sessionManager) : ISftpFeature
+    IUserSettingsService userSettingsService) : ISftpFeature
 {
     private static readonly string IconDllPath = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "Assets\\Icons", "IconResource.dll"));
 
     public Task InitializeAsync()
     {
-        sessionManager.ConnectionStatusChanged += OnConnectionStatusChanged;
+        // Keep registered Cloud Files providers alive while a device is offline.
+        // The SFTP watcher owns reconnect attempts, and cached placeholders must
+        // remain browsable even when their remote content cannot be hydrated.
         return Task.CompletedTask;
     }
 
     private IEnumerable<SyncRootInfo> GetSyncRootsForDevice(string deviceId)
         => registrar.GetSyncRoots().Where(r => r.Id.Contains($"!{deviceId}_"));
-
-    private async void OnConnectionStatusChanged(object? sender, PairedDevice device)
-    {
-        if (device.IsConnected) return;
-
-        try
-        {
-            await StopSyncRoots(GetSyncRootsForDevice(device.Id));
-        }
-        catch (Exception ex)
-        {
-            logger.Error($"Error stopping sync roots for device {device.Id}", ex);
-        }
-    }
 
     public async Task InitializeAsync(PairedDevice device, SftpServerInfo info)
     {
@@ -93,9 +80,9 @@ public class SftpFeature(
         await StopAndUnregister(registrar.GetSyncRoots());
     }
 
-    public async void Remove(string deviceId)
+    public Task RemoveAsync(string deviceId)
     {
-        await StopAndUnregister(GetSyncRootsForDevice(deviceId));
+        return StopAndUnregister(GetSyncRootsForDevice(deviceId));
     }
 
     private async Task StopSyncRoots(IEnumerable<SyncRootInfo> syncRoots)

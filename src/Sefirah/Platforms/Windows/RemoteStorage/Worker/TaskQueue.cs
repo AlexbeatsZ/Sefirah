@@ -1,8 +1,11 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 
 namespace Sefirah.Platforms.Windows.RemoteStorage.Worker;
 
-public sealed partial class TaskQueue(ChannelReader<Func<Task>> taskReader) : IDisposable
+public sealed partial class TaskQueue(
+    ChannelReader<Func<Task>> taskReader,
+    ILogger logger) : IDisposable
 {
     private readonly CancellationTokenSource _disposeTokenSource = new();
     private CancellationTokenSource? _linkedTokenSource;
@@ -29,7 +32,18 @@ public sealed partial class TaskQueue(ChannelReader<Func<Task>> taskReader) : ID
             {
                 while (taskReader.TryRead(out var func))
                 {
-                    await func();
+                    try
+                    {
+                        await func();
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Remote storage task queue item failed");
+                    }
                 }
             }
         }

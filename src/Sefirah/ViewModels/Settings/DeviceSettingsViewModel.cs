@@ -677,7 +677,7 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
                 // If storage access is disabled, remove the sync root
                 if (!value)
                 {
-                    sftpFeature.Remove(Device.Id);
+                    _ = sftpFeature.RemoveAsync(Device.Id);
                 }
             }
         }

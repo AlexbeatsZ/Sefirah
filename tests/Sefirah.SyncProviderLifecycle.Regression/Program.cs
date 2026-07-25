@@ -1,6 +1,7 @@
 using Sefirah.Platforms.Windows.RemoteStorage.Worker;
 using System.Diagnostics;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging.Abstractions;
 
 var pool = new AsyncSessionPool<string>((_, exception) =>
     throw new InvalidOperationException("A provider session failed unexpectedly.", exception));
@@ -50,11 +51,20 @@ Assert(!pool.Has("device-root"), "Stopped provider remained registered.");
 Assert(activeCount == 0, $"Expected no active providers, observed {activeCount}.");
 
 var channel = Channel.CreateUnbounded<Func<Task>>();
-using var queue = new TaskQueue(channel.Reader);
+using var queue = new TaskQueue(channel.Reader, NullLogger.Instance);
+var workAfterFailureCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var queueTaskStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var queueTaskCompleted = false;
 
 queue.Start(CancellationToken.None);
+await channel.Writer.WriteAsync(() => throw new IOException("Simulated SFTP transport failure."));
+await channel.Writer.WriteAsync(() =>
+{
+    workAfterFailureCompleted.SetResult();
+    return Task.CompletedTask;
+});
+await workAfterFailureCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
 await channel.Writer.WriteAsync(async () =>
 {
     queueTaskStarted.SetResult();

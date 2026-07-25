@@ -33,6 +33,10 @@ static object BuildRequest(string[] args)
     {
         Console.WriteLine("""
             sefirahctl status
+            sefirahctl pairing list
+            sefirahctl pairing request <device-id> <verification-code>
+            sefirahctl pairing forget <device-id> <exact-device-name>
+            sefirahctl storage unregister <device-id> <exact-device-name>
             sefirahctl bluetooth endpoints
             sefirahctl bluetooth list [local|phone|endpoint-id]
             sefirahctl bluetooth discover
@@ -49,6 +53,18 @@ static object BuildRequest(string[] args)
 
     if (args is ["status"])
         return Request("status", new { });
+    if (args is ["pairing", "list"])
+        return Request("pairing.list", new { });
+    if (args is ["pairing", "request", var pairingDeviceId, var verificationCode])
+        return Request("pairing.request", new { deviceId = pairingDeviceId, verificationCode });
+    if (args is ["pairing", "forget", var forgottenDeviceId, var expectedName])
+        return Request("pairing.forget", new { deviceId = forgottenDeviceId, expectedName });
+    if (args is ["storage", "unregister", var storageDeviceId, var storageExpectedName])
+        return Request("storage.unregister", new
+        {
+            deviceId = storageDeviceId,
+            expectedName = storageExpectedName,
+        });
     if (args is ["bluetooth", "endpoints"])
         return Request("bluetooth.endpoints", new { });
     if (args is ["bluetooth", "list"])

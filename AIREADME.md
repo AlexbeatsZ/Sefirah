@@ -121,3 +121,28 @@
 - Installer EXE SHA-256: `8B65CA59697FE36A15AA8DA5F285429301A5D938C261E27590F796B84E037FFB`
 - 数据备份：`%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-remote-storage-v41-20260725-212039\LocalState`
 - `sefirah.db`、`Sefirah.pfx`、`user_settings.json` 在 v40 → v41 更新边界的 SHA-256 均保持一致。
+
+# 2026-07-26 Android Data Remote Storage
+
+## Project Goal
+
+- 通过现有 Cloud Files + SFTP 链路显示手机和平板的 QQ 下载目录，并提供无需 UI 自动化的配对/同步根维护 API。
+
+## Lessons Learned
+
+- `StorageProviderSyncRootInfo.Context` 中的 SFTP 凭据会过期；已有同步根必须更新 Context，并用新信息重启 provider。
+- Android 端短暂重连若立即停止 SFTP，会轮换密码并让 Windows provider 持有旧凭据；120 秒断连宽限期可覆盖 HyperOS 的短暂掉线。
+- 配对 API 使用当前证书验证码验证请求；破坏性控制命令要求精确设备 ID 与设备名称。
+
+## Task Board
+
+- [x] 新增 `pairing.list`、`pairing.request`、`pairing.forget`、`storage.unregister` 控制 API 与 CLI。
+- [x] 刷新已有 Cloud Files 同步根的 SFTP Context 并安全重启 provider。
+- [x] 构建、签名并部署 Windows 3.0.0.47。
+- [x] 从平板 QQ 下载目录成功按需读取 1,827,463 字节 PNG 文件。
+
+## Evidence
+
+- Bundle: `artifacts\windows-x64\Sefirah-Fork_3.0.0.47_x64_Sideload\Sefirah-Fork_3.0.0.47_x64.msixbundle`
+- Bundle SHA-256: `A79B711BC9CECCD947B6761E733536A759A3435627EAC9EAB392047966E77204`
+- 已安装包：`Meta.Sefirah.Fork 3.0.0.47`

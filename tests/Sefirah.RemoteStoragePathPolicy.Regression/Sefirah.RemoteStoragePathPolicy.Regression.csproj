@@ -6,8 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\src\Sefirah\Platforms\Windows\RemoteStorage\Worker\AsyncSessionPool.cs" Link="AsyncSessionPool.cs" />
-    <Compile Include="..\..\src\Sefirah\Platforms\Windows\RemoteStorage\Worker\TaskQueue.cs" Link="TaskQueue.cs" />
+    <Compile Include="..\..\src\Sefirah\Platforms\Windows\Helpers\FileHelper.cs" Link="FileHelper.cs" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
   </ItemGroup>
 </Project>

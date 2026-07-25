@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Text;
+using CommunityToolkit.WinUI;
 using Sefirah.Data.Models;
 
 namespace Sefirah.Platforms.Windows.Control;
@@ -7,6 +8,8 @@ namespace Sefirah.Platforms.Windows.Control;
 public sealed class ControlApiWorker(
     IHeadsetHandoffService handoffService,
     IDeviceManager deviceManager,
+    ISessionManager sessionManager,
+    ISftpFeature sftpFeature,
     ILogger<ControlApiWorker> logger) : BackgroundService
 {
     public const string PipeName = "Sefirah.Control.v1";
@@ -73,6 +76,10 @@ public sealed class ControlApiWorker(
         return request.Command switch
         {
             "status" or "bluetooth.endpoints" => await GetStatusAsync(),
+            "pairing.list" => await GetPairingCandidatesAsync(),
+            "pairing.request" => await RequestPairingAsync(request.Arguments),
+            "pairing.forget" => await ForgetPairingAsync(request.Arguments),
+            "storage.unregister" => await UnregisterStorageAsync(request.Arguments),
             "bluetooth.catalog" => await GetCatalogAsync(request.Arguments, cancellationToken),
             "bluetooth.discover" => await handoffService.DiscoverAsync(cancellationToken),
             "bluetooth.config" => handoffService.Configurations,
@@ -83,6 +90,76 @@ public sealed class ControlApiWorker(
             "bluetooth.command" => await ExecuteBluetoothCommandAsync(request.Arguments, cancellationToken),
             _ => throw new InvalidOperationException($"Unknown command: {request.Command}"),
         };
+    }
+
+    private async Task<object> GetPairingCandidatesAsync()
+    {
+        return await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+            deviceManager.DiscoveredDevices.Select(device => new
+            {
+                id = device.Id,
+                name = device.Name,
+                model = device.Model,
+                address = device.Address,
+                port = device.Port,
+                verificationCode = device.VerificationKey,
+                isPairing = device.IsPairing,
+            }).ToArray());
+    }
+
+    private async Task<object> RequestPairingAsync(JsonElement arguments)
+    {
+        var deviceId = GetRequiredString(arguments, "deviceId");
+        var verificationCode = GetRequiredString(arguments, "verificationCode");
+        var device = await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+            deviceManager.DiscoveredDevices.FirstOrDefault(candidate =>
+                candidate.Id.Equals(deviceId, StringComparison.OrdinalIgnoreCase)));
+
+        if (device is null)
+            throw new InvalidOperationException($"Pairing candidate was not found: {deviceId}");
+        if (!device.VerificationKey.Equals(verificationCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Verification code does not match the current device certificate.");
+
+        sessionManager.Pair(device);
+        return new
+        {
+            id = device.Id,
+            name = device.Name,
+            verificationCode = device.VerificationKey,
+            requested = true,
+        };
+    }
+
+    private async Task<object> ForgetPairingAsync(JsonElement arguments)
+    {
+        var deviceId = GetRequiredString(arguments, "deviceId");
+        var expectedName = GetRequiredString(arguments, "expectedName");
+        var device = deviceManager.FindDeviceById(deviceId)
+            ?? throw new InvalidOperationException($"Paired device was not found: {deviceId}");
+
+        if (!device.Name.Equals(expectedName, StringComparison.Ordinal))
+            throw new InvalidOperationException("Expected device name does not match the paired device.");
+
+        if (device.IsConnected)
+            sessionManager.DisconnectDevice(device, true);
+
+        await sftpFeature.RemoveAsync(device.Id);
+        await deviceManager.RemoveDevice(device);
+        return new { id = device.Id, name = device.Name, forgotten = true };
+    }
+
+    private async Task<object> UnregisterStorageAsync(JsonElement arguments)
+    {
+        var deviceId = GetRequiredString(arguments, "deviceId");
+        var expectedName = GetRequiredString(arguments, "expectedName");
+        var device = deviceManager.FindDeviceById(deviceId)
+            ?? throw new InvalidOperationException($"Paired device was not found: {deviceId}");
+
+        if (!device.Name.Equals(expectedName, StringComparison.Ordinal))
+            throw new InvalidOperationException("Expected device name does not match the paired device.");
+
+        await sftpFeature.RemoveAsync(device.Id);
+        return new { id = device.Id, name = device.Name, unregistered = true };
     }
 
     private async Task<object> GetStatusAsync()

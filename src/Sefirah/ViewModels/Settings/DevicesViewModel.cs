@@ -81,7 +81,7 @@ public partial class DevicesViewModel : ObservableObject
 
                 await DeviceManager.RemoveDevice(device);
 
-                SftpFeature.Remove(deviceId);
+                await SftpFeature.RemoveAsync(deviceId);
 
                 await Task.Run(() =>
                 {

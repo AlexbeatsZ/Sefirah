@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
 
 namespace Sefirah.Platforms.Windows.Helpers;
 public static class FileHelper
@@ -16,9 +17,7 @@ public static class FileHelper
 
     private static readonly ImmutableHashSet<string> SYSTEM_FOLDER_NAMES = [
         "/Android/obb",
-        "/Android/data",
         "Android/obb",
-        "Android/data",
     ];
 
     public static async Task WaitUntilUnlocked(Action funcOrAction, ILogger logger)
@@ -63,7 +62,7 @@ public static class FileHelper
 
     private static async Task LogAndWait(IOException ex, ILogger logger)
     {
-        logger.Warn($"File access error, waiting to retry; HR {ex.HResult}", ex);
+        logger.LogWarning(ex, "File access error, waiting to retry; HR {HResult}", ex.HResult);
         await Task.Delay(DELAY_MS);
     }
 

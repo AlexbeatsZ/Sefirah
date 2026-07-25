@@ -44,11 +44,6 @@ public class SyncRootRegistrar(
 
         var contextBytes = StructBytes.ToBytes(context);
 
-        if (IsRegistered(id))
-        {
-            UpdateCredentials(id, context);
-        }
-
         var info = new StorageProviderSyncRootInfo
         {
             Id = id,
@@ -72,6 +67,13 @@ public class SyncRootRegistrar(
             Context = CryptographicBuffer.CreateFromByteArray(contextBytes),
         };
          //info.StorageProviderItemPropertyDefinitions.Add()
+
+        if (IsRegistered(id))
+        {
+            UpdateCredentials(id, context);
+            logger.Debug($"Updated credentials for {id}");
+            return info;
+        }
 
         logger.Debug($"Registering {id}");
         StorageProviderSyncRootManager.Register(info);
