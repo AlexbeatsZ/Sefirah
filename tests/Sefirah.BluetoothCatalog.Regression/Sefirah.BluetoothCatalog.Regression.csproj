@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\Sefirah\Services\BluetoothDeviceIdentity.cs" Link="BluetoothDeviceIdentity.cs" />
+    <Compile Include="..\..\src\Sefirah\Services\BluetoothHandoffFallbackPolicy.cs" Link="BluetoothHandoffFallbackPolicy.cs" />
   </ItemGroup>
 </Project>

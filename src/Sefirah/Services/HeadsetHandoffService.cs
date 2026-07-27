@@ -456,7 +456,9 @@ public sealed class HeadsetHandoffService(
             if (!connectedPerDevice)
             {
                 var targetCatalog = await GetCatalogAsync(targetEndpointId, cancellationToken);
-                if (!targetCatalog.SupportsPerDeviceControl && targetCatalog.RadioEnabled)
+                if (BluetoothHandoffFallbackPolicy.ShouldCycleTargetRadio(
+                        connectedPerDevice,
+                        targetCatalog.RadioEnabled))
                 {
                     var disable = await ExecuteEndpointCommandAsync(
                         targetEndpointId,

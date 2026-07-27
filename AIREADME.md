@@ -21,6 +21,7 @@
 - `sefirahctl bluetooth discover` was physically validated against the installed Windows app and Redmi K70: both QCY headsets were matched across PC and phone, and the active endpoint was reported correctly.
 - Windows 3.0.0.5 presents Bluetooth devices in three selected-endpoint sections, supports per-headset visibility, and exposes matching `view`, `disconnect`, and `visibility` CLI commands for deterministic testing.
 - Windows cannot directly connect or disconnect a single paired audio device through the public API. Handoff uses a short target-radio off/on cycle only when per-device connection control is unavailable; direct Disconnect refuses to disable the whole PC radio.
+- A target that advertises per-device control can still reject or time out a particular `connect`. That failure must trigger the same target-radio off/on fallback; checking only `SupportsPerDeviceControl` turns the fallback into a no-op (`setRadio(true)` while already on).
 - Updating 3.0.0.2 through 3.0.0.5 preserved the fork package identity and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte at every installation boundary. Backups are under `%LOCALAPPDATA%\Temp\.agents\Sefirah`.
 - QCY AilyBuds Lite was physically validated PC to Redmi K70 and Redmi K70 to PC. Both radios returned enabled, the final connection was restored to the PC, and both desktop and Android three-section UIs were visually verified.
 - Windows 3.0.0.9 localizes the complete desktop resource set into Simplified Chinese and aligns the Bluetooth module hierarchy with Notifications: the module heading remains outside the cards, while the three device sections use separate cards and per-device context actions.
@@ -55,6 +56,7 @@
 - [x] Add a current-user-only command-line control API and validate status, Bluetooth catalogs, discovery, and saved configuration end to end.
 - [x] Redesign the Windows Bluetooth card around the selected endpoint with three sections, expandable actions, and visibility settings.
 - [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
+- [x] Make failed Android per-device connections power-cycle the target radio, add regression coverage, and deploy Windows 3.0.0.48.
 - [x] Localize the Windows UI into Simplified Chinese, align Bluetooth with the Notifications visual hierarchy, reuse the device selector for handoff targets, and ship the data-preserving 3.0.0.9 update.
 - [x] Add an explicit schema 3 to 5 primary-key migration with regression coverage and deploy the data-preserving 3.0.0.10 fork to the Windows server.
 - [x] Stabilize simultaneous Windows peer connections, add capability-gated remote actions, route desktop Bluetooth catalog/command messages, clean failed sessions, and deploy the data-preserving 3.0.0.27 update to both Windows peers.
@@ -146,3 +148,17 @@
 - Bundle: `artifacts\windows-x64\Sefirah-Fork_3.0.0.47_x64_Sideload\Sefirah-Fork_3.0.0.47_x64.msixbundle`
 - Bundle SHA-256: `A79B711BC9CECCD947B6761E733536A759A3435627EAC9EAB392047966E77204`
 - 已安装包：`Meta.Sefirah.Fork 3.0.0.47`
+
+# 2026-07-28 Bluetooth Handoff Recovery
+
+## Current State
+
+- Windows `Meta.Sefirah.Fork` 3.0.0.48 is installed and running.
+- Bundle SHA-256: `56260701C3D9E80FB1B19AE96ADEF87D9408D81BABE99CE0B85A6471D585CFB9`.
+- Pre-update LocalState backup: `C:\Users\Meta\AppData\Local\Temp\.agents\Sefirah\pre-bluetooth-v48-20260728-021009\LocalState`.
+
+## Durable Lessons
+
+- If an Android endpoint reports per-device support but its `connect` fails, the Windows coordinator must still cycle the target radio before waiting for a connection.
+- The physical fallback probe reset the tablet Bluetooth uptime from more than 51 hours to about 24 seconds while leaving the radio enabled and its catalog responsive, confirming that v48 executes a real off/on cycle.
+- The in-range `84AC60251624` QCY headset was restored to Meta-OMEN after testing. The server Bluetooth radio was restored to its original off state.

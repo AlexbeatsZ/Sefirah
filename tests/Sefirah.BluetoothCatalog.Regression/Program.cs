@@ -21,6 +21,24 @@ AssertEqual(
     BluetoothDeviceIdentity.CatalogKey(null, "opaque-device-key", " Keyboard "),
     "Devices without a usable address must fall back to a stable trimmed name.");
 
+AssertTrue(
+    BluetoothHandoffFallbackPolicy.ShouldCycleTargetRadio(
+        perDeviceConnectionSucceeded: false,
+        targetRadioEnabled: true),
+    "A failed per-device connection must cycle an already-enabled target radio.");
+
+AssertFalse(
+    BluetoothHandoffFallbackPolicy.ShouldCycleTargetRadio(
+        perDeviceConnectionSucceeded: true,
+        targetRadioEnabled: true),
+    "A successful per-device connection must not cycle the target radio.");
+
+AssertFalse(
+    BluetoothHandoffFallbackPolicy.ShouldCycleTargetRadio(
+        perDeviceConnectionSucceeded: false,
+        targetRadioEnabled: false),
+    "An already-disabled target radio only needs the later enable step.");
+
 Console.WriteLine("Bluetooth catalog identity regression: PASS");
 
 static void AssertEqual(string expected, string? actual, string message)
@@ -29,4 +47,14 @@ static void AssertEqual(string expected, string? actual, string message)
     {
         throw new InvalidOperationException($"{message} Expected '{expected}', got '{actual}'.");
     }
+}
+
+static void AssertTrue(bool actual, string message)
+{
+    if (!actual) throw new InvalidOperationException(message);
+}
+
+static void AssertFalse(bool actual, string message)
+{
+    if (actual) throw new InvalidOperationException(message);
 }
