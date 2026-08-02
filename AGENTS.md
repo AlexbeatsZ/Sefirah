@@ -1,164 +1,47 @@
-# Project Goal
+# Sefirah Windows Fork Instructions
 
-- Maintain a long-lived personal fork of Sefirah while keeping changes suitable for upstream pull requests.
-- Coordinate one-click Bluetooth headset handoff between Windows, Redmi K70, and Xiaomi Pad 6 Pro.
-- Preserve existing device records and settings across fork updates; the first Android migration uses a one-time secure re-enrollment because the official Android signing key and Android Keystore private key are unavailable.
+## Repository and Branch Policy
 
-# Lessons Learned
+- This is AlexbeatsZ's Windows fork. Keep `origin` pointed at `AlexbeatsZ/Sefirah` and `upstream` at `shrimqy/Sefirah`.
+- Keep changes reviewable for upstream where practical, but preserve fork-specific packaging, control API, and device-coordination behavior when required.
+- Do not overwrite or discard unrelated dirty work. Commit and push only the files in the current task.
 
-- Upstream `v3.0.0` already pairs the phone to Windows for Bluetooth calling, but it does not control arbitrary Bluetooth audio-device connections.
-- The installed Microsoft Store build is `2.4.0`; its pairing database and exportable TLS identity are `LocalState\sefirah.db` and `LocalState\Sefirah.pfx`.
-- Never modify or replace live Store data directly. Before migration, stop the app with user confirmation, copy the database, PFX, and settings into `%LOCALAPPDATA%\Temp\.agents\`, then validate the copy.
-- Old clients must be capability-gated before receiving new polymorphic socket message types.
-- The installed Store database is schema version 3. Upstream v3 declares schema version 5 but has no v3-to-v5 migration and previously used destructive fallback; the fork now backs up and performs additive reconciliation instead.
-- Desktop and Windows targets compile without restoring packages; existing upstream warnings remain.
-- The Microsoft Store package publisher is Microsoft-controlled, so a self-signed fork cannot update it in place. The fork uses the side-by-side identity `Meta.Sefirah.Fork`; its installer backs up and migrates the complete Store `LocalState` before first launch.
-- Windows fork signing material lives only in the ignored project-local `.signing` directory. The PFX password is DPAPI-protected for the current Windows user and is passed to MSBuild through an environment property, not process arguments. Back up the whole directory before deleting the checkout.
-- The x64 sideload build can report APPX certificate-store warnings because the project key is deliberately not imported during builds. The build script independently rejects a bundle whose Authenticode signer thumbprint does not match the project certificate.
-- The user-facing Windows artifact is now a self-contained x64 EXE bootstrapper. It embeds the signed bundle and public certificate, requests UAC, installs the package, and intentionally does not import Microsoft Store data; only future updates of the same fork identity preserve fork `LocalState` in place.
-- Windows 3.0.0.2 exposes a current-user-only named-pipe control API (`Sefirah.Control.v1`) and the `sefirahctl` client. It supports status, endpoint/catalog queries, discovery, saved headset configuration, direct endpoint commands, and coordinated handoff without UI automation.
-- Updating the fork package from 3.0.0.1 to 3.0.0.2 preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte. The pre-update copy is under `%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-control-api-3.0.0.2\LocalState`.
-- `sefirahctl bluetooth discover` was physically validated against the installed Windows app and Redmi K70: both QCY headsets were matched across PC and phone, and the active endpoint was reported correctly.
-- Windows 3.0.0.5 presents Bluetooth devices in three selected-endpoint sections, supports per-headset visibility, and exposes matching `view`, `disconnect`, and `visibility` CLI commands for deterministic testing.
-- Windows cannot directly connect or disconnect a single paired audio device through the public API. Handoff uses a short target-radio off/on cycle only when per-device connection control is unavailable; direct Disconnect refuses to disable the whole PC radio.
-- A target that advertises per-device control can still reject or time out a particular `connect`. That failure must trigger the same target-radio off/on fallback; checking only `SupportsPerDeviceControl` turns the fallback into a no-op (`setRadio(true)` while already on).
-- Updating 3.0.0.2 through 3.0.0.5 preserved the fork package identity and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte at every installation boundary. Backups are under `%LOCALAPPDATA%\Temp\.agents\Sefirah`.
-- QCY AilyBuds Lite was physically validated PC to Redmi K70 and Redmi K70 to PC. Both radios returned enabled, the final connection was restored to the PC, and both desktop and Android three-section UIs were visually verified.
-- Windows 3.0.0.9 localizes the complete desktop resource set into Simplified Chinese and aligns the Bluetooth module hierarchy with Notifications: the module heading remains outside the cards, while the three device sections use separate cards and per-device context actions.
-- Removing `Language` from `AppxBundleAutoResourcePackageQualifiers` requires the complete `AppxDefaultResourceQualifiers` union, including the original `Scale=200`. Omitting it collapsed the scale resource-package graph and caused an in-place update to fail in Windows MRT `SystemRegisterRemove` with `0x80073CF9`/`0x8007000D`.
-- The corrected 3.0.0.9 bundle embeds all 15 UI languages in the main package while preserving the prior `split.scale-100/125/150/300/400` graph. Updating from 3.0.0.7 succeeded and preserved `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` byte-for-byte; the backup is under `%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-ui-3.0.0.9-20260718-231936\LocalState`.
-- The official 2.4.0 server database is schema 3. sqlite-net cannot add the schema 5 primary-key columns during `CreateTable`, so legacy content tables now use an explicit transactional rebuild migration; paired-device, local-device, and certificate rows are left in place.
-- The schema 3 to 5 migration passes both a synthetic regression fixture and a read-only copy of the server database containing 3 pairings, 261 conversations, and 612 messages.
-- Server `META-ROGALLY` now runs fork package `Meta.Sefirah.Fork` 3.0.0.10 in console session 1. The original Store package was removed only after a complete LocalState backup, and the fork PFX hash remained `7DD1AD685076DCF6362B186D194558CD806344F55280847654FB4F339286791C`. The immediate pre-3.0.0.10 backup is `%LOCALAPPDATA%\Temp\.agents\Sefirah\server-deploy\pre-3.0.0.10-20260718-235628\LocalState` on the server.
-- A stable peer connection needs deterministic collision handling when both Windows peers initiate simultaneously. Choose one direction from the two device IDs, authenticate the accepted socket atomically, keep the survivor alive with TCP keepalive, and ignore stale disconnect callbacks belonging to a replaced socket.
-- Existing paired inbound connections must receive both the authentication response and current `DeviceInfo`; otherwise one side can look connected while the initiating side waits, lacks capabilities, and repeatedly reconnects.
-- Remote `ActionInfo` execution is now denied unless the sender explicitly advertises `remote-actions-controller-v1`; Bluetooth catalog and command messages are independently gated by `bluetooth-handoff-v1`.
-- Desktop peers can legitimately send `BluetoothHandoffConfiguration` and `BluetoothHandoffState`, but these are companion-facing state messages and should be recognized without mutating the receiving desktop's local configuration.
-- Windows 3.0.0.27 handles Bluetooth catalog requests and commands on both desktop peers and routes session-level socket failures back to the owning `ServerSession` for immediate cleanup. `NotConnected` on an already-closed transient session is normal close-race telemetry and is kept at debug level; other server and session socket faults remain warnings/errors.
-- 3.0.0.27 was installed on `Meta-OMEN` and `META-ROGALLY` with each machine's `sefirah.db`, `Sefirah.pfx`, and `user_settings.json` preserved byte-for-byte at every package update boundary. A live `sefirahctl bluetooth list Meta-ROG` returned the remote catalog, and a 75-second post-upgrade observation contained no new warning/error, unknown-message, or `NotConnected` entries.
-- Remote storage already uses Windows Cloud Files API placeholders backed by Android SFTP. On 2026-07-25, Explorer error `0x8007016A` was reproduced three times on both tablet roots and the old phone root while both devices had `StorageAccess=true` and live TCP sessions.
-- `SyncProviderPool.CancellableThread` wraps an async delegate in `new Task(async () => ...)`, so its tracked task completes at the first await and `Stop()` does not await the provider. A stale provider's unconditional `Stopped` handler can then remove the replacement from `_threads`. Reconnect churn produced 586 tablet and 944 phone SFTP initializations in one log, versus 358 tracked stops, and the main process grew to about 851 threads and 49,751 handles.
-- Windows v41 replaces that lifecycle with an awaitable, serialized, generation-safe async session pool. The task and shell-command queues now track their actual async loops, and the SFTP watcher exposes an awaitable `StartAsync`, so provider shutdown waits for every owned loop before releasing the Cloud Files connection.
-- `Sefirah.SyncProviderLifecycle.Regression` exercises 50 delayed provider replacements plus queue shutdown. It guards both single-generation ownership and the former nested-task early-completion bug.
-- On-device validation after installing v41 opened both formerly failing sync roots, listed the tablet and phone `Download` directories (including QQ/WeChat placeholders), and hydrated one 32-byte file from each device. A 106-second observation held at 85–91 threads and 2,211–2,719 handles instead of the prior 851 threads/~50,000 handles.
-- Unregistered/abandoned sync roots remain as Cloud Files directory reparse points (`0x9000101a`) and return `ERROR_CLOUD_FILE_PROVIDER_NOT_RUNNING`; device renames created duplicate old/new root directories. Recovery must preserve hydrated user data and must not recursively delete an unknown non-empty destination.
-- Android currently accepts every SFTP public key. Windows remote-storage work must not be treated as production-safe until authentication and server-side shared-path confinement are fixed.
+## Product Invariants
 
-# Task Board
+- Preserve user data, pairings, certificates, settings, and Cloud Files state across upgrades. Schema changes require explicit migrations and regression coverage.
+- Bluetooth devices are identified by normalized address. Merge Classic and BLE records; classify devices by capability/category rather than name substrings.
+- The catalog defaults to all paired devices; headset-only is an optional filter.
+- The selected endpoint drives the Bluetooth UI and coordinator. Keep UI state, CLI state, and protocol state consistent.
+- An accepted connect/disconnect request is not final success. Wait for observable state with bounded timeouts. If Android per-device connect fails, perform the defined target-radio recovery before waiting again.
+- Serialize cross-peer handoff and use deterministic connection direction plus bounded retry/backoff to avoid simultaneous connection storms.
+- Control-pipe operations are current-user-only and explicitly allowlisted. Never add arbitrary shell execution.
+- Protocol changes must be capability-gated so older Android clients remain usable.
 
-- [x] Fork repository and configure `origin`/`upstream` remotes.
-- [x] Add headset capability protocol and Windows handoff coordinator.
-- [x] Add Windows Bluetooth device provider with per-device control first and radio-cycle rollback fallback.
-- [x] Add desktop discovery and handoff UI.
-- [x] Add non-destructive schema upgrades and validated Store-data migration tooling.
-- [x] Add a reproducible signed x64 MSIX Bundle installer with UAC certificate trust, automatic first-run Store data migration, and an in-project artifact/signing layout.
-- [x] Add and validate a directly runnable, Authenticode-signed x64 EXE installer that performs a clean fork install without Store-data migration.
-- [x] Add a current-user-only command-line control API and validate status, Bluetooth catalogs, discovery, and saved configuration end to end.
-- [x] Redesign the Windows Bluetooth card around the selected endpoint with three sections, expandable actions, and visibility settings.
-- [x] Extend the CLI with grouped UI-state, direct-disconnect, and visibility commands; physically validate AilyBuds handoff in both directions.
-- [x] Make failed Android per-device connections power-cycle the target radio, add regression coverage, and deploy Windows 3.0.0.48.
-- [x] Localize the Windows UI into Simplified Chinese, align Bluetooth with the Notifications visual hierarchy, reuse the device selector for handoff targets, and ship the data-preserving 3.0.0.9 update.
-- [x] Add an explicit schema 3 to 5 primary-key migration with regression coverage and deploy the data-preserving 3.0.0.10 fork to the Windows server.
-- [x] Stabilize simultaneous Windows peer connections, add capability-gated remote actions, route desktop Bluetooth catalog/command messages, clean failed sessions, and deploy the data-preserving 3.0.0.27 update to both Windows peers.
-- [ ] Replace the tablet installation after its USB ADB interface is enabled and authorized; Windows currently sees Xiaomi Pad 6 Pro only as an MTP/WPD device.
-- [ ] Extend the control API with an explicit allowlist for future non-Bluetooth app actions; never expose arbitrary shell execution through the pipe.
-- [ ] Complete secure Android first-time re-enrollment for the signing-key transition.
-- [ ] Add automated tests and validate QCY-T13 and QCY AilyBuds Lite in all three-device directions.
-- [x] Fix remote-storage provider lifecycle with a truly awaitable task, generation-safe dictionary removal, serialized per-root replacement, and reconnect stress coverage; deploy and validate Windows v41.
-- [ ] Add safe orphan-sync-root detection/recovery and device-rename reconciliation without deleting hydrated or unrelated local files.
-- [ ] Add selected remote shares (Download/QQ/WeChat) and a unified shortcut hub while retaining Cloud Files on-demand hydration.
-- [x] Commit and push the feature branch.
-# 2026-07-24 Fork Bluetooth Catalog and Connection Work
+## Remote Storage and Security
 
-## Project Goal
+- Hold the real lifetime task for every async provider, watcher, and queue. Do not wrap `async` delegates with `new Task` or unwrapped `StartNew`.
+- Replacement of a sync root must await the old generation, serialize per root, and remove state only when the completing object is still the registered generation.
+- Refresh stored SFTP context when credentials change and restart the provider safely.
+- Orphan cleanup and device-rename reconciliation must never delete hydrated or unrelated local files.
+- Treat Android remote storage as untrusted until it authenticates the paired desktop key and confines every operation to canonical selected-share paths.
 
-- 蓝牙卡片默认显示全部已配对设备，并提供“全部 / 仅耳机”筛选。
-- 统一电脑、Windows 服务器、平板和手机的蓝牙端点目录与切换协议。
+## Packaging and Deployment
 
-## Lessons Learned
+- Use the repository's reproducible signed x64 package/installer flow. Keep signing materials out of Git.
+- Before any upgrade, verify the installed package identity and back up the relevant LocalState under `%LOCALAPPDATA%\Temp\.agents\` when rollback risk warrants it.
+- After deployment, verify package status, preserved data, and the changed behavior. Do not rely on an old version number, hash, PID, endpoint, or radio state recorded in documentation.
 
-- Windows 设备目录需要枚举并合并 Classic 与 BLE；规范化蓝牙地址比名称匹配可靠。
-- `SendAsync` 已复制到 NetCoreServer 内部缓冲；原始回调 buffer 生命周期不是平板断流根因。
-- `SendControlAndFlush` 的“未清空”警告只说明 250 ms 内发送队列仍有数据，不等同于心跳未排队。
-- Android 回调内同步执行 ADB TCP 可达性探测会阻塞 socket 处理，必须按设备设置在后台去重执行。
-- 平板断流在同一设备的无线 ADB TLS 上也复现，因此不能继续只修改 Windows 心跳来猜根因。
+## Verification
 
-## Task Board
+Run the smallest relevant regression suite first, then the complete affected Windows build/tests. Bluetooth changes must cover catalog identity/filtering and coordinator recovery. Cloud Files changes must cover provider replacement, cancellation, reconnect, and safe root reconciliation.
 
-- [done] 全设备蓝牙目录、Classic/BLE 合并、地址身份与精确耳机分类。
-- [done] UI 和 CLI 支持默认 `all` 与可选 `headsets`。
-- [done] Android 心跳响应、主动心跳、串行收包和 ADB TCP 回调解耦。
-- [done] `Sefirah.BluetoothCatalog.Regression` 通过。
-- [done] Windows v40 构建、打包并部署至电脑和服务器；服务器证书保留。
-- [paused] Xiaomi Pad 6 Pro 的 20–30 秒系统层断流，留待取得稳定 USB logcat 后继续。
+## Active Work
 
-## Evidence
-
-- Bundle SHA-256: `DFAD6466D3E373AE76C57174274D7F8F13698BF94EAD01DA05B72BBBB4ECBF2B`
-- 实机“全部”目录包含键盘、鼠标、手写笔和耳机；“仅耳机”只保留 QCY AilyBuds Lite 与 QCY-T13。
-- 服务器 v40 安装状态 `Ok`，PFX 文件哈希保持 `7DD1AD685076DCF6362B186D194558CD806344F55280847654FB4F339286791C`。
-
-# 2026-07-25 Remote Storage Provider Lifecycle Fix
-
-## Project Goal
-
-- 修复资源管理器访问手机/平板云文件根目录时的 `0x8007016A`（云文件提供程序未运行）。
-
-## Lessons Learned
-
-- `new Task(async () => ...)` 与 `Task.Factory.StartNew(async () => ...)` 只跟踪外层任务；提供器、任务队列和 shell 命令队列都必须保存真正可等待的异步任务。
-- 同一 sync-root 的替换必须串行等待旧代退出，并以对象身份检查结束回调，避免旧代删除新代。
-- SFTP watcher 不能以 `async void` 启动；它的运行任务必须由 sync provider 一直持有并在取消后等待。
-
-## Task Board
-
-- [done] 新增 50 代替换与队列停止回归测试。
-- [done] Windows 工程与全部四组回归测试通过。
-- [done] 构建、签名并安装 v41，保留数据库、PFX 和用户设置。
-- [done] 实机验证平板/手机根目录、Download/QQ/WeChat 占位符和按需下载。
-
-## Evidence
-
-- Bundle SHA-256: `D79AB451EFFE067DB38660C2D12AE22FA92AF98325579B9CD87835C098A45E82`
-- Installer EXE SHA-256: `8B65CA59697FE36A15AA8DA5F285429301A5D938C261E27590F796B84E037FFB`
-- 数据备份：`%LOCALAPPDATA%\Temp\.agents\Sefirah\pre-remote-storage-v41-20260725-212039\LocalState`
-- `sefirah.db`、`Sefirah.pfx`、`user_settings.json` 在 v40 → v41 更新边界的 SHA-256 均保持一致。
-
-# 2026-07-26 Android Data Remote Storage
-
-## Project Goal
-
-- 通过现有 Cloud Files + SFTP 链路显示手机和平板的 QQ 下载目录，并提供无需 UI 自动化的配对/同步根维护 API。
-
-## Lessons Learned
-
-- `StorageProviderSyncRootInfo.Context` 中的 SFTP 凭据会过期；已有同步根必须更新 Context，并用新信息重启 provider。
-- Android 端短暂重连若立即停止 SFTP，会轮换密码并让 Windows provider 持有旧凭据；120 秒断连宽限期可覆盖 HyperOS 的短暂掉线。
-- 配对 API 使用当前证书验证码验证请求；破坏性控制命令要求精确设备 ID 与设备名称。
-
-## Task Board
-
-- [x] 新增 `pairing.list`、`pairing.request`、`pairing.forget`、`storage.unregister` 控制 API 与 CLI。
-- [x] 刷新已有 Cloud Files 同步根的 SFTP Context 并安全重启 provider。
-- [x] 构建、签名并部署 Windows 3.0.0.47。
-- [x] 从平板 QQ 下载目录成功按需读取 1,827,463 字节 PNG 文件。
-
-## Evidence
-
-- Bundle: `artifacts\windows-x64\Sefirah-Fork_3.0.0.47_x64_Sideload\Sefirah-Fork_3.0.0.47_x64.msixbundle`
-- Bundle SHA-256: `A79B711BC9CECCD947B6761E733536A759A3435627EAC9EAB392047966E77204`
-- 已安装包：`Meta.Sefirah.Fork 3.0.0.47`
-
-# 2026-07-28 Bluetooth Handoff Recovery
+- Add safe orphan-sync-root recovery and device-rename reconciliation.
+- Add selected remote shares and a unified shortcut hub while preserving on-demand hydration.
+- Extend future non-Bluetooth controls only through an explicit allowlist and capability checks.
+- Add automated multi-peer/headset coverage and repeat physical validation when devices are reachable.
 
 ## Current State
 
-- Windows `Meta.Sefirah.Fork` 3.0.0.48 is installed and running.
-- Bundle SHA-256: `56260701C3D9E80FB1B19AE96ADEF87D9408D81BABE99CE0B85A6471D585CFB9`.
-- Pre-update LocalState backup: `C:\Users\Meta\AppData\Local\Temp\.agents\Sefirah\pre-bluetooth-v48-20260728-021009\LocalState`.
-
-## Durable Lessons
-
-- If an Android endpoint reports per-device support but its `connect` fails, the Windows coordinator must still cycle the target radio before waiting for a connection.
-- The physical fallback probe reset the tablet Bluetooth uptime from more than 51 hours to about 24 seconds while leaving the radio enabled and its catalog responsive, confirming that v48 executes a real off/on cycle.
-- The in-range `84AC60251624` QCY headset was restored to Meta-OMEN after testing. The server Bluetooth radio was restored to its original off state.
+The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
