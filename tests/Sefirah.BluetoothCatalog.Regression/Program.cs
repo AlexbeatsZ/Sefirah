@@ -39,6 +39,42 @@ AssertFalse(
         targetRadioEnabled: false),
     "An already-disabled target radio only needs the later enable step.");
 
+AssertTrue(
+    BluetoothHandoffUiPolicy.IsConnected("phone"),
+    "Any active endpoint belongs in the single connected section.");
+
+AssertFalse(
+    BluetoothHandoffUiPolicy.IsConnected(null),
+    "A device without an active endpoint belongs in the disconnected section.");
+
+AssertTrue(
+    BluetoothHandoffUiPolicy.CanSwitchTo(
+        sourceEndpointId: "server",
+        targetEndpointId: "phone",
+        supportedEndpointIds: new[] { "phone", "server" }),
+    "The selected endpoint remains available through the generic other-device action.");
+
+AssertTrue(
+    BluetoothHandoffUiPolicy.CanSwitchTo(
+        sourceEndpointId: null,
+        targetEndpointId: "phone",
+        supportedEndpointIds: Array.Empty<string>()),
+    "Legacy configurations without an endpoint allowlist must remain switchable.");
+
+AssertFalse(
+    BluetoothHandoffUiPolicy.CanSwitchTo(
+        sourceEndpointId: null,
+        targetEndpointId: "phone",
+        supportedEndpointIds: new[] { "server" }),
+    "An explicit endpoint allowlist must still disable unsupported targets.");
+
+AssertFalse(
+    BluetoothHandoffUiPolicy.IsOtherTarget(
+        candidateEndpointId: "pc",
+        sourceEndpointId: "phone",
+        localEndpointId: "pc"),
+    "The local PC must not appear in the other-device picker.");
+
 Console.WriteLine("Bluetooth catalog identity regression: PASS");
 
 static void AssertEqual(string expected, string? actual, string message)

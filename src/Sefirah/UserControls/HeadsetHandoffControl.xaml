@@ -99,8 +99,8 @@
                             FontSize="16"
                             FontWeight="SemiBold"
                             Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                            Text="{helpers:ResourceString Name=BluetoothConnectedSelected}" />
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.SelectedConnectedDevices, Mode=OneWay}">
+                            Text="{helpers:ResourceString Name=BluetoothConnected}" />
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.ConnectedDevices, Mode=OneWay}">
                             <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="viewModels:HeadsetDeviceItem">
                                     <Button
@@ -111,7 +111,7 @@
                                         BorderBrush="Transparent"
                                         Tapped="DeviceButton_Tapped"
                                         Tag="{x:Bind}">
-                                        <TextBlock FontSize="14" Text="{x:Bind DisplayName}" />
+                                        <TextBlock FontSize="14" Text="{x:Bind DisplayText}" />
                                     </Button>
                                 </DataTemplate>
                             </ItemsRepeater.ItemTemplate>
@@ -130,39 +130,8 @@
                             FontSize="16"
                             FontWeight="SemiBold"
                             Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                            Text="{helpers:ResourceString Name=BluetoothConnectedOther}" />
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.OtherConnectedDevices, Mode=OneWay}">
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="viewModels:HeadsetDeviceItem">
-                                    <Button
-                                        Padding="8,6"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Left"
-                                        Background="Transparent"
-                                        BorderBrush="Transparent"
-                                        Tapped="DeviceButton_Tapped"
-                                        Tag="{x:Bind}">
-                                        <TextBlock FontSize="14" Text="{x:Bind DisplayName}" />
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
-                        </ItemsRepeater>
-                    </StackPanel>
-                </Border>
-
-                <Border
-                    Padding="12"
-                    Background="{ThemeResource CardBackgroundFillColorDefault}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefault}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                    <StackPanel Spacing="8">
-                        <TextBlock
-                            FontSize="16"
-                            FontWeight="SemiBold"
-                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                            Text="{helpers:ResourceString Name=BluetoothSavedDisconnected}" />
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.SavedDisconnectedDevices, Mode=OneWay}">
+                            Text="{helpers:ResourceString Name=BluetoothDisconnected}" />
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.DisconnectedDevices, Mode=OneWay}">
                             <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="viewModels:HeadsetDeviceItem">
                                     <Button

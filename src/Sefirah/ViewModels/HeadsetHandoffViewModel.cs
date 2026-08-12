@@ -1,4 +1,5 @@
 using Sefirah.Data.Models;
+using Sefirah.Services;
 
 namespace Sefirah.ViewModels;
 
@@ -11,9 +12,8 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private List<HeadsetConfiguration> latestConfigurations = [];
 
     public ObservableCollection<HeadsetEndpointOption> Endpoints { get; } = [];
-    public ObservableCollection<HeadsetDeviceItem> SelectedConnectedDevices { get; } = [];
-    public ObservableCollection<HeadsetDeviceItem> OtherConnectedDevices { get; } = [];
-    public ObservableCollection<HeadsetDeviceItem> SavedDisconnectedDevices { get; } = [];
+    public ObservableCollection<HeadsetDeviceItem> ConnectedDevices { get; } = [];
+    public ObservableCollection<HeadsetDeviceItem> DisconnectedDevices { get; } = [];
     public ObservableCollection<HeadsetVisibilityOption> VisibilityOptions { get; } = [];
     public IReadOnlyList<string> FilterOptions { get; } =
     [
@@ -74,7 +74,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
 
     public async Task DisconnectAsync(HeadsetDeviceItem item)
     {
-        if (IsBusy) return;
+        if (IsBusy || item.SourceEndpointId is null) return;
         IsBusy = true;
         try
         {
@@ -115,16 +115,15 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     }
 
     public bool CanSwitchTo(HeadsetDeviceItem item, string? endpointId) =>
-        endpointId is not null &&
-        (item.Section == HeadsetDeviceSection.SavedDisconnected || endpointId != item.SourceEndpointId) &&
-        item.EndpointIds.Contains(endpointId);
+        BluetoothHandoffUiPolicy.CanSwitchTo(item.SourceEndpointId, endpointId, item.EndpointIds);
 
     public IReadOnlyList<HeadsetEndpointOption> GetOtherSwitchTargets(HeadsetDeviceItem item) =>
         Endpoints.Where(endpoint =>
-                item.EndpointIds.Contains(endpoint.Id) &&
-                endpoint.Id != item.SourceEndpointId &&
-                endpoint.Id != LocalEndpointId &&
-                endpoint.Id != SelectedEndpointId)
+                BluetoothHandoffUiPolicy.SupportsEndpoint(endpoint.Id, item.EndpointIds) &&
+                BluetoothHandoffUiPolicy.IsOtherTarget(
+                    endpoint.Id,
+                    item.SourceEndpointId,
+                    LocalEndpointId))
             .ToList();
 
     public IReadOnlyList<PairedDevice> GetOtherSwitchDevices(HeadsetDeviceItem item)
@@ -161,32 +160,38 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private void ReloadSections(IEnumerable<HeadsetConfiguration> configurations)
     {
         latestConfigurations = configurations.ToList();
-        SelectedConnectedDevices.Clear();
-        OtherConnectedDevices.Clear();
-        SavedDisconnectedDevices.Clear();
+        ConnectedDevices.Clear();
+        DisconnectedDevices.Clear();
         VisibilityOptions.Clear();
 
         var endpointsById = Endpoints.ToDictionary(item => item.Id, item => item.DisplayName);
+        foreach (var device in deviceManager.PairedDevices)
+        {
+            endpointsById.TryAdd(device.Id, device.Name);
+        }
         foreach (var headset in latestConfigurations.OrderBy(item => item.DisplayName))
         {
             VisibilityOptions.Add(new HeadsetVisibilityOption(headset.Id, headset.DisplayName, headset.IsVisible));
-            if (!headset.IsVisible || !MatchesFilter(headset) || SelectedEndpointId is null) continue;
+            if (!headset.IsVisible || !MatchesFilter(headset)) continue;
 
-            if (headset.ActiveEndpointId == SelectedEndpointId)
+            if (BluetoothHandoffUiPolicy.IsConnected(headset.ActiveEndpointId))
             {
-                SelectedConnectedDevices.Add(CreateItem(headset, SelectedEndpointId, SelectedEndpointName,
-                    HeadsetDeviceSection.SelectedConnected));
+                var endpointName = endpointsById.GetValueOrDefault(
+                    headset.ActiveEndpointId!,
+                    headset.ActiveEndpointId!);
+                ConnectedDevices.Add(CreateItem(
+                    headset,
+                    headset.ActiveEndpointId,
+                    endpointName,
+                    HeadsetDeviceSection.Connected));
             }
-            else if (!string.IsNullOrEmpty(headset.ActiveEndpointId))
+            else
             {
-                var endpointName = endpointsById.GetValueOrDefault(headset.ActiveEndpointId, "Another device");
-                OtherConnectedDevices.Add(CreateItem(headset, headset.ActiveEndpointId, endpointName,
-                    HeadsetDeviceSection.OtherConnected));
-            }
-            else if (headset.EndpointDeviceKeys.ContainsKey(SelectedEndpointId))
-            {
-                SavedDisconnectedDevices.Add(CreateItem(headset, SelectedEndpointId, SelectedEndpointName,
-                    HeadsetDeviceSection.SavedDisconnected));
+                DisconnectedDevices.Add(CreateItem(
+                    headset,
+                    null,
+                    null,
+                    HeadsetDeviceSection.Disconnected));
             }
         }
     }
@@ -215,8 +220,8 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
 
     private static HeadsetDeviceItem CreateItem(
         HeadsetConfiguration headset,
-        string endpointId,
-        string endpointName,
+        string? endpointId,
+        string? endpointName,
         HeadsetDeviceSection section) => new(
         headset.Id,
         headset.DisplayName,
@@ -255,9 +260,8 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
 
 public enum HeadsetDeviceSection
 {
-    SelectedConnected,
-    OtherConnected,
-    SavedDisconnected,
+    Connected,
+    Disconnected,
 }
 
 public sealed partial record HeadsetEndpointOption(string Id, string DisplayName);
@@ -265,19 +269,19 @@ public sealed partial record HeadsetEndpointOption(string Id, string DisplayName
 public sealed record HeadsetDeviceItem(
     string HeadsetId,
     string DisplayName,
-    string SourceEndpointId,
-    string SourceEndpointName,
+    string? SourceEndpointId,
+    string? SourceEndpointName,
     IReadOnlyList<string> EndpointIds,
     HeadsetDeviceSection Section)
 {
-    public bool CanDisconnect => Section != HeadsetDeviceSection.SavedDisconnected;
+    public bool CanDisconnect => SourceEndpointId is not null;
 
-    public string ConnectionText => Section switch
-    {
-        HeadsetDeviceSection.SelectedConnected => $"Connected to {SourceEndpointName}",
-        HeadsetDeviceSection.OtherConnected => $"Connected to {SourceEndpointName}",
-        _ => $"Saved on {SourceEndpointName}",
-    };
+    public string DisplayText => SourceEndpointName is null
+        ? DisplayName
+        : string.Format(
+            "BluetoothConnectedDeviceName".GetLocalizedResource(),
+            DisplayName,
+            SourceEndpointName);
 }
 
 public sealed partial class HeadsetVisibilityOption(

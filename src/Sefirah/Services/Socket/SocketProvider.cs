@@ -8,12 +8,15 @@ namespace Sefirah.Services.Socket;
 
 internal sealed class SerializedSocketReceiver
 {
-    private readonly Channel<byte[]> queue = Channel.CreateUnbounded<byte[]>(
-        new UnboundedChannelOptions
+    internal const int DefaultCapacity = 64;
+
+    private readonly Channel<byte[]> queue = Channel.CreateBounded<byte[]>(
+        new BoundedChannelOptions(DefaultCapacity)
         {
             SingleReader = true,
             SingleWriter = false,
             AllowSynchronousContinuations = false,
+            FullMode = BoundedChannelFullMode.Wait,
         });
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly Action<byte[]> dispatch;
@@ -50,36 +53,32 @@ internal sealed class SerializedSocketReceiver
 
 public partial class ServerSession : SslSession
 {
+    private const int TransportSendBufferLimit =
+        (int)(SerializedSocketSender.DefaultMaxFrameBytes + SerializedSocketSender.DefaultMaxControlFrameBytes);
     private readonly ITcpServerProvider socketProvider;
     private readonly SerializedSocketReceiver receiver;
-    private readonly object applicationSendLock = new();
+    private readonly SerializedSocketSender sender;
 
     public ServerSession(SslServer server, ITcpServerProvider socketProvider) : base(server)
     {
+        OptionSendBufferLimit = TransportSendBufferLimit;
         this.socketProvider = socketProvider;
         receiver = new SerializedSocketReceiver(
             buffer => socketProvider.OnReceived(this, buffer, 0, buffer.LongLength));
+        sender = new SerializedSocketSender(
+            buffer => SendAsync(buffer),
+            () => IsConnected,
+            () => BytesPending,
+            () => BytesSending);
     }
 
-    public bool SendApplicationAsync(byte[] buffer)
-    {
-        lock (applicationSendLock)
-            return SendAsync(buffer);
-    }
+    public bool SendApplicationAsync(byte[] buffer) => sender.TrySendApplication(buffer);
 
-    public bool SendControlAndFlush(byte[] buffer, int timeoutMilliseconds = 250)
-    {
-        lock (applicationSendLock)
-        {
-            if (!SendAsync(buffer)) return false;
-            return SpinWait.SpinUntil(
-                () => BytesPending == 0 && BytesSending == 0,
-                timeoutMilliseconds);
-        }
-    }
+    public bool TrySendControl(byte[] buffer) => sender.TrySendControl(buffer);
 
     protected override void OnDisconnected()
     {
+        sender.Stop();
         receiver.Stop();
         socketProvider.OnDisconnected(this);
     }
@@ -91,11 +90,18 @@ public partial class ServerSession : SslSession
 
     protected override void OnReceived(byte[] buffer, long offset, long size)
     {
-        receiver.TryDispatch(buffer.AsSpan((int)offset, (int)size).ToArray());
+        if (receiver.TryDispatch(buffer.AsSpan((int)offset, (int)size).ToArray()))
+            return;
+
+        sender.Stop();
+        receiver.Stop();
+        socketProvider.OnError(this, SocketError.NoBufferSpaceAvailable);
+        Disconnect();
     }
 
     protected override void OnError(SocketError error)
     {
+        sender.Stop();
         receiver.Stop();
         socketProvider.OnError(this, error);
     }
@@ -116,33 +122,28 @@ public partial class Server(SslContext context, IPAddress address, int port, ITc
 
 public partial class Client : SslClient
 {
+    private const int TransportSendBufferLimit =
+        (int)(SerializedSocketSender.DefaultMaxFrameBytes + SerializedSocketSender.DefaultMaxControlFrameBytes);
     private readonly ITcpClientProvider socketProvider;
     private readonly SerializedSocketReceiver receiver;
-    private readonly object applicationSendLock = new();
+    private readonly SerializedSocketSender sender;
 
     public Client(SslContext context, string address, int port, ITcpClientProvider socketProvider) : base(context, address, port)
     {
+        OptionSendBufferLimit = TransportSendBufferLimit;
         this.socketProvider = socketProvider;
         receiver = new SerializedSocketReceiver(
             buffer => socketProvider.OnReceived(this, buffer, 0, buffer.LongLength));
+        sender = new SerializedSocketSender(
+            buffer => SendAsync(buffer),
+            () => IsConnected,
+            () => BytesPending,
+            () => BytesSending);
     }
 
-    public bool SendApplicationAsync(byte[] buffer)
-    {
-        lock (applicationSendLock)
-            return SendAsync(buffer);
-    }
+    public bool SendApplicationAsync(byte[] buffer) => sender.TrySendApplication(buffer);
 
-    public bool SendControlAndFlush(byte[] buffer, int timeoutMilliseconds = 250)
-    {
-        lock (applicationSendLock)
-        {
-            if (!SendAsync(buffer)) return false;
-            return SpinWait.SpinUntil(
-                () => BytesPending == 0 && BytesSending == 0,
-                timeoutMilliseconds);
-        }
-    }
+    public bool TrySendControl(byte[] buffer) => sender.TrySendControl(buffer);
 
     protected override void OnConnected()
     {
@@ -151,17 +152,25 @@ public partial class Client : SslClient
 
     protected override void OnDisconnected()
     {
+        sender.Stop();
         receiver.Stop();
         socketProvider.OnDisconnected(this);
     }
 
     protected override void OnReceived(byte[] buffer, long offset, long size)
     {
-        receiver.TryDispatch(buffer.AsSpan((int)offset, (int)size).ToArray());
+        if (receiver.TryDispatch(buffer.AsSpan((int)offset, (int)size).ToArray()))
+            return;
+
+        sender.Stop();
+        receiver.Stop();
+        socketProvider.OnError(this, SocketError.NoBufferSpaceAvailable);
+        DisconnectAsync();
     }
 
     protected override void OnError(SocketError error)
     {
+        sender.Stop();
         receiver.Stop();
         socketProvider.OnError(this, error);
     }

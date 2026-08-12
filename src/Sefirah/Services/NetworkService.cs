@@ -19,6 +19,8 @@ public class NetworkService(
     IDeviceManager deviceManager,
     IAdbService adbService) : INetworkService, ISessionManager, ITcpServerProvider, ITcpClientProvider
 {
+    private const int MaxMessageFrameChars = 8 * 1024 * 1024;
+
     public static int ServerPort { get; private set; }
 
     private Server? server;
@@ -94,15 +96,15 @@ public class NetworkService(
                 var bytes = EncodeMessage(new ConnectionHeartbeat());
                 foreach (var device in PairedDevices
                              .Where(d => d.IsConnected &&
-                                         d.SupportsCapability(ProtocolCapabilities.RemoteActionsControllerV1))
+                                         ConnectionHeartbeatPolicy.ShouldSendTo(d.Capabilities))
                              .ToList())
                 {
-                    var flushed = device.Session is not null
-                        ? device.Session.SendControlAndFlush(bytes)
-                        : device.Client is not null && device.Client.SendControlAndFlush(bytes);
+                    var accepted = device.Session is not null
+                        ? device.Session.TrySendControl(bytes)
+                        : device.Client is not null && device.Client.TrySendControl(bytes);
 
-                    if (!flushed)
-                        logger.Warn($"Proactive heartbeat did not flush for Android endpoint {device.Name}");
+                    if (!accepted)
+                        logger.Warn($"Proactive heartbeat was not accepted for Android endpoint {device.Name}");
                 }
             }
             catch (Exception ex)
@@ -233,7 +235,14 @@ public class NetworkService(
                     newlineIndex = i; break;
                 }
             }
-            if (newlineIndex < 0) break;
+            if (newlineIndex < 0)
+            {
+                if (sb.Length > MaxMessageFrameChars)
+                    throw new InvalidDataException($"Incoming message exceeded {MaxMessageFrameChars} characters.");
+                break;
+            }
+            if (newlineIndex > MaxMessageFrameChars)
+                throw new InvalidDataException($"Incoming message exceeded {MaxMessageFrameChars} characters.");
 
             var messageString = sb.ToString(0, newlineIndex).Trim();
             sb.Remove(0, newlineIndex + 1);
@@ -315,6 +324,8 @@ public class NetworkService(
         catch (Exception ex)
         {
             logger.Error($"Error in OnReceived for session {session.Id}", ex);
+            if (ex is InvalidDataException)
+                DisconnectSession(session);
         }
     }
 
@@ -341,14 +352,14 @@ public class NetworkService(
                 if (pairedDevice.Session?.Id == guid)
                 {
                     var bytes = EncodeMessage(new ConnectionHeartbeat());
-                    if (!pairedDevice.Session.SendControlAndFlush(bytes))
-                        logger.Warn($"Heartbeat reply did not flush for server session {guid}");
+                    if (!pairedDevice.Session.TrySendControl(bytes))
+                        logger.Warn($"Heartbeat reply was not accepted for server session {guid}");
                 }
                 else if (pairedDevice.Client?.Id == guid)
                 {
                     var bytes = EncodeMessage(new ConnectionHeartbeat());
-                    if (!pairedDevice.Client.SendControlAndFlush(bytes))
-                        logger.Warn($"Heartbeat reply did not flush for client {guid}");
+                    if (!pairedDevice.Client.TrySendControl(bytes))
+                        logger.Warn($"Heartbeat reply was not accepted for client {guid}");
                 }
                 else
                     logger.Warn($"Heartbeat source {guid} is no longer the active connection for {pairedDevice.Name}");
@@ -900,6 +911,8 @@ public class NetworkService(
         catch (Exception ex)
         {
             logger.Error($"Error in OnReceived for client", ex);
+            if (ex is InvalidDataException)
+                DisconnectClient(client);
         }
     }
     #endregion

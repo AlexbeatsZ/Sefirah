@@ -961,6 +961,9 @@ input text %pwd%</value>
   <data name="BluetoothConnectedSelected" xml:space="preserve"><value>Connected to selected device</value></data>
   <data name="BluetoothConnectedOther" xml:space="preserve"><value>Connected to other devices</value></data>
   <data name="BluetoothSavedDisconnected" xml:space="preserve"><value>Saved but not connected</value></data>
+  <data name="BluetoothConnected" xml:space="preserve"><value>Connected</value></data>
+  <data name="BluetoothDisconnected" xml:space="preserve"><value>Not connected</value></data>
+  <data name="BluetoothConnectedDeviceName" xml:space="preserve"><value>{0} (connected to {1})</value></data>
   <data name="BluetoothSwitchDevice" xml:space="preserve"><value>Switch device</value></data>
   <data name="BluetoothSwitchTitle" xml:space="preserve"><value>Switch {0}</value></data>
   <data name="BluetoothSelectedDevice" xml:space="preserve"><value>Selected device</value></data>

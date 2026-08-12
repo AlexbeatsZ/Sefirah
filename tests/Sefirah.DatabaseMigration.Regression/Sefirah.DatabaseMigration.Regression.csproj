@@ -10,6 +10,7 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\..\src\Sefirah\Data\AppDatabase\Repository\CoalescingSerialExecutor.cs" Link="Repository\CoalescingSerialExecutor.cs" />
     <Compile Include="..\..\src\Sefirah\Data\AppDatabase\Migrations\IMigration.cs" Link="Migrations\IMigration.cs" />
     <Compile Include="..\..\src\Sefirah\Data\AppDatabase\Migrations\SchemaVersion5Migration.cs" Link="Migrations\SchemaVersion5Migration.cs" />
   </ItemGroup>

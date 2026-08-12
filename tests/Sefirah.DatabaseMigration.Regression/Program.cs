@@ -1,7 +1,9 @@
 using Sefirah.Data.AppDatabase.Migrations;
+using Sefirah.Data.AppDatabase.Repository;
 using SQLite;
 
 SQLitePCL.Batteries_V2.Init();
+await AssertCoalescingSerialExecutorAsync();
 
 if (args is ["--database", var sourceDatabase])
 {
@@ -99,6 +101,47 @@ static void AssertEqual<T>(T expected, T actual, string label)
         throw new InvalidOperationException($"Expected {label} to be '{expected}', got '{actual}'.");
 }
 
+static async Task AssertCoalescingSerialExecutorAsync()
+{
+    var executor = new CoalescingSerialExecutor<string>();
+    var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var running = 0;
+    var maximumRunning = 0;
+    var executions = 0;
+    var observedValues = new List<int>();
+
+    async Task Work(int value, bool block)
+    {
+        var current = Interlocked.Increment(ref running);
+        InterlockedExtensions.Max(ref maximumRunning, current);
+        Interlocked.Increment(ref executions);
+        lock (observedValues) observedValues.Add(value);
+        if (block)
+        {
+            firstStarted.TrySetResult();
+            await releaseFirst.Task;
+        }
+        Interlocked.Decrement(ref running);
+    }
+
+    var first = executor.RunAsync("same", () => Work(1, block: true));
+    await firstStarted.Task;
+    var staleDuplicate = executor.RunAsync("same", () => Work(2, block: false));
+    var latestDuplicate = executor.RunAsync("same", () => Work(3, block: false));
+    var different = executor.RunAsync("different", () => Work(4, block: false));
+
+    await Task.Delay(25);
+    AssertEqual(1, executions, "serialized executor running count before release");
+    releaseFirst.TrySetResult();
+    await Task.WhenAll(first, staleDuplicate, latestDuplicate, different);
+
+    AssertEqual(3, executions, "serialized executor coalesced execution count");
+    AssertEqual(1, maximumRunning, "serialized executor maximum concurrency");
+    if (!observedValues.SequenceEqual([1, 3, 4]))
+        throw new InvalidOperationException($"Expected latest-wins execution order '1,3,4', got '{string.Join(',', observedValues)}'.");
+}
+
 static void RunExternalDatabase(string sourceDatabase)
 {
     var root = Path.Combine(
@@ -159,4 +202,17 @@ sealed class PairingSnapshot
     public string Name { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
     public byte[] Certificate { get; set; } = [];
+}
+
+static class InterlockedExtensions
+{
+    public static void Max(ref int target, int value)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref target);
+            if (current >= value || Interlocked.CompareExchange(ref target, value, current) == current)
+                return;
+        }
+    }
 }

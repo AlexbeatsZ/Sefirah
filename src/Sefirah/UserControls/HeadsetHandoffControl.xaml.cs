@@ -25,39 +25,13 @@ public sealed partial class HeadsetHandoffControl : UserControl
         if (sender is not Button { Tag: HeadsetDeviceItem item } button) return;
 
         var menu = new MenuFlyout();
-        switch (item.Section)
-        {
-            case HeadsetDeviceSection.SelectedConnected:
-                menu.Items.Add(CreateEndpointAction(
-                    "BluetoothSwitchToThisDevice",
-                    item,
-                    ViewModel.LocalEndpointId));
-                menu.Items.Add(CreateOtherDeviceAction(item));
-                menu.Items.Add(new MenuFlyoutSeparator());
-                menu.Items.Add(CreateDisconnectAction(item));
-                break;
-
-            case HeadsetDeviceSection.OtherConnected:
-                menu.Items.Add(CreateEndpointAction(
-                    "BluetoothSwitchToThisDevice",
-                    item,
-                    ViewModel.LocalEndpointId));
-                menu.Items.Add(CreateEndpointAction(
-                    "BluetoothSwitchToSelectedDevice",
-                    item,
-                    ViewModel.SelectedEndpointId));
-                menu.Items.Add(CreateOtherDeviceAction(item));
-                menu.Items.Add(new MenuFlyoutSeparator());
-                menu.Items.Add(CreateDisconnectAction(item));
-                break;
-
-            case HeadsetDeviceSection.SavedDisconnected:
-                menu.Items.Add(CreateEndpointAction(
-                    "BluetoothConnectToSelectedDevice",
-                    item,
-                    ViewModel.SelectedEndpointId));
-                break;
-        }
+        menu.Items.Add(CreateEndpointAction(
+            "BluetoothSwitchToThisDevice",
+            item,
+            ViewModel.LocalEndpointId));
+        menu.Items.Add(CreateOtherDeviceAction(item));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(CreateDisconnectAction(item));
 
         menu.ShowAt(button, new FlyoutShowOptions
         {

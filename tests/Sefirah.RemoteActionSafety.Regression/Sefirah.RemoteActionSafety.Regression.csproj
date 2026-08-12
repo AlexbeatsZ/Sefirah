@@ -9,6 +9,8 @@
     <Compile Include="..\..\src\Sefirah\Data\Contracts\ProtocolCapabilities.cs" Link="ProtocolCapabilities.cs" />
     <Compile Include="..\..\src\Sefirah\Services\RemoteActionPolicy.cs" Link="RemoteActionPolicy.cs" />
     <Compile Include="..\..\src\Sefirah\Services\ConnectionCollisionPolicy.cs" Link="ConnectionCollisionPolicy.cs" />
+    <Compile Include="..\..\src\Sefirah\Services\ConnectionHeartbeatPolicy.cs" Link="ConnectionHeartbeatPolicy.cs" />
     <Compile Include="..\..\src\Sefirah\Services\ConnectionAuthenticationGate.cs" Link="ConnectionAuthenticationGate.cs" />
+    <Compile Include="..\..\src\Sefirah\Services\Socket\SerializedSocketSender.cs" Link="SerializedSocketSender.cs" />
   </ItemGroup>
 </Project>

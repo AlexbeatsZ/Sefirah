@@ -35,6 +35,10 @@
 
 Run the smallest relevant regression suite first, then the complete affected Windows build/tests. Bluetooth changes must cover catalog identity/filtering and coordinator recovery. Cloud Files changes must cover provider replacement, cancellation, reconnect, and safe root reconciliation.
 
+## Design References
+
+- [`docs/design/bluetooth-handoff-ui.md`](docs/design/bluetooth-handoff-ui.md): Bluetooth catalog grouping, labels, endpoint choices, legacy compatibility, and action semantics. Read it before changing the handoff page or view model.
+
 ## Active Work
 
 - Add safe orphan-sync-root recovery and device-rename reconciliation.
@@ -45,3 +49,10 @@ Run the smallest relevant regression suite first, then the complete affected Win
 ## Current State
 
 The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
+
+## Durable Lessons
+
+- NetCoreServer `SendAsync` means that a complete frame was accepted into its locked internal
+  buffer, not that the network is empty. Waiting for global drain after every application frame
+  can starve heartbeats. Keep application traffic in a bounded single-writer queue, let small
+  control frames enter the transport buffer directly, and configure a transport buffer limit.

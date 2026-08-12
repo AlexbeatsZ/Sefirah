@@ -889,6 +889,9 @@ input text %pwd%</value>
   <data name="BluetoothConnectedSelected" xml:space="preserve"><value>已连接到选定设备</value></data>
   <data name="BluetoothConnectedOther" xml:space="preserve"><value>已连接到其他设备</value></data>
   <data name="BluetoothSavedDisconnected" xml:space="preserve"><value>已保存但未连接</value></data>
+  <data name="BluetoothConnected" xml:space="preserve"><value>已连接</value></data>
+  <data name="BluetoothDisconnected" xml:space="preserve"><value>未连接</value></data>
+  <data name="BluetoothConnectedDeviceName" xml:space="preserve"><value>{0}（连接到 {1}）</value></data>
   <data name="BluetoothSwitchDevice" xml:space="preserve"><value>切换设备</value></data>
   <data name="BluetoothSwitchTitle" xml:space="preserve"><value>切换 {0}</value></data>
   <data name="BluetoothSelectedDevice" xml:space="preserve"><value>选定设备</value></data>
