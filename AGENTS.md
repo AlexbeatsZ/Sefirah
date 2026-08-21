@@ -33,7 +33,7 @@
 
 ## Verification
 
-Run the smallest relevant regression suite first, then the complete affected Windows build/tests. Bluetooth changes must cover catalog identity/filtering and coordinator recovery. Cloud Files changes must cover provider replacement, cancellation, reconnect, and safe root reconciliation.
+Run the smallest relevant regression suite first, then the complete affected Windows build/tests. Bluetooth changes must cover catalog identity/filtering and coordinator recovery. Cloud Files changes must cover provider replacement, cancellation, reconnect, and safe root reconciliation. Connection framing/authentication changes must run `Sefirah.ConnectionAuthentication.Regression` in addition to `Sefirah.RemoteActionSafety.Regression`.
 
 ## Design References
 
@@ -48,7 +48,7 @@ Run the smallest relevant regression suite first, then the complete affected Win
 
 ## Current State
 
-The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
+The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. It also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
 
 ## Durable Lessons
 
@@ -56,3 +56,6 @@ The feature branch contains the fork's Bluetooth catalog/handoff, control API, s
   buffer, not that the network is empty. Waiting for global drain after every application frame
   can starve heartbeats. Keep application traffic in a bounded single-writer queue, let small
   control frames enter the transport buffer directly, and configure a transport buffer limit.
+- TCP can deliver authentication and application frames in the same read. Buffer later frames
+  per connection until authentication completes, preserve their arrival order, and discard the
+  buffered generation if that connection is superseded or cancelled.
