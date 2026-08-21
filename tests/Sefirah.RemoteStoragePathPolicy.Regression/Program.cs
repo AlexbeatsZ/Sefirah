@@ -12,6 +12,21 @@ Assert(
     FileHelper.IsSystemDirectory("/Android/obb/com.example"),
     "Files beneath Android/obb must remain hidden.");
 
+var shortPath = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "sefirah-short-path"));
+Assert(
+    LongPath.EnsureExtendedPrefix(shortPath) == shortPath,
+    "A short absolute path was unexpectedly rewritten.");
+
+var longPath = Path.Combine(Path.GetTempPath(), new string('a', 280));
+Assert(
+    LongPath.EnsureExtendedPrefix(longPath).StartsWith(@"\\?\", StringComparison.Ordinal),
+    "A path beyond MAX_PATH did not receive the Win32 extended-length prefix.");
+
+const string extendedPath = @"\\?\C:\already-extended";
+Assert(
+    LongPath.EnsureExtendedPrefix(extendedPath) == extendedPath,
+    "An existing extended-length prefix was changed.");
+
 Console.WriteLine("Remote storage path policy regression: PASS");
 
 static void Assert(bool condition, string message)
