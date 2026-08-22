@@ -360,10 +360,6 @@ public class NotificationHandler(
                     HandleClipboardNotification(args);
                     break;
 
-                case ToastNotificationType.Update:
-                    HandleUpdateNotification(args);
-                    break;
-
                 case ToastNotificationType.IncomingPhoneCall:
                     await HandleIncomingPhoneCallNotificationAsync(args);
                     break;
@@ -384,15 +380,6 @@ public class NotificationHandler(
         if (args.Arguments.TryGetValue("uri", out var uriString) && Uri.TryCreate(uriString, UriKind.Absolute, out Uri? uri) && ClipboardFeature.IsValidWebUrl(uri))
         {
             await Launcher.LaunchUriAsync(uri);
-        }
-    }
-
-    private static async void HandleUpdateNotification(AppNotificationActivatedEventArgs args)
-    {
-        if (args.Arguments.TryGetValue("action", out var action) && action == "download")
-        {
-            var updateService = Ioc.Default.GetRequiredService<IUpdateService>();
-            await updateService.DownloadUpdatesAsync();
         }
     }
 

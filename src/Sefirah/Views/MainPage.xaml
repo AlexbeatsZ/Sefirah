@@ -226,29 +226,6 @@
                         </NavigationViewItem>
                     </NavigationView.MenuItems>
 
-                    <NavigationView.FooterMenuItems>
-                        <NavigationViewItem
-                            Style="{StaticResource CompactFooterNavigationViewItemStyle}"
-                            SelectsOnInvoked="False"
-                            utu:CommandExtensions.Command="{x:Bind ViewModel.UpdateCommand}"
-                            AutomationProperties.Name="{helpers:ResourceString Name=UpdateNotification/Action}"
-                            ToolTipService.ToolTip="{helpers:ResourceString Name=UpdateNotification/Action}"
-                            Visibility="{x:Bind ViewModel.IsUpdateAvailableOrUpdating, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <Grid>
-                                <FontIcon
-                                    FontSize="16"
-                                    Foreground="{ThemeResource AccentFillColorDefaultBrush}"
-                                    Glyph="&#xEDAB;"
-                                    Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
-                                <ProgressRing
-                                    x:Name="loadingicon"
-                                    Width="16"
-                                    Height="16"
-                                    IsIndeterminate="True"
-                                    x:Load="{x:Bind ViewModel.IsUpdating, Mode=OneWay}" />
-                            </Grid>
-                        </NavigationViewItem>
-                    </NavigationView.FooterMenuItems>
                 </NavigationView>
 
                 <Frame

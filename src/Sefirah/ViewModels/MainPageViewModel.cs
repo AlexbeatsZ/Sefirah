@@ -12,7 +12,6 @@ public sealed partial class MainPageViewModel : BaseViewModel
     private INotificationFeature NotificationFeature { get; } = Ioc.Default.GetRequiredService<INotificationFeature>();
     private RemoteAppRepository RemoteAppsRepository { get; } = Ioc.Default.GetRequiredService<RemoteAppRepository>();
     private ISessionManager SessionManager { get; } = Ioc.Default.GetRequiredService<ISessionManager>();
-    private IUpdateService UpdateService { get; } = Ioc.Default.GetRequiredService<IUpdateService>();
     private IFileTransferService FileTransferService { get; } = Ioc.Default.GetRequiredService<IFileTransferService>();
     private IAdbService AdbService { get; } = Ioc.Default.GetRequiredService<IAdbService>();
     #endregion
@@ -24,14 +23,6 @@ public sealed partial class MainPageViewModel : BaseViewModel
 
     [ObservableProperty]
     public partial bool LoadingScrcpy { get; set; } = false;
-
-    private bool _isUpdateAvailable;
-    public bool IsUpdateAvailable { get => _isUpdateAvailable; set => SetProperty(ref _isUpdateAvailable, value); }
-
-    private bool _isUpdating;
-    public bool IsUpdating { get => _isUpdating; set => SetProperty(ref _isUpdating, value); }
-
-    public bool IsUpdateAvailableOrUpdating => IsUpdateAvailable || IsUpdating;
 
     /// <summary>
     /// Active device's notifications
@@ -110,12 +101,6 @@ public sealed partial class MainPageViewModel : BaseViewModel
     public void ClearAllNotifications()
     {
         NotificationFeature.ClearAllNotification();
-    }
-
-    [RelayCommand]
-    public void Update()
-    {
-        UpdateService.DownloadUpdatesAsync();
     }
 
     [RelayCommand]
@@ -235,17 +220,5 @@ public sealed partial class MainPageViewModel : BaseViewModel
     public MainPageViewModel()
     {
         DeviceManager.ActiveDeviceChanged += (_, _) => OnPropertyChanged(nameof(Device));
-
-        IsUpdateAvailable = UpdateService.IsUpdateAvailable;
-        IsUpdating = UpdateService.IsUpdating;
-
-        UpdateService.PropertyChanged += UpdateService_OnPropertyChanged;
-    }
-
-    private void UpdateService_OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        IsUpdateAvailable = UpdateService.IsUpdateAvailable;
-        IsUpdating = UpdateService.IsUpdating;
-        OnPropertyChanged(nameof(IsUpdateAvailableOrUpdating));
     }
 }

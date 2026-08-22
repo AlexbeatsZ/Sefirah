@@ -30,7 +30,6 @@ public static class ServiceCollectionExtensions
         services.AddFeature<IMediaFeature, MediaFeature>();
         services.AddFeature<IBatteryFeature, BatteryFeature>();
         services.AddFeature<ISftpFeature, SftpFeature>();
-        services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<IAppShortcutService, AppShortcutService>();
         services.AddSingleton<ISystemTrayService, SystemTrayService>();
 

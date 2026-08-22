@@ -34,11 +34,12 @@ public static class AppLifecycleHelper
         var networkService = Ioc.Default.GetRequiredService<INetworkService>();
         var deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
         var adbService = Ioc.Default.GetRequiredService<IAdbService>();
-        var updateService = Ioc.Default.GetRequiredService<IUpdateService>();
         var phoneLineService = Ioc.Default.GetRequiredService<IPhoneLineService>();
 #if WINDOWS
         var notificationHandler = Ioc.Default.GetRequiredService<IPlatformNotificationHandler>();
         await notificationHandler.RegisterForNotifications();
+        await Microsoft.Windows.AppNotifications.AppNotificationManager.Default
+            .RemoveByTagAndGroupAsync("app-update", "update");
 #endif
 
         await deviceManager.Initialize();
@@ -50,7 +51,6 @@ public static class AppLifecycleHelper
 
         _ = Task.WhenAll(
             adbService.StartAsync(),
-            updateService.CheckForUpdatesAsync(),
             phoneLineService.InitializeAsync()
         );
     }
