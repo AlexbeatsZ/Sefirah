@@ -47,6 +47,18 @@ AssertFalse(
     BluetoothHandoffUiPolicy.IsConnected(null),
     "A device without an active endpoint belongs in the disconnected section.");
 
+AssertFalse(
+    BluetoothHandoffUiPolicy.IsEndpointAvailable(
+        "phone",
+        new HashSet<string>(StringComparer.Ordinal) { "phone" }),
+    "An endpoint with an unavailable Bluetooth controller must not accept actions.");
+
+AssertTrue(
+    BluetoothHandoffUiPolicy.IsEndpointAvailable(
+        "phone",
+        new HashSet<string>(StringComparer.Ordinal)),
+    "An endpoint absent from the unavailable set remains actionable.");
+
 AssertTrue(
     BluetoothHandoffUiPolicy.CanSwitchTo(
         sourceEndpointId: "server",

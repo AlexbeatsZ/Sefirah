@@ -983,6 +983,7 @@ input text %pwd%</value>
   <data name="BluetoothStatusNone" xml:space="preserve"><value>No Bluetooth devices match the current filter.</value></data>
   <data name="BluetoothStatusUpdated" xml:space="preserve"><value>Updated {0} saved Bluetooth device(s).</value></data>
   <data name="BluetoothStatusRefreshFailed" xml:space="preserve"><value>Bluetooth refresh failed: {0}</value></data>
+  <data name="BluetoothPrivilegedBridgeUnavailable" xml:space="preserve"><value>Shizuku is not running or Sefirah is not authorized</value></data>
   <data name="BluetoothStatusDisconnecting" xml:space="preserve"><value>Disconnecting Bluetooth device…</value></data>
   <data name="BluetoothStatusConnecting" xml:space="preserve"><value>Connecting Bluetooth device…</value></data>
   <data name="BluetoothStatusCompleted" xml:space="preserve"><value>Bluetooth operation completed.</value></data>

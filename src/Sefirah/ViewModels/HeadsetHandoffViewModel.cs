@@ -10,6 +10,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private bool initialized;
     private DispatcherTimer? refreshTimer;
     private List<HeadsetConfiguration> latestConfigurations = [];
+    private HashSet<string> unavailableEndpointIds = new(StringComparer.Ordinal);
 
     public ObservableCollection<HeadsetEndpointOption> Endpoints { get; } = [];
     public ObservableCollection<HeadsetDeviceItem> ConnectedDevices { get; } = [];
@@ -59,8 +60,25 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         {
             await RefreshEndpointsAsync();
             var report = await handoffService.DiscoverAsync();
+            unavailableEndpointIds = report.Endpoints
+                .Where(endpoint => !endpoint.Catalog.ControllerAvailable)
+                .Select(endpoint => endpoint.EndpointId)
+                .ToHashSet(StringComparer.Ordinal);
             ReloadSections(report.Headsets);
-            UpdateCountStatus();
+            var unavailable = report.Endpoints
+                .Where(endpoint => unavailableEndpointIds.Contains(endpoint.EndpointId))
+                .Select(endpoint => $"{endpoint.DisplayName}: {DescribeCatalogError(endpoint.Catalog)}")
+                .ToList();
+            if (unavailable.Count > 0)
+            {
+                StatusText = string.Format(
+                    "BluetoothStatusRefreshFailed".GetLocalizedResource(),
+                    string.Join("; ", unavailable));
+            }
+            else
+            {
+                UpdateCountStatus();
+            }
         }
         catch (Exception ex)
         {
@@ -115,10 +133,12 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     }
 
     public bool CanSwitchTo(HeadsetDeviceItem item, string? endpointId) =>
+        BluetoothHandoffUiPolicy.IsEndpointAvailable(endpointId, unavailableEndpointIds) &&
         BluetoothHandoffUiPolicy.CanSwitchTo(item.SourceEndpointId, endpointId, item.EndpointIds);
 
     public IReadOnlyList<HeadsetEndpointOption> GetOtherSwitchTargets(HeadsetDeviceItem item) =>
         Endpoints.Where(endpoint =>
+                BluetoothHandoffUiPolicy.IsEndpointAvailable(endpoint.Id, unavailableEndpointIds) &&
                 BluetoothHandoffUiPolicy.SupportsEndpoint(endpoint.Id, item.EndpointIds) &&
                 BluetoothHandoffUiPolicy.IsOtherTarget(
                     endpoint.Id,
@@ -218,7 +238,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
             : string.Format("BluetoothStatusUpdated".GetLocalizedResource(), visibleCount);
     }
 
-    private static HeadsetDeviceItem CreateItem(
+    private HeadsetDeviceItem CreateItem(
         HeadsetConfiguration headset,
         string? endpointId,
         string? endpointName,
@@ -228,7 +248,13 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
         endpointId,
         endpointName,
         headset.EndpointDeviceKeys.Keys.ToList(),
+        endpointId is null || BluetoothHandoffUiPolicy.IsEndpointAvailable(endpointId, unavailableEndpointIds),
         section);
+
+    private static string DescribeCatalogError(BluetoothDeviceCatalog catalog) =>
+        catalog.ErrorCode == "privileged_bridge_unavailable"
+            ? "BluetoothPrivilegedBridgeUnavailable".GetLocalizedResource()
+            : catalog.ErrorMessage ?? catalog.ErrorCode ?? "BluetoothStatusFailed".GetLocalizedResource();
 
     private async void OnActiveDeviceChanged(object? sender, PairedDevice? device)
     {
@@ -272,9 +298,10 @@ public sealed record HeadsetDeviceItem(
     string? SourceEndpointId,
     string? SourceEndpointName,
     IReadOnlyList<string> EndpointIds,
+    bool EndpointAvailable,
     HeadsetDeviceSection Section)
 {
-    public bool CanDisconnect => SourceEndpointId is not null;
+    public bool CanDisconnect => SourceEndpointId is not null && EndpointAvailable;
 
     public string DisplayText => SourceEndpointName is null
         ? DisplayName

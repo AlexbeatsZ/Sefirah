@@ -20,6 +20,9 @@ The Bluetooth page is a device catalog, not a view filtered to one selected peer
 - An empty supported-endpoint list is the backward-compatible legacy meaning of “all endpoints”.
 - A request being accepted is not success. The coordinator must wait for the requested Bluetooth
   state with a bounded timeout and report the final result.
+- An endpoint whose live catalog reports an unavailable controller remains visible for diagnosis,
+  but its switch and disconnect actions are disabled. Keep the endpoint-specific failure visible
+  across periodic refreshes so a dead Shizuku bridge is not mistaken for a successful no-op.
 
 ## Verification
 

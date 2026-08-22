@@ -5,6 +5,11 @@ internal static class BluetoothHandoffUiPolicy
     public static bool IsConnected(string? activeEndpointId) =>
         !string.IsNullOrEmpty(activeEndpointId);
 
+    public static bool IsEndpointAvailable(
+        string? endpointId,
+        IReadOnlySet<string> unavailableEndpointIds) =>
+        endpointId is not null && !unavailableEndpointIds.Contains(endpointId);
+
     public static bool CanSwitchTo(
         string? sourceEndpointId,
         string? targetEndpointId,

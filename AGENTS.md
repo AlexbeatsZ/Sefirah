@@ -48,7 +48,7 @@ Run the smallest relevant regression suite first, then the complete affected Win
 
 ## Current State
 
-The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. It also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
+The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
 
 ## Durable Lessons
 
@@ -59,3 +59,6 @@ The feature branch contains the fork's Bluetooth catalog/handoff, control API, s
 - TCP can deliver authentication and application frames in the same read. Buffer later frames
   per connection until authentication completes, preserve their arrival order, and discard the
   buffered generation if that connection is superseded or cancelled.
+- A capability-advertising endpoint can still have an unavailable runtime dependency. Preserve
+  the endpoint and its diagnostic state in the catalog, but keep its actions disabled until a
+  later successful refresh; do not replace the actionable error with a generic device count.

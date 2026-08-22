@@ -902,6 +902,7 @@ input text %pwd%</value>
   <data name="BluetoothStatusNone" xml:space="preserve"><value>没有符合当前筛选条件的蓝牙设备。</value></data>
   <data name="BluetoothStatusUpdated" xml:space="preserve"><value>已更新 {0} 个蓝牙设备。</value></data>
   <data name="BluetoothStatusRefreshFailed" xml:space="preserve"><value>刷新蓝牙设备失败：{0}</value></data>
+  <data name="BluetoothPrivilegedBridgeUnavailable" xml:space="preserve"><value>Shizuku 未运行或尚未授权 Sefirah</value></data>
   <data name="BluetoothStatusDisconnecting" xml:space="preserve"><value>正在断开蓝牙设备…</value></data>
   <data name="BluetoothStatusConnecting" xml:space="preserve"><value>正在连接蓝牙设备…</value></data>
   <data name="BluetoothStatusCompleted" xml:space="preserve"><value>蓝牙操作已完成。</value></data>
