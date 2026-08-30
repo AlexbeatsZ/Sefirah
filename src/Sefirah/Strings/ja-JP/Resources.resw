@@ -270,6 +270,9 @@
   <data name="Connected.Text" xml:space="preserve">
     <value>接続中</value>
   </data>
+  <data name="Connecting" xml:space="preserve">
+    <value>接続中</value>
+  </data>
   <data name="Disconnected.Text" xml:space="preserve">
     <value>切断しました</value>
   </data>

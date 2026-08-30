@@ -55,48 +55,45 @@ public static class AppLifecycleHelper
         );
     }
 
-    public static IApplicationBuilder ConfigureApp(this App app, LaunchActivatedEventArgs args)
+    /// <summary>
+    /// Builds the generic host with Serilog logging and all application services.
+    /// </summary>
+    public static IHost BuildHost()
     {
-        return app.CreateBuilder(args)
-            .Configure(host => host
+        var builder = Host.CreateApplicationBuilder();
+
+        Log.Logger = new LoggerConfiguration()
 #if DEBUG
-                // Switch to Development environment when running in DEBUG
-                .UseEnvironment(Environments.Development)
+            .MinimumLevel.Debug()
+#else
+            .MinimumLevel.Warning()
 #endif
-                .UseLogging(configure: (context, logBuilder) =>
-                {
-                    // Configure log levels for different categories of logging
-                    logBuilder
-                        .SetMinimumLevel(
-                            context.HostingEnvironment.IsDevelopment() ?
-                                LogLevel.Debug :
-                                LogLevel.Warning)
+            .Enrich.FromLogContext()
+#if DEBUG
+            .WriteTo.Console()
+#endif
+            .WriteTo.File(
+                Path.Combine(ApplicationData.Current.LocalFolder.Path, "Logs", "Log_.log"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 7
+            )
+            .CreateLogger();
 
-                        // Default filters for core Uno Platform namespaces
-                        .CoreLogLevel(LogLevel.Error);
+        builder.Logging.ClearProviders();
+        builder.Logging.AddSerilog(dispose: true);
 
-                }, enableUnoLogging: false)
-                .UseSerilog(
-                    consoleLoggingEnabled: true,
-                    fileLoggingEnabled: true,
-                    configureLogger: config =>
-                    {
-                        config.WriteTo.File(
-                            Path.Combine(ApplicationData.Current.LocalFolder.Path, "Logs", "Log_.log"),
-                            rollingInterval: RollingInterval.Day,
-                            retainedFileCountLimit: 7
-                        );
-                    }
-                )
-                .UseConfiguration(configure: configBuilder =>
-                    configBuilder
-                        .EmbeddedSource<App>()
-                        .Section<AppConfig>()
-                )
-                .UseLocalization()
-                .ConfigureServices((context, services) => services
+        builder.Services.AddSefirahServices();
+
+        return builder.Build();
+    }
+
+    public static IServiceCollection AddSefirahServices(this IServiceCollection services)
+    {
+        return services
 
                 .AddSingleton<ILogger>(sp => sp.GetRequiredService<ILogger<App>>())
+
+                .AddSingleton<IStringLocalizer, ResourceLocalizer>()
 
                 // Settings Services
                 .AddSingleton<IUserSettingsService, UserSettingsService>()
@@ -144,8 +141,7 @@ public static class AppLifecycleHelper
                 .AddSingleton<MessagesViewModel>()
                 .AddSingleton<CallsPageViewModel>()
                 .AddSingleton<HeadsetHandoffViewModel>()
-                )
-            );
+                ;
     }
 
     /// <summary>

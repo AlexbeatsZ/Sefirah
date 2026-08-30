@@ -1,54 +1,44 @@
-﻿<Project Sdk="Uno.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFrameworks>net10.0-windows10.0.26100;net10.0-desktop</TargetFrameworks>
-
-        <OutputType>Exe</OutputType>
-        <UnoSingleProject>true</UnoSingleProject>
+        <OutputType>WinExe</OutputType>
+        <!-- Native WinUI 3 + Windows App SDK frontend. The Uno/Skia desktop TFM was removed. -->
+        <TargetFramework>net10.0-windows10.0.26100</TargetFramework>
+        <UseWinUI>true</UseWinUI>
+        <EnableMsixTooling>true</EnableMsixTooling>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
+        <ApplicationIcon>Assets\Icons\SefirahDark.ico</ApplicationIcon>
+        <DefineConstants Condition="'$(Configuration)' == 'Debug'">TRACE;DEBUG;DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+        <DefineConstants Condition="'$(Configuration)' != 'Debug'">TRACE;RELEASE;DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+        <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+        <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
 
         <!-- Display name -->
         <ApplicationTitle>Sefirah Fork</ApplicationTitle>
-        <!-- App Identifier -->
-        <ApplicationId>com.sefirah.castle</ApplicationId>
-        <!-- Versions -->
-        <ApplicationDisplayVersion>3.0.0</ApplicationDisplayVersion>
-        <ApplicationVersion>53</ApplicationVersion>
-        <!-- Package Publisher -->
-        <ApplicationPublisher>shrimqy</ApplicationPublisher>
-        <!-- Package Description -->
-        <Description>Sefirah powered by Uno Platform.</Description>
+        <!-- Platforms -->
+        <Platforms>x64;ARM64</Platforms>
+        <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+        <LangVersion>Preview</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <StartupObject>Sefirah.Platforms.Windows.Program</StartupObject>
+
+        <PublishTrimmed>false</PublishTrimmed>
+        <TrimMode>partial</TrimMode>
+        <!-- Disable ILLink  -->
+        <RunILLink>false</RunILLink>
+        <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+        <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+
         <!--
             If you encounter this error message:
 
             error NETSDK1148: A referenced assembly was compiled using a newer version of Microsoft.Windows.SDK.NET.dll.
             Please update to a newer .NET SDK in order to reference this assembly.
-
-            This means that the two packages below must be aligned with the "build" version number of
-            the "Microsoft.Windows.SDK.BuildTools" package above, and the "revision" version number
-            must be the highest found in https://www.nuget.org/packages/Microsoft.Windows.SDK.NET.Ref.
         -->
         <!-- <WindowsSdkPackageVersion>10.0.22621.28</WindowsSdkPackageVersion> -->
-
-        <!--
-            UnoFeatures let's you quickly add and manage implicit package references based on the features you want to use.
-            https://aka.platform.uno/singleproject-features
-        -->
-        <UnoFeatures>
-            Lottie;
-            Hosting;
-            Toolkit;
-            Logging;
-            LoggingSerilog;
-            Mvvm;
-            Configuration;
-            Localization;
-            ThemeService;
-            SkiaRenderer;
-        </UnoFeatures>
-        <Platforms>x64;ARM64</Platforms>
-        <LangVersion>Preview</LangVersion>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
-
 
     <PropertyGroup Condition="'$(UapAppxPackageBuildMode)' == 'StoreUpload'">
         <GenerateTemporaryStoreCertificate>false</GenerateTemporaryStoreCertificate>
@@ -64,50 +54,59 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <UnoIconForegroundFile>Assets\Icons\icon_foreground.svg</UnoIconForegroundFile>
-        <UnoIconBackgroundColor Condition="'$(IsWinAppSdk)' == 'true'">Transparent</UnoIconBackgroundColor>
         <GenerateTestArtifacts>False</GenerateTestArtifacts>
         <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100'">
-        <StartupObject>Sefirah.Platforms.Windows.Program</StartupObject>
-        <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
-        <!-- Keep every UI language in the main package so in-app language switching works. -->
+    <!-- Keep every UI language in the main package so in-app language switching works. -->
+    <PropertyGroup>
         <AppxBundleAutoResourcePackageQualifiers>Scale</AppxBundleAutoResourcePackageQualifiers>
         <!-- Required when Language is not split into resource packages. Keep the scale
              resource-package graph stable across upgrades while embedding this union. -->
         <AppxDefaultResourceQualifiers>Language=en;en-US;cs-CZ;de-DE;fr-FR;he-IL;hi-IN;hu-HU;id-ID;ja-JP;ko-KR;nl-NL;ru-RU;vi-VN;zh-CN|Contrast=standard|Scale=200|HomeRegion=001|TargetSize=256|LayoutDirection=LTR|DXFeatureLevel=DX9|Configuration=|AlternateForm=</AppxDefaultResourceQualifiers>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-desktop'">
-        <StartupObject>Program</StartupObject>
-    </PropertyGroup>
 
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-desktop'">
-        <PackageReference Include="Tmds.DBus.Protocol" />
-        <PackageReference Include="Tmds.DBus.Generator">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <AdditionalFiles Include="Platforms\Desktop\Tray\DBusXml\com.canonical.dbusmenu.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Handler" />
-        <AdditionalFiles Include="Platforms\Desktop\Tray\DBusXml\com.castle.sefirah.SingleInstance.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Handler" />
-        <AdditionalFiles Include="Platforms\Desktop\Tray\DBusXml\org.kde.StatusNotifierItem.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Handler" />
-        <AdditionalFiles Include="Platforms\Desktop\Tray\DBusXml\org.kde.StatusNotifierWatcher.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Proxy" />
+    <ItemGroup>
+        <PackageReference Include="AdvancedSharpAdbClient" />
+        <PackageReference Include="BouncyCastle.Cryptography" />
+        <PackageReference Include="CommunityToolkit.Mvvm" />
+        <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
+        <PackageReference Include="CommunityToolkit.WinUI.Converters" />
+        <PackageReference Include="CommunityToolkit.WinUI.Extensions" />
+        <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" />
+        <PackageReference Include="DesktopFlyouts.WinUI" />
+        <PackageReference Include="libphonenumber-csharp" />
+        <PackageReference Include="MeaMod.DNS" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="Microsoft.Extensions.Localization" />
+        <PackageReference Include="Microsoft.WindowsAppSDK" />
+        <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+        <PackageReference Include="NAudio" />
+        <PackageReference Include="NetCoreServer" />
+        <PackageReference Include="QRCoder" />
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="sqlite-net-pcl" />
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+        <PackageReference Include="SSH.NET" />
+        <PackageReference Include="Vanara.PInvoke.CldApi" />
+        <PackageReference Include="Vanara.PInvoke.Ole" />
+        <PackageReference Include="Vanara.PInvoke.Shell32" />
     </ItemGroup>
 
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100'">
-        <PublishTrimmed>false</PublishTrimmed>
-        <TrimMode>partial</TrimMode>
-        <!-- Disable ILLink  -->
-        <RunILLink>false</RunILLink>
-        <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-        <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
-    </PropertyGroup>
-
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100'">
-        <PackageReference Include="DesktopFlyouts.WinUI" />
+    <ItemGroup>
         <RuntimeHostConfigurationOption Include="System.Runtime.InteropServices.BuiltInComInterop.IsSupported" Value="true" />
         <RuntimeHostConfigurationOption Include="System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization" Value="false" />
+    </ItemGroup>
+
+    <!-- The Linux/DBus (Skia desktop) platform code is excluded from the native WinUI build.
+         Files stay in the repository for upstream merge compatibility. -->
+    <ItemGroup>
+        <Compile Remove="Platforms\Desktop\**" />
+        <None Remove="Platforms\Desktop\**" />
+        <AdditionalFiles Remove="Platforms\Desktop\**" />
     </ItemGroup>
 
     <ItemGroup>
@@ -121,51 +120,20 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
-    <ItemGroup>
-        <PackageReference Include="AdvancedSharpAdbClient" />
-        <PackageReference Include="BouncyCastle.Cryptography" />
-        <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
-        <PackageReference Include="CommunityToolkit.WinUI.Converters" />
-        <PackageReference Include="CommunityToolkit.WinUI.Extensions" />
-        <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" />
-        <PackageReference Include="libphonenumber-csharp" />
-        <PackageReference Include="MeaMod.DNS" />
-        <PackageReference Include="NAudio" />
-        <PackageReference Include="NetCoreServer" />
-        <PackageReference Include="sqlite-net-pcl" />
-        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
-        <PackageReference Include="SSH.NET" />
-        <PackageReference Include="Tmds.DBus" />
-        <PackageReference Include="Vanara.PInvoke.CldApi" />
-        <PackageReference Include="Vanara.PInvoke.Ole" />
-        <PackageReference Include="Vanara.PInvoke.Shell32" />
-        <PackageReference Include="QRCoder" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100'">
-        <PackageReference Include="Microsoft.Windows.SDK.BuildTools" VersionOverride="10.0.28000.1839" />
-        <PackageReference Include="Microsoft.WindowsAppSDK" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <UnoSplashScreen Update="Assets\Splash\splash_screen.svg">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </UnoSplashScreen>
-    </ItemGroup>
 
     <!-- Hosted app PRI generation: bundle Windows SDK mrmsupport.dll into the MSIX package. -->
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100'">
+    <PropertyGroup>
         <SefirahMrmSupportSdkVersion Condition="'$(SefirahMrmSupportSdkVersion)' == ''">10.0.26100.0</SefirahMrmSupportSdkVersion>
         <SefirahMrmSupportSdkArch Condition="'$(Platform)' == 'ARM64'">arm64</SefirahMrmSupportSdkArch>
         <SefirahMrmSupportSdkArch Condition="'$(SefirahMrmSupportSdkArch)' == ''">x64</SefirahMrmSupportSdkArch>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100' and '$(SefirahMrmSupportDll)' == '' and Exists('C:\Program Files (x86)\Windows Kits\10\bin\$(SefirahMrmSupportSdkVersion)\$(SefirahMrmSupportSdkArch)\mrmsupport.dll')">
+    <PropertyGroup Condition="'$(SefirahMrmSupportDll)' == '' and Exists('C:\Program Files (x86)\Windows Kits\10\bin\$(SefirahMrmSupportSdkVersion)\$(SefirahMrmSupportSdkArch)\mrmsupport.dll')">
         <SefirahMrmSupportDll>C:\Program Files (x86)\Windows Kits\10\bin\$(SefirahMrmSupportSdkVersion)\$(SefirahMrmSupportSdkArch)\mrmsupport.dll</SefirahMrmSupportDll>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100' and '$(SefirahMrmSupportDll)' == '' and Exists('C:\Program Files\Windows Kits\10\bin\$(SefirahMrmSupportSdkVersion)\$(SefirahMrmSupportSdkArch)\mrmsupport.dll')">
+    <PropertyGroup Condition="'$(SefirahMrmSupportDll)' == '' and Exists('C:\Program Files\Windows Kits\10\bin\$(SefirahMrmSupportSdkVersion)\$(SefirahMrmSupportSdkArch)\mrmsupport.dll')">
         <SefirahMrmSupportDll>C:\Program Files\Windows Kits\10\bin\$(SefirahMrmSupportSdkVersion)\$(SefirahMrmSupportSdkArch)\mrmsupport.dll</SefirahMrmSupportDll>
     </PropertyGroup>
-    <Target Name="IncludeMrmSupportDll" BeforeTargets="PrepareForBuild" Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100' and '$(Platform)' != 'Any CPU'">
+    <Target Name="IncludeMrmSupportDll" BeforeTargets="PrepareForBuild" Condition="'$(Platform)' != 'Any CPU'">
         <Error Condition="'$(SefirahMrmSupportDll)' == '' or !Exists('$(SefirahMrmSupportDll)')" Text="Windows SDK mrmsupport.dll was not found. Install the Windows SDK or set SefirahMrmSupportDll." />
         <ItemGroup>
             <Content Include="$(SefirahMrmSupportDll)">

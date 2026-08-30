@@ -1,5 +1,6 @@
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
+using Sefirah.Platforms.Windows.Helpers;
 using Sefirah.Data.Models;
 using Sefirah.ViewModels.Settings;
 using Sefirah.Views.DevicePreferences;

@@ -270,6 +270,9 @@
   <data name="Connected.Text" xml:space="preserve">
     <value>Připojeno</value>
   </data>
+  <data name="Connecting" xml:space="preserve">
+    <value>Připojování</value>
+  </data>
   <data name="Disconnected.Text" xml:space="preserve">
     <value>Odpojeno</value>
   </data>

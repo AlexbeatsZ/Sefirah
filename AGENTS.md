@@ -28,6 +28,7 @@
 ## Packaging and Deployment
 
 - Use the repository's reproducible signed x64 package/installer flow. Keep signing materials out of Git.
+- The app package is built self-contained (`-p:SelfContained=true` in `tools/Build-SideloadPackage.ps1`): the Windows Server peer has no .NET 10 desktop runtime, so framework-dependent packages cannot start there. Verify `hostfxr.dll` is inside the MSIX when deployment fails to launch.
 - Before any upgrade, verify the installed package identity and back up the relevant LocalState under `%LOCALAPPDATA%\Temp\.agents\` when rollback risk warrants it.
 - After deployment, verify package status, preserved data, and the changed behavior. Do not rely on an old version number, hash, PID, endpoint, or radio state recorded in documentation.
 
@@ -48,7 +49,7 @@ Run the smallest relevant regression suite first, then the complete affected Win
 
 ## Current State
 
-The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The fork has no built-in Store/upstream automatic update check, update toast, or update action; repository and issue links target the AlexbeatsZ forks. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
+The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. The Windows frontend was rewritten on native WinUI 3 + Windows App SDK 2.4 (Uno Platform removed; the Skia/Linux desktop TFM code stays in `Platforms/Desktop` but is excluded from compilation). The title bar is a window-level control, the app host is a plain `Microsoft.Extensions.Hosting` Generic Host with Serilog, and localization goes through `ResourceLocalizer`/`ResourceString` over the packaged resw map. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The fork has no built-in Store/upstream automatic update check, update toast, or update action; repository and issue links target the AlexbeatsZ forks. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
 
 ## Durable Lessons
 
@@ -62,3 +63,16 @@ The feature branch contains the fork's Bluetooth catalog/handoff, control API, s
 - A capability-advertising endpoint can still have an unavailable runtime dependency. Preserve
   the endpoint and its diagnostic state in the catalog, but keep its actions disabled until a
   later successful refresh; do not replace the actionable error with a generic device count.
+- Native MRT (`ResourceLoader.GetString`) throws COMException 0x80073B17 "NamedResource not
+  found" for unknown keys, and resw dot-keys must be looked up with slashes
+  (`Connected.Text` → `Connected/Text`). `ResourceLocalizer` and the `ResourceString` markup
+  extension normalize and fall back to the key; missing-key exceptions there kill app startup
+  silently because activation is fire-and-forget — keep the failure logging wrapper in
+  `App.OnLaunched`.
+- WASDK 2.x XAML compilation (`Microsoft.WindowsAppSDK.WinUI` 2.3.6) moved `Page` to
+  `Microsoft.UI.Xaml.Controls`; `XamlPreCompile` builds a temp assembly whose csc failures are
+  swallowed as WMC9999/WMC1509 — diagnose with `-v:diag` and read the hidden `error CS` lines.
+- The single-instance handshake reads `INSTANCE_ACTIVE` from LocalSettings. PIDs are reused by
+  unrelated processes and crashed sessions leave stale values, so the redirect target must be
+  both alive AND named `Sefirah`, with a bounded `CoWaitForMultipleObjects` timeout; otherwise
+  startup deadlocks before any window exists.

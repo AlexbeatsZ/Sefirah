@@ -55,6 +55,9 @@ public sealed partial class DeviceControlCenter : UserControl
     private void OnPairedDevicesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => TryShowPhoneFrameScrollTeachingTip();
 
+    private void PhoneFrameOverlay_Tapped(object sender, TappedRoutedEventArgs e)
+        => ViewModel.StartScrcpyCommand.Execute(null);
+
     private void TryShowPhoneFrameScrollTeachingTip()
     {
         if (IsPhoneFrameScrollTeachingTipShown) return;

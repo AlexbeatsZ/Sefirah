@@ -1,4 +1,5 @@
 using Microsoft.UI.Windowing;
+using Sefirah.Platforms.Windows.Helpers;
 using Sefirah.UserControls;
 using Sefirah.ViewModels;
 using Windows.Graphics;

@@ -271,6 +271,9 @@ page.</value>
   <data name="Connected.Text" xml:space="preserve">
     <value>Connected</value>
   </data>
+  <data name="Connecting" xml:space="preserve">
+    <value>Menghubungkan</value>
+  </data>
   <data name="Disconnected.Text" xml:space="preserve">
     <value>Disconnected</value>
   </data>

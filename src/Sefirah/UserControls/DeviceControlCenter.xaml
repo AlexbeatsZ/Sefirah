@@ -7,7 +7,6 @@
     xmlns:helpers="using:Sefirah.Helpers"
     xmlns:messages="using:Sefirah.Data.Models.Messages"
     xmlns:models="using:Sefirah.Data.Models"
-    xmlns:utu="using:Uno.Toolkit.UI"
     xmlns:wuc="using:CommunityToolkit.WinUI.Controls"
     xmlns:wctconverters="using:CommunityToolkit.WinUI.Converters">
 
@@ -97,8 +96,8 @@
                 <Border Margin="3" CornerRadius="4">
                     <Border.Background>
                         <LinearGradientBrush Opacity="{x:Bind ViewModel.Device.Wallpaper, Converter={StaticResource EmptyObjectToOpacityConverter}, Mode=OneWay}" StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Offset="0" Color="#FF0070FF" />
-                            <GradientStop Offset="1" Color="#FF2E90FF" />
+                            <GradientStop Offset="0" Color="{ThemeResource SystemAccentColorLight1}" />
+                            <GradientStop Offset="1" Color="{ThemeResource SystemAccentColorDark1}" />
                         </LinearGradientBrush>
                     </Border.Background>
                     <Image
@@ -111,7 +110,7 @@
                     AutomationProperties.Name="{helpers:ResourceString Name=StartScreenMirroring}"
                     Background="#80000000"
                     Opacity="0"
-                    utu:CommandExtensions.Command="{x:Bind ViewModel.StartScrcpyCommand}"
+                    Tapped="PhoneFrameOverlay_Tapped"
                     Visibility="Collapsed">
                     <FontIcon
                         Foreground="White"

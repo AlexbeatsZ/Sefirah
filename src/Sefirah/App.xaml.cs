@@ -41,22 +41,33 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _ = ActivateAsync();
+        _ = LogStartupFailuresAsync(ActivateAsync());
+
+        static async Task LogStartupFailuresAsync(Task activation)
+        {
+            try
+            {
+                await activation;
+            }
+            catch (Exception ex)
+            {
+                // Fire-and-forget activation failures would otherwise be swallowed
+                // silently, leaving the splash screen visible with no diagnosis.
+                AppLifecycleHelper.HandleAppUnhandledException(ex);
+                throw;
+            }
+        }
 
         async Task ActivateAsync()
         {
-            var builder = this.ConfigureApp(args);
-            MainWindow = builder.Window;
+            MainWindow = new Window();
             MainWindow.AppWindow.Title = "Sefirah";
             MainWindow.SetWindowIcon();
 #if WINDOWS
             WindowHandle = WindowNative.GetWindowHandle(MainWindow);
             MainWindow.ExtendsContentIntoTitleBar = true;
 #endif
-#if DEBUG
-            MainWindow.UseStudio();
-#endif
-            Host = builder.Build();
+            Host = AppLifecycleHelper.BuildHost();
             Ioc.Default.ConfigureServices(Host.Services);
             await Host.StartAsync();
 
@@ -150,8 +161,21 @@ public partial class App : Application
             rootFrame = new() { CacheSize = 1 };
             rootFrame.NavigationFailed += OnNavigationFailed;
 
+            // Host the custom title bar at the window level so every page gets
+            // the native caption strip instead of each page drawing its own.
+            var rootGrid = new Grid();
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var titleBar = new UserControls.TitleBar();
+            Grid.SetRow(titleBar, 0);
+            rootGrid.Children.Add(titleBar);
+
+            Grid.SetRow(rootFrame, 1);
+            rootGrid.Children.Add(rootFrame);
+
             // Place the frame in the current Window
-            MainWindow.Content = rootFrame;
+            MainWindow.Content = rootGrid;
         }
 
         return rootFrame;

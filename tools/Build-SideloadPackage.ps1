@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('x64')]
     [string]$Architecture = 'x64',
     [ValidateSet('Release', 'Debug')]
@@ -103,6 +103,9 @@ $publishArguments = @(
     '-c', $Configuration,
     "-p:Platform=$Architecture",
     "-p:RuntimeIdentifier=win-$Architecture",
+    # Self-contained: target machines (e.g. the Windows Server peer) may not have the
+    # .NET 10 desktop runtime installed; the fork historically shipped self-contained.
+    '-p:SelfContained=true',
     '-p:UapAppxPackageBuildMode=Sideloading',
     '-p:GenerateAppxPackageOnBuild=true',
     '-p:AppxBundle=Always',

@@ -30,14 +30,31 @@ internal class Program
             return;
         }
 
-        // Get active process PID
-        var activePid = ApplicationData.Current.LocalSettings.Values.Get("INSTANCE_ACTIVE", -1);
+        // Get active process PID. A stale value from a crashed session must not be
+        // redirected to: CoWaitForMultipleObjects on a dead instance deadlocks startup.
+        // PIDs are reused by unrelated processes, so require the Sefirah process name too.
+        var activePidValue = ApplicationData.Current.LocalSettings.Values.Get("INSTANCE_ACTIVE", -1);
+        var existingPid = activePidValue < 0 ? -activePidValue : -1;
+        var isExistingInstanceLive = false;
+        if (existingPid > 0 && existingPid != proc.Id)
+        {
+            try
+            {
+                using var existingProcess = Process.GetProcessById(existingPid);
+                isExistingInstanceLive = !existingProcess.HasExited
+                    && existingProcess.ProcessName.Equals(proc.ProcessName, StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+            {
+                isExistingInstanceLive = false;
+            }
+        }
 
-        // Get current active PID's instance
-        var instance = AppInstance.FindOrRegisterForKey(activePid.ToString());
+        // If that live instance is not current window's own, the app will redirect to that
+        // instance so that the app would not create more than one window
+        var instance = AppInstance.FindOrRegisterForKey(
+            (isExistingInstanceLive ? activePidValue : -proc.Id).ToString());
 
-        // If that instance is not current window's own, the app will redirect to that instance
-        // so that the app would not create more than one window
         if (!instance.IsCurrent)
         {
             RedirectActivationTo(instance, activatedArgs);
@@ -46,11 +63,8 @@ internal class Program
             return;
         }
 
-        // Get this current instance
-        var currentInstance = AppInstance.FindOrRegisterForKey((-proc.Id).ToString());
-
-        if (currentInstance.IsCurrent)
-            currentInstance.Activated += OnActivated;
+        if (instance.IsCurrent)
+            instance.Activated += OnActivated;
 
         // Set this current active process's PID
         ApplicationData.Current.LocalSettings.Values["INSTANCE_ACTIVE"] = -proc.Id;
@@ -78,9 +92,11 @@ internal class Program
         });
 
         uint CWMO_DEFAULT = 0;
-        uint INFINITE = 0xFFFFFFFF;
+        // Bound the wait: a redirect target that never completes must not leave a
+        // zombie process holding the single-instance key.
+        uint redirectTimeoutMs = 10_000;
 
-        _ = InteropHelpers.CoWaitForMultipleObjects(CWMO_DEFAULT, INFINITE, 1, [redirectEventHandle], out uint handleIndex);
+        _ = InteropHelpers.CoWaitForMultipleObjects(CWMO_DEFAULT, redirectTimeoutMs, 1, [redirectEventHandle], out uint handleIndex);
     }
 
     private static async void OnActivated(object? sender, AppActivationArguments args)
