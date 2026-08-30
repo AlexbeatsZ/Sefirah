@@ -28,7 +28,7 @@
 ## Packaging and Deployment
 
 - Use the repository's reproducible signed x64 package/installer flow. Keep signing materials out of Git.
-- The app package is built self-contained (`-p:SelfContained=true` in `tools/Build-SideloadPackage.ps1`): the Windows Server peer has no .NET 10 desktop runtime, so framework-dependent packages cannot start there. Verify `hostfxr.dll` is inside the MSIX when deployment fails to launch.
+- The app package is built self-contained (`-p:SelfContained=true` in `tools/Build-SideloadPackage.ps1`): the Windows Server peer has no .NET 10 desktop runtime, so framework-dependent packages cannot start there. Verify `hostfxr.dll` is inside the MSIX when deployment fails to launch. The staged `sefirahctl.exe` stays framework-dependent; run it from a machine with .NET 10.
 - Before any upgrade, verify the installed package identity and back up the relevant LocalState under `%LOCALAPPDATA%\Temp\.agents\` when rollback risk warrants it.
 - After deployment, verify package status, preserved data, and the changed behavior. Do not rely on an old version number, hash, PID, endpoint, or radio state recorded in documentation.
 
