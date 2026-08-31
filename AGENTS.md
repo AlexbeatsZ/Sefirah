@@ -76,3 +76,7 @@ The feature branch contains the fork's Bluetooth catalog/handoff, control API, s
   unrelated processes and crashed sessions leave stale values, so the redirect target must be
   both alive AND named `Sefirah`, with a bounded `CoWaitForMultipleObjects` timeout; otherwise
   startup deadlocks before any window exists.
+- `ExtendsContentIntoTitleBar` only removes the system title bar; the replacement control must
+  also be registered with `Window.SetTitleBar` or it is not a draggable caption region. Keep the
+  root frame idempotent across activations, and log navigation/startup failures instead of
+  constructing discarded exceptions or rethrowing into an unobserved fire-and-forget task.

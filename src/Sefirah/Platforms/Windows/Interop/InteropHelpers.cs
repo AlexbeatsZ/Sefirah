@@ -14,7 +14,7 @@ public static class InteropHelpers
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern nint CreateEvent(nint lpEventAttributes, bool bManualReset,
-            bool bInitialState, string lpName);
+            bool bInitialState, string? lpName);
 
     [DllImport("kernel32.dll")]
     public static extern bool SetEvent(nint hEvent);

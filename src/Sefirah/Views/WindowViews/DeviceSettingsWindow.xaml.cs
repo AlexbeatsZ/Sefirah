@@ -2,6 +2,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Sefirah.Platforms.Windows.Helpers;
 using Sefirah.Data.Models;
+using Sefirah.Helpers;
 using Sefirah.ViewModels.Settings;
 using Sefirah.Views.DevicePreferences;
 using Windows.Graphics;
@@ -87,7 +88,10 @@ public sealed partial class DeviceSettingsWindow : Window
 #endif
 
     private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
-        => new Exception("Failed to load Page " + e.SourcePageType.FullName);
+        => AppLifecycleHelper.HandleAppUnhandledException(
+            new InvalidOperationException(
+                "Failed to load Page " + e.SourcePageType.FullName,
+                e.Exception));
 
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
         => App.RemoveDeviceSettingsWindow(Device.Id);

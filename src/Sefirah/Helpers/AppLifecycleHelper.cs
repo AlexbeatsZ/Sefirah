@@ -149,7 +149,23 @@ public static class AppLifecycleHelper
     /// </summary>
     public static void HandleAppUnhandledException(Exception? ex)
     {
-        Ioc.Default.GetService<ILogger>()?.LogCritical("Unhandled exception {ex}", ex);
+        ILogger? logger = null;
+        try
+        {
+            logger = Ioc.Default.GetService<ILogger>();
+        }
+        catch (InvalidOperationException)
+        {
+            // The app can fail before the service provider is configured.
+        }
+
+        if (logger is not null)
+        {
+            logger.LogCritical(ex, "Unhandled exception");
+            return;
+        }
+
+        Log.Logger.Fatal(ex, "Unhandled exception before dependency injection was initialized");
     }
 
     public static async Task HandleStartupTaskAsync(bool enable)

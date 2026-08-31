@@ -26,6 +26,7 @@ public partial class App : Application
     public static nint WindowHandle { get; private set; }
     public static Window MainWindow { get; private set; } = null!;
     protected IHost? Host { get; private set; }
+    private Frame? _rootFrame;
     
     // Track open DeviceSettingsWindow instances
     private static readonly Dictionary<string, DeviceSettingsWindow> DeviceSettingsWindows = [];
@@ -36,14 +37,18 @@ public partial class App : Application
         // Configure exception handlers
         UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
-        TaskScheduler.UnobservedTaskException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
+        TaskScheduler.UnobservedTaskException += (sender, e) =>
+        {
+            AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
+            e.SetObserved();
+        };
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         _ = LogStartupFailuresAsync(ActivateAsync());
 
-        static async Task LogStartupFailuresAsync(Task activation)
+        async Task LogStartupFailuresAsync(Task activation)
         {
             try
             {
@@ -54,12 +59,30 @@ public partial class App : Application
                 // Fire-and-forget activation failures would otherwise be swallowed
                 // silently, leaving the splash screen visible with no diagnosis.
                 AppLifecycleHelper.HandleAppUnhandledException(ex);
-                throw;
+                try
+                {
+                    if (Host is not null)
+                        await Host.StopAsync();
+                }
+                catch (Exception stopException)
+                {
+                    AppLifecycleHelper.HandleAppUnhandledException(
+                        new AggregateException("Host shutdown failed after app activation failed", ex, stopException));
+                }
+                finally
+                {
+                    Current.Exit();
+                }
             }
         }
 
         async Task ActivateAsync()
         {
+            // Configure logging before creating the window so native shell failures
+            // are persisted, but do not start hosted workers until MainWindow exists.
+            Host = AppLifecycleHelper.BuildHost();
+            Ioc.Default.ConfigureServices(Host.Services);
+
             MainWindow = new Window();
             MainWindow.AppWindow.Title = "Sefirah";
             MainWindow.SetWindowIcon();
@@ -67,8 +90,6 @@ public partial class App : Application
             WindowHandle = WindowNative.GetWindowHandle(MainWindow);
             MainWindow.ExtendsContentIntoTitleBar = true;
 #endif
-            Host = AppLifecycleHelper.BuildHost();
-            Ioc.Default.ConfigureServices(Host.Services);
             await Host.StartAsync();
 
             bool isStartupTask = false;
@@ -151,35 +172,37 @@ public partial class App : Application
     public Frame? EnsureWindowIsInitialized()
     {
         try
-    {
-        //  NOTE:
-        //  Do not repeat app initialization when the Window already has content,
-        //  just ensure that the window is active
-        if (MainWindow.Content is not Frame rootFrame)
         {
-            // Create a Frame to act as the navigation context and navigate to the first page
-            rootFrame = new() { CacheSize = 1 };
-            rootFrame.NavigationFailed += OnNavigationFailed;
+            // Do not rebuild the root content on a later activation.
+            if (_rootFrame is null)
+            {
+                // Create a Frame to act as the navigation context and navigate to the first page
+                var rootFrame = new Frame { CacheSize = 1 };
+                rootFrame.NavigationFailed += OnNavigationFailed;
 
-            // Host the custom title bar at the window level so every page gets
-            // the native caption strip instead of each page drawing its own.
-            var rootGrid = new Grid();
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                // Host the custom title bar at the window level so every page gets
+                // the native caption strip instead of each page drawing its own.
+                var rootGrid = new Grid();
+                rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
+                rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var titleBar = new UserControls.TitleBar();
-            Grid.SetRow(titleBar, 0);
-            rootGrid.Children.Add(titleBar);
+                var titleBar = new UserControls.TitleBar();
+                Grid.SetRow(titleBar, 0);
+                rootGrid.Children.Add(titleBar);
 
-            Grid.SetRow(rootFrame, 1);
-            rootGrid.Children.Add(rootFrame);
+                Grid.SetRow(rootFrame, 1);
+                rootGrid.Children.Add(rootFrame);
 
-            // Place the frame in the current Window
-            MainWindow.Content = rootGrid;
+                // Place the frame in the current Window
+                MainWindow.Content = rootGrid;
+#if WINDOWS
+                MainWindow.SetTitleBar(titleBar);
+#endif
+                _rootFrame = rootFrame;
+            }
+
+            return _rootFrame;
         }
-
-        return rootFrame;
-    }
 
         catch (COMException)
         {
@@ -325,7 +348,10 @@ public partial class App : Application
 #endif
 
     private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
-        => new Exception("Failed to load Page " + e.SourcePageType.FullName);
+        => AppLifecycleHelper.HandleAppUnhandledException(
+            new InvalidOperationException(
+                "Failed to load Page " + e.SourcePageType.FullName,
+                e.Exception));
 
     /// <summary>
     /// Opens DeviceSettingsWindow for the specified device.
