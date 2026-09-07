@@ -192,11 +192,12 @@ public static class AppLifecycleHelper
             if (startupTask.State is StartupTaskState.Disabled)
                 await startupTask.RequestEnableAsync();
         }
-        else
+        else if (startupTask.State is StartupTaskState.Enabled)
         {
-            if (startupTask.State is StartupTaskState.Enabled)
-                startupTask.Disable();
+            startupTask.Disable();
         }
+
+        Log.Information("Startup task state: {StartupTaskState}; requested enabled={StartupEnabled}", startupTask.State, enable);
 #endif
     }
 }

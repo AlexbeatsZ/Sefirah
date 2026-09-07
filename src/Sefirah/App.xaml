@@ -13,6 +13,12 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
+            <!--  Keep app-owned glyph icons on the Windows symbol font. Without an explicit -->
+            <!--  font, inherited content fonts can render private-use glyphs as question marks. -->
+            <Style TargetType="FontIcon">
+                <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+            </Style>
+
             <!--  Transparent page background so the Mica/Acrylic backdrop shows through  -->
             <SolidColorBrush x:Key="App.PageBackgroundBrush" Color="Transparent" />
 

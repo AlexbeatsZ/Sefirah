@@ -124,14 +124,12 @@ public partial class App : Application
             bool isStartupTask = false;
 #if WINDOWS
             var appActivationArguments = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
-            isStartupTask = appActivationArguments.Data is IStartupTaskActivatedEventArgs;
+            isStartupTask = appActivationArguments.Kind == ExtendedActivationKind.StartupTask ||
+                            appActivationArguments.Data is IStartupTaskActivatedEventArgs;
 
-            bool isStartupRegistered = ApplicationData.Current.LocalSettings.Values["isStartupRegistered"] is null;
-            if (isStartupRegistered)
-            {
-                await AppLifecycleHelper.HandleStartupTaskAsync(true);
-                ApplicationData.Current.LocalSettings.Values["isStartupRegistered"] = true;
-            }
+            var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
+            var startupOption = userSettingsService.GeneralSettingsService.StartupOption;
+            await AppLifecycleHelper.HandleStartupTaskAsync(startupOption != StartupOptions.Disabled);
 
             if (appActivationArguments.Data is ProtocolActivatedEventArgs protocolArgs)
                 HandleProtocolActivationArgs(protocolArgs);
@@ -149,8 +147,6 @@ public partial class App : Application
 
             if (isStartupTask)
             {
-                var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
-                var startupOption = userSettingsService.GeneralSettingsService.StartupOption;
                 switch (startupOption)
                 {
                     case StartupOptions.InTray:
@@ -165,6 +161,12 @@ public partial class App : Application
                         {
                             overlappedPresenter.Minimize();
                         }
+                        break;
+                    case StartupOptions.Maximized:
+                        MainWindow.Activate();
+                        MainWindow.AppWindow.Show();
+                        if (MainWindow.AppWindow.Presenter is OverlappedPresenter maximizedPresenter && maximizedPresenter.IsMaximizable)
+                            maximizedPresenter.Maximize();
                         break;
                     default:
                         MainWindow.Activate();
@@ -306,27 +308,27 @@ public partial class App : Application
     {
 #if WINDOWS
         MainWindow.Activated += Window_Activated;
+        MainWindow.AppWindow.Closing += MainWindow_Closing;
 #endif
-        MainWindow.Closed += Window_Closed;
     }
 
-    private void Window_Closed(object sender, WindowEventArgs args)
+#if WINDOWS
+    private void MainWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        Console.WriteLine($"[DEBUG] Window_Closed called! HandleClosedEvents={HandleClosedEvents}");
+        Console.WriteLine($"[DEBUG] MainWindow_Closing called! HandleClosedEvents={HandleClosedEvents}");
         if (!HandleClosedEvents)
             return;
 
         if (Ioc.Default.GetService<ISystemTrayService>() is not { IsAvailable: true })
         {
-            Console.WriteLine("[DEBUG] Window_Closed: SystemTrayService is null or not available!");
+            Console.WriteLine("[DEBUG] MainWindow_Closing: System tray is unavailable; allowing the window to close.");
             return;
         }
 
-        args.Handled = true;
-#if WINDOWS
-        MainWindow.AppWindow.Hide();
-#endif
+        args.Cancel = true;
+        sender.Hide();
     }
+#endif
 
     public static void TrayStartScrcpy()
     {

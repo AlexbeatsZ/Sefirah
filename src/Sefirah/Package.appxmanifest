@@ -26,7 +26,7 @@
     xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
     IgnorableNamespaces="uap rescap rescap5 uap3 uap13 desktop2 desktop3 desktop4 desktop6 desktop7 cloudfiles cloudfiles2 mp">
     
-        <Identity Version="3.1.0.10" Name="Meta.Sefirah.Fork" Publisher="CN=Meta Sefirah Fork"/>
+        <Identity Version="3.1.0.12" Name="Meta.Sefirah.Fork" Publisher="CN=Meta Sefirah Fork"/>
     
     <Properties >
         <DisplayName>Sefirah Fork</DisplayName>
@@ -76,7 +76,7 @@
                 <uap5:Extension Category="windows.startupTask">
                     <uap5:StartupTask
                     TaskId="8B5D3E3F-9B69-4E8A-A9F7-BFCA793B9AF0"
-                    Enabled="false"
+                    Enabled="true"
                     DisplayName="Sefirah" />
                 </uap5:Extension>
                 <uap13:Extension Category="windows.phoneCallActivation" />

@@ -49,10 +49,19 @@ Run the smallest relevant regression suite first, then the complete affected Win
 
 ## Current State
 
-The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. The Windows frontend was rewritten on native WinUI 3 + Windows App SDK 2.4 (Uno Platform removed; the Skia/Linux desktop TFM code stays in `Platforms/Desktop` but is excluded from compilation). The title bar is a window-level control, the app host is a plain `Microsoft.Extensions.Hosting` Generic Host with Serilog, and localization goes through `ResourceLocalizer`/`ResourceString` over the packaged resw map. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The fork has no built-in Store/upstream automatic update check, update toast, or update action; repository and issue links target the AlexbeatsZ forks. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
+The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Windows package `3.1.0.12` pins app-owned `FontIcon` glyphs to `Segoe Fluent Icons`, handles the system close action through cancellable `AppWindow.Closing` so the main window reliably hides to the tray, and reconciles the packaged startup task against `StartupOption` on every launch; the default `InTray` setting therefore starts at login without showing the window. The Windows frontend was rewritten on native WinUI 3 + Windows App SDK 2.4 (Uno Platform removed; the Skia/Linux desktop TFM code stays in `Platforms/Desktop` but is excluded from compilation). The title bar is a window-level control, the app host is a plain `Microsoft.Extensions.Hosting` Generic Host with Serilog, and localization goes through `ResourceLocalizer`/`ResourceString` over the packaged resw map. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The fork has no built-in Store/upstream automatic update check, update toast, or update action; repository and issue links target the AlexbeatsZ forks. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
 
 ## Durable Lessons
 
+- Native WinUI 3 close-to-tray must intercept the cancellable `AppWindow.Closing` event and set
+  `AppWindowClosingEventArgs.Cancel` before hiding. `Window.Closed` is too late to provide reliable
+  caption-button close semantics.
+- Private-use glyphs in app-owned `FontIcon` controls can degrade to question marks when a content
+  font is inherited after a native WinUI rewrite. Pin the application-level `FontIcon` style to
+  the Windows symbol font (`Segoe Fluent Icons`) and visually verify representative pages.
+- Packaged startup registration is stateful outside the app settings file. Reconcile
+  `StartupTask.State` with the desired `StartupOption` on every launch instead of guarding it with
+  a one-time LocalSettings marker; log the resulting runtime state so deployment can be verified.
 - NetCoreServer `SendAsync` means that a complete frame was accepted into its locked internal
   buffer, not that the network is empty. Waiting for global drain after every application frame
   can starve heartbeats. Keep application traffic in a bounded single-writer queue, let small
