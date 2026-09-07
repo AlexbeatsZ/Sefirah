@@ -80,3 +80,14 @@ The feature branch contains the fork's Bluetooth catalog/handoff, control API, s
   also be registered with `Window.SetTitleBar` or it is not a draggable caption region. Keep the
   root frame idempotent across activations, and log navigation/startup failures instead of
   constructing discarded exceptions or rethrowing into an unobserved fire-and-forget task.
+- When multiple desktop peers connect directly, each peer proactively sends periodic heartbeats.
+  If a receiver replies unconditionally to incoming heartbeats with an immediate heartbeat reply,
+  a line-rate ping-pong cascade develops (filling gigabytes of logs and consuming 100% CPU).
+  Incoming heartbeat replies must be rate-limited (e.g. minimum 5s interval per connection) to break
+  infinite echo storms while preserving Android timeout recovery.
+- AppX package installation/updates via remote OpenSSH fail with `0x80070005` (Access Denied /
+  `Failed to reach state PackagesInUseClosed`) when using `-ForceApplicationShutdown`, because
+  remote SSH sessions lack an interactive desktop token to activate Process Lifecycle Manager (PLM).
+  Deploy updates on headless/remote Windows machines via an interactive scheduled task
+  (`schtasks /create ... /it /f`) executed under the logged-on console user session.
+
