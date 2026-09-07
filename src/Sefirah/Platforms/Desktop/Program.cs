@@ -12,6 +12,16 @@ internal class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        var stdOut = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+        Console.SetOut(stdOut);
+        var stdErr = new StreamWriter(Console.OpenStandardError()) { AutoFlush = true };
+        Console.SetError(stdErr);
+        AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+        {
+            stdOut.WriteLine($"[DEBUG] ProcessExit triggered! Callstack:\n{Environment.StackTrace}");
+            stdOut.Flush();
+        };
+        Console.WriteLine("[DEBUG] Sefirah.Desktop Main starting...");
         DBusConnection? connection = null;
         InstanceHandler? handler = null;
         var shouldRedirect = false;
@@ -86,13 +96,23 @@ internal class Program
 
         try
         {
+            Console.WriteLine("[DEBUG] Creating UnoPlatformHostBuilder...");
             var host = UnoPlatformHostBuilder.Create()
                 .App(() => new App())
+                .UseMacOS()
                 .UseX11()
                 .UseLinuxFrameBuffer()
                 .Build();
 
+            Console.WriteLine("[DEBUG] Calling host.Run()...");
+            Sefirah.Platforms.Desktop.Mac.MacKeepAliveHelper.EnsureMacAppKeepsRunning();
             host.Run();
+            Console.WriteLine("[DEBUG] host.Run() returned.");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[FATAL] Unhandled exception in host.Run: {ex}");
+            throw;
         }
         finally
         {

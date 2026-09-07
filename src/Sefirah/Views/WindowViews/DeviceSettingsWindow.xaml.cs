@@ -1,6 +1,8 @@
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
+#if WINDOWS
 using Sefirah.Platforms.Windows.Helpers;
+#endif
 using Sefirah.Data.Models;
 using Sefirah.Helpers;
 using Sefirah.ViewModels.Settings;

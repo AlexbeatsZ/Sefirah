@@ -30,29 +30,49 @@ public static class AppLifecycleHelper
 
     public static async Task InitializeAppComponentsAsync()
     {
-        var discoveryService = Ioc.Default.GetRequiredService<IDiscoveryService>();
-        var networkService = Ioc.Default.GetRequiredService<INetworkService>();
-        var deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
-        var adbService = Ioc.Default.GetRequiredService<IAdbService>();
-        var phoneLineService = Ioc.Default.GetRequiredService<IPhoneLineService>();
+        try
+        {
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving discoveryService...");
+            var discoveryService = Ioc.Default.GetRequiredService<IDiscoveryService>();
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving networkService...");
+            var networkService = Ioc.Default.GetRequiredService<INetworkService>();
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving deviceManager...");
+            var deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving adbService...");
+            var adbService = Ioc.Default.GetRequiredService<IAdbService>();
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving phoneLineService...");
+            var phoneLineService = Ioc.Default.GetRequiredService<IPhoneLineService>();
 #if WINDOWS
-        var notificationHandler = Ioc.Default.GetRequiredService<IPlatformNotificationHandler>();
-        await notificationHandler.RegisterForNotifications();
-        await Microsoft.Windows.AppNotifications.AppNotificationManager.Default
-            .RemoveByTagAndGroupAsync("app-update", "update");
+            var notificationHandler = Ioc.Default.GetRequiredService<IPlatformNotificationHandler>();
+            await notificationHandler.RegisterForNotifications();
+            await Microsoft.Windows.AppNotifications.AppNotificationManager.Default
+                .RemoveByTagAndGroupAsync("app-update", "update");
 #endif
 
-        await deviceManager.Initialize();
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Initializing DeviceManager...");
+            await deviceManager.Initialize();
 
-        await Task.WhenAll(Ioc.Default.GetServices<IFeature>().Select(feature => feature.InitializeAsync()));
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Initializing Features...");
+            await Task.WhenAll(Ioc.Default.GetServices<IFeature>().Select(feature => feature.InitializeAsync()));
 
-        await networkService.StartServerAsync();
-        await discoveryService.StartDiscoveryAsync();
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Starting NetworkService...");
+            await networkService.StartServerAsync();
 
-        _ = Task.WhenAll(
-            adbService.StartAsync(),
-            phoneLineService.InitializeAsync()
-        );
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Starting DiscoveryService...");
+            await discoveryService.StartDiscoveryAsync();
+
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Starting Adb and PhoneLine...");
+            _ = Task.WhenAll(
+                adbService.StartAsync(),
+                phoneLineService.InitializeAsync()
+            );
+            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Complete.");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[FATAL] InitializeAppComponentsAsync failed: {ex}");
+            throw;
+        }
     }
 
     /// <summary>
@@ -63,15 +83,9 @@ public static class AppLifecycleHelper
         var builder = Host.CreateApplicationBuilder();
 
         Log.Logger = new LoggerConfiguration()
-#if DEBUG
             .MinimumLevel.Debug()
-#else
-            .MinimumLevel.Warning()
-#endif
             .Enrich.FromLogContext()
-#if DEBUG
             .WriteTo.Console()
-#endif
             .WriteTo.File(
                 Path.Combine(ApplicationData.Current.LocalFolder.Path, "Logs", "Log_.log"),
                 rollingInterval: RollingInterval.Day,

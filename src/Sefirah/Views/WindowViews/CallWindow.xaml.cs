@@ -1,5 +1,8 @@
 using Microsoft.UI.Windowing;
+#if WINDOWS
 using Sefirah.Platforms.Windows.Helpers;
+#endif
+using Sefirah.Helpers;
 using Sefirah.UserControls;
 using Sefirah.ViewModels;
 using Windows.Graphics;

@@ -33,29 +33,51 @@ public partial class App : Application
 
     public App()
     {
+        Console.WriteLine("[DEBUG] App constructor starting...");
         InitializeComponent();
+        Console.WriteLine("[DEBUG] App InitializeComponent finished.");
         // Configure exception handlers
-        UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
-        AppDomain.CurrentDomain.UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
+        UnhandledException += (sender, e) =>
+        {
+            Console.Error.WriteLine($"[FATAL] UnhandledException: {e.Exception}");
+            AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
+        };
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+        {
+            Console.Error.WriteLine($"[FATAL] AppDomain.UnhandledException: {e.ExceptionObject}");
+            AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
+        };
         TaskScheduler.UnobservedTaskException += (sender, e) =>
         {
+            Console.Error.WriteLine($"[FATAL] TaskScheduler.UnobservedTaskException: {e.Exception}");
             AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
             e.SetObserved();
         };
+#if !WINDOWS
+        if (OperatingSystem.IsMacOS())
+        {
+            Sefirah.Platforms.Desktop.Mac.MacKeepAliveHelper.EnsureMacAppKeepsRunning();
+        }
+#endif
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        Console.WriteLine("[DEBUG] App.OnLaunched entered.");
         _ = LogStartupFailuresAsync(ActivateAsync());
 
         async Task LogStartupFailuresAsync(Task activation)
         {
             try
             {
+                Console.WriteLine("[DEBUG] Awaiting ActivateAsync()...");
                 await activation;
+                Console.WriteLine("[DEBUG] ActivateAsync() completed successfully.");
             }
             catch (Exception ex)
             {
+                Console.Error.WriteLine($"[FATAL] Startup failure: {ex}");
+                Console.Error.Flush();
                 // Fire-and-forget activation failures would otherwise be swallowed
                 // silently, leaving the splash screen visible with no diagnosis.
                 AppLifecycleHelper.HandleAppUnhandledException(ex);
@@ -78,19 +100,26 @@ public partial class App : Application
 
         async Task ActivateAsync()
         {
-            // Configure logging before creating the window so native shell failures
-            // are persisted, but do not start hosted workers until MainWindow exists.
+            Console.WriteLine("[DEBUG] ActivateAsync: Building host...");
             Host = AppLifecycleHelper.BuildHost();
+            Console.WriteLine("[DEBUG] ActivateAsync: Configuring services...");
             Ioc.Default.ConfigureServices(Host.Services);
-
+            Console.WriteLine("[DEBUG] ActivateAsync: Creating MainWindow...");
             MainWindow = new Window();
             MainWindow.AppWindow.Title = "Sefirah";
             MainWindow.SetWindowIcon();
 #if WINDOWS
             WindowHandle = WindowNative.GetWindowHandle(MainWindow);
             MainWindow.ExtendsContentIntoTitleBar = true;
+#else
+            if (OperatingSystem.IsMacOS())
+            {
+                Sefirah.Platforms.Desktop.Mac.MacKeepAliveHelper.EnsureMacAppKeepsRunning();
+            }
 #endif
+            Console.WriteLine("[DEBUG] ActivateAsync: Starting host...");
             await Host.StartAsync();
+            Console.WriteLine("[DEBUG] ActivateAsync: Host started.");
 
             bool isStartupTask = false;
 #if WINDOWS
@@ -107,9 +136,11 @@ public partial class App : Application
             if (appActivationArguments.Data is ProtocolActivatedEventArgs protocolArgs)
                 HandleProtocolActivationArgs(protocolArgs);
 #endif
+            Console.WriteLine("[DEBUG] ActivateAsync: Hooking events & getting tray...");
             HookEventsForWindow();
             _ = Ioc.Default.GetRequiredService<ISystemTrayService>();
 
+            Console.WriteLine("[DEBUG] ActivateAsync: Initializing root frame...");
             var rootFrame = EnsureWindowIsInitialized();
             if (rootFrame is null)
                 return;
@@ -144,27 +175,37 @@ public partial class App : Application
             else
             {
                 MainWindow.Activate();
+#if WINDOWS
                 // Wait for the Window to initialize
                 await Task.Delay(10);
                 MainWindow.AppWindow.Show();
+#endif
             }
 
+            Console.WriteLine("[DEBUG] ActivateAsync: Navigating splash screen...");
             rootFrame.Navigate(typeof(Views.SplashScreen));
 
+            Console.WriteLine("[DEBUG] ActivateAsync: Initializing app components...");
             await Task.WhenAll(
-                AppLifecycleHelper.InitializeAppComponentsAsync(),
+                Task.Run(AppLifecycleHelper.InitializeAppComponentsAsync),
                 Task.Delay(500));
+            Console.WriteLine("[DEBUG] ActivateAsync: App components initialized.");
 
             bool isOnboarding = ApplicationData.Current.LocalSettings.Values["HasCompletedOnboarding"] == null;
+            Console.WriteLine($"[DEBUG] ActivateAsync: isOnboarding = {isOnboarding}");
             if (isOnboarding)
             {
+                Console.WriteLine("[DEBUG] ActivateAsync: Navigating to WelcomePage...");
                 // Navigate to onboarding page
                 rootFrame.Navigate(typeof(WelcomePage), null, new SuppressNavigationTransitionInfo());
+                Console.WriteLine("[DEBUG] ActivateAsync: Navigated to WelcomePage.");
             }
             else
             {
+                Console.WriteLine("[DEBUG] ActivateAsync: Navigating to MainPage...");
                 // Navigate to main page
                 rootFrame.Navigate(typeof(MainPage), null, new SuppressNavigationTransitionInfo());
+                Console.WriteLine("[DEBUG] ActivateAsync: Navigated to MainPage.");
             }
         }
     }
@@ -271,14 +312,20 @@ public partial class App : Application
 
     private void Window_Closed(object sender, WindowEventArgs args)
     {
+        Console.WriteLine($"[DEBUG] Window_Closed called! HandleClosedEvents={HandleClosedEvents}");
         if (!HandleClosedEvents)
             return;
 
         if (Ioc.Default.GetService<ISystemTrayService>() is not { IsAvailable: true })
+        {
+            Console.WriteLine("[DEBUG] Window_Closed: SystemTrayService is null or not available!");
             return;
+        }
 
         args.Handled = true;
+#if WINDOWS
         MainWindow.AppWindow.Hide();
+#endif
     }
 
     public static void TrayStartScrcpy()
@@ -292,6 +339,7 @@ public partial class App : Application
     {
         MainWindow.DispatcherQueue.TryEnqueue(() =>
         {
+#if WINDOWS
             var presenter = MainWindow.AppWindow.Presenter as OverlappedPresenter;
             var isMinimized = presenter?.State is OverlappedPresenterState.Minimized;
 
@@ -302,19 +350,24 @@ public partial class App : Application
             }
 
             MainWindow.AppWindow.Hide();
+#else
+            ShowMainWindow();
+#endif
         });
     }
 
     public static void ShowMainWindow()
     {
+#if WINDOWS
         var presenter = MainWindow.AppWindow.Presenter as OverlappedPresenter;
         if (presenter?.State is OverlappedPresenterState.Minimized)
             presenter.Restore();
 
         MainWindow.AppWindow.Show();
         MainWindow.Activate();
-#if WINDOWS
         InteropHelpers.SetForegroundWindow(WindowHandle);
+#else
+        MainWindow.Activate();
 #endif
     }
 

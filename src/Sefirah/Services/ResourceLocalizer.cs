@@ -1,5 +1,9 @@
 using System.Globalization;
+#if WINDOWS
 using Microsoft.Windows.ApplicationModel.Resources;
+#else
+using Windows.ApplicationModel.Resources;
+#endif
 
 namespace Sefirah.Services;
 
@@ -9,7 +13,28 @@ namespace Sefirah.Services;
 /// </summary>
 public sealed class ResourceLocalizer : IStringLocalizer
 {
+#if WINDOWS
     private static readonly ResourceLoader resourceLoader = new();
+#else
+    private static ResourceLoader? resourceLoader;
+    private static bool resourceLoaderFailed;
+    private static ResourceLoader? GetResourceLoader()
+    {
+        if (resourceLoaderFailed) return null;
+        if (resourceLoader is not null) return resourceLoader;
+        try
+        {
+            resourceLoader = ResourceLoader.GetForViewIndependentUse();
+            return resourceLoader;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] ResourceLoader initialization failed: {ex.Message}");
+            resourceLoaderFailed = true;
+            return null;
+        }
+    }
+#endif
 
     public LocalizedString this[string name]
     {
@@ -38,7 +63,13 @@ public sealed class ResourceLocalizer : IStringLocalizer
     {
         try
         {
-            return resourceLoader.GetString(name.Replace('.', '/'));
+            var normalized = name.Replace('.', '/');
+#if WINDOWS
+            return resourceLoader.GetString(normalized);
+#else
+            var loader = GetResourceLoader();
+            return loader?.GetString(normalized) ?? string.Empty;
+#endif
         }
         catch (Exception)
         {

@@ -129,10 +129,17 @@ public partial class DeviceManager(
 
     public async Task Initialize()
     {
-        var pairedDevicesList = await repository.GetPairedDevices();
-        PairedDevices = pairedDevicesList.ToObservableCollection();
-        ActiveDevice = PairedDevices.FirstOrDefault();
-        await contactRepository.LoadContacts();
+        Console.WriteLine("[DEBUG] DeviceManager.Initialize: getting paired devices...");
+        var pairedDevicesList = await repository.GetPairedDevices().ConfigureAwait(false);
+        Console.WriteLine($"[DEBUG] DeviceManager.Initialize: got {pairedDevicesList.Count} paired devices.");
+        await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+        {
+            PairedDevices = pairedDevicesList.ToObservableCollection();
+            ActiveDevice = PairedDevices.FirstOrDefault();
+        });
+        Console.WriteLine("[DEBUG] DeviceManager.Initialize: loading contacts...");
+        await contactRepository.LoadContacts().ConfigureAwait(false);
+        Console.WriteLine("[DEBUG] DeviceManager.Initialize: completed.");
     }
 
     public async Task UpdateDeviceInfo(PairedDevice device, DeviceInfo deviceInfo)

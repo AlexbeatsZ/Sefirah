@@ -34,6 +34,7 @@ public class NetworkService(
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> handshakeCompletion = [];
     private readonly ConcurrentDictionary<string, CancellationTokenSource> connectionCancellationTokens = [];
     private readonly ConcurrentDictionary<string, byte> adbConnectionAttempts = [];
+    private readonly ConcurrentDictionary<Guid, long> lastHeartbeatReplyTicks = [];
     private readonly ConnectionAuthenticationGate connectionAuthenticationGate = new();
     private int heartbeatLoopStarted;
 
@@ -370,6 +371,13 @@ public class NetworkService(
             }
             if (message is ConnectionHeartbeat)
             {
+                var now = Environment.TickCount64;
+                if (lastHeartbeatReplyTicks.TryGetValue(guid, out var last) && now - last < 5000)
+                {
+                    return;
+                }
+                lastHeartbeatReplyTicks[guid] = now;
+
                 // Receiving the dedicated heartbeat already proves that this peer supports it.
                 // Do not depend on the asynchronously applied DeviceInfo capabilities here:
                 // a slow initial feature sync could otherwise suppress every response until the
@@ -624,6 +632,7 @@ public class NetworkService(
         try
         {
             connectionBuffers.TryRemove(session.Id, out _);
+            lastHeartbeatReplyTicks.TryRemove(session.Id, out _);
             authenticationBuffers.Cancel(session.Id);
             session.Disconnect();
             session.Dispose();
@@ -671,6 +680,7 @@ public class NetworkService(
         {
             logger.Debug($"disconnecing client session: {client.Id}");
             connectionBuffers.TryRemove(client.Id, out _);
+            lastHeartbeatReplyTicks.TryRemove(client.Id, out _);
             authenticationBuffers.Cancel(client.Id);
 
             client.Disconnect();

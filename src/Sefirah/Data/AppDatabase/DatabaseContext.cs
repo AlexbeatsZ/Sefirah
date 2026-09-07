@@ -18,13 +18,18 @@ public class DatabaseContext
 
     public DatabaseContext(ILogger<DatabaseContext> logger)
     {
+        Console.WriteLine("[DEBUG] DatabaseContext: constructor starting...");
         try
         {
+            Console.WriteLine("[DEBUG] DatabaseContext: calling logger.Info...");
             logger.Info("Initializing database context");
+            Console.WriteLine("[DEBUG] DatabaseContext: calling TryCreateDatabase...");
             Database = TryCreateDatabase(logger);
+            Console.WriteLine("[DEBUG] DatabaseContext: database created successfully.");
         }
         catch (Exception ex)
         {
+            Console.Error.WriteLine($"[FATAL] DatabaseContext initialization failed: {ex}");
             logger.Error($"Failed to initialize database context", ex);
             throw;
         }
@@ -32,16 +37,25 @@ public class DatabaseContext
 
     private static SQLiteConnection TryCreateDatabase(ILogger logger)
     {
-        var databasePath = Path.Combine(ApplicationData.Current.LocalFolder.Path, Constants.LocalSettings.DatabaseFileName);
+        Console.WriteLine("[DEBUG] TryCreateDatabase: getting LocalFolder.Path...");
+        var localFolderPath = ApplicationData.Current.LocalFolder.Path;
+        Console.WriteLine($"[DEBUG] TryCreateDatabase: LocalFolder.Path = {localFolderPath}");
+        Directory.CreateDirectory(localFolderPath);
+        var databasePath = Path.Combine(localFolderPath, Constants.LocalSettings.DatabaseFileName);
+        Console.WriteLine($"[DEBUG] TryCreateDatabase: databasePath = {databasePath}");
+        Console.WriteLine("[DEBUG] TryCreateDatabase: opening SQLiteConnection...");
         var db = new SQLiteConnection(databasePath)
         {
             BusyTimeout = TimeSpan.FromSeconds(5),
         };
+        Console.WriteLine("[DEBUG] TryCreateDatabase: SQLiteConnection opened. Checking SchemaVersionEntity table info...");
 
         var hasSchemaVersionTable = db.GetTableInfo(nameof(SchemaVersionEntity)).Count > 0;
+        Console.WriteLine($"[DEBUG] TryCreateDatabase: hasSchemaVersionTable = {hasSchemaVersionTable}");
         int? storedSchemaVersion = hasSchemaVersionTable
             ? db.Table<SchemaVersionEntity>().OrderByDescending(v => v.Version).FirstOrDefault()?.Version
             : null;
+        Console.WriteLine($"[DEBUG] TryCreateDatabase: storedSchemaVersion = {storedSchemaVersion}");
 
         // If schema version doesn't match, run migrations when they exist; otherwise destructive fallback
         if (storedSchemaVersion != CurrentSchemaVersion)
@@ -126,17 +140,29 @@ public class DatabaseContext
 
     private static void CreateAllTables(SQLiteConnection db)
     {
+        Console.WriteLine("[DEBUG] CreateAllTables: SchemaVersionEntity...");
         db.CreateTable<SchemaVersionEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: LocalDeviceEntity...");
         db.CreateTable<LocalDeviceEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: PairedDeviceEntity...");
         db.CreateTable<PairedDeviceEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: ApplicationEntity...");
         db.CreateTable<ApplicationEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: ContactEntity...");
         db.CreateTable<ContactEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: PhoneNumberEntity...");
         db.CreateTable<PhoneNumberEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: ConversationEntity...");
         db.CreateTable<ConversationEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: MessageEntity...");
         db.CreateTable<MessageEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: AttachmentEntity...");
         db.CreateTable<AttachmentEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: CallLogEntity...");
         db.CreateTable<CallLogEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: NotificationEntity...");
         db.CreateTable<NotificationEntity>();
+        Console.WriteLine("[DEBUG] CreateAllTables: All tables created.");
     }
 
     public static void DropAllTables(SQLiteConnection db)
