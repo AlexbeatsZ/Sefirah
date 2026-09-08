@@ -122,13 +122,14 @@ public partial class App : Application
             Console.WriteLine("[DEBUG] ActivateAsync: Host started.");
 
             bool isStartupTask = false;
+            var startupOption = StartupOptions.Disabled;
 #if WINDOWS
             var appActivationArguments = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
             isStartupTask = appActivationArguments.Kind == ExtendedActivationKind.StartupTask ||
                             appActivationArguments.Data is IStartupTaskActivatedEventArgs;
 
             var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
-            var startupOption = userSettingsService.GeneralSettingsService.StartupOption;
+            startupOption = userSettingsService.GeneralSettingsService.StartupOption;
             await AppLifecycleHelper.HandleStartupTaskAsync(startupOption != StartupOptions.Disabled);
 
             if (appActivationArguments.Data is ProtocolActivatedEventArgs protocolArgs)

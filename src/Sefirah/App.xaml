@@ -13,10 +13,10 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!--  Keep app-owned glyph icons on the Windows symbol font. Without an explicit -->
-            <!--  font, inherited content fonts can render private-use glyphs as question marks. -->
+            <!--  Keep app-owned glyph icons on the platform symbol font. The theme resource maps -->
+            <!--  to Segoe Fluent Icons on Windows and Uno.Fonts.Fluent on Skia/macOS. -->
             <Style TargetType="FontIcon">
-                <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+                <Setter Property="FontFamily" Value="{StaticResource SymbolThemeFontFamily}" />
             </Style>
 
             <!--  Transparent page background so the Mica/Acrylic backdrop shows through  -->
