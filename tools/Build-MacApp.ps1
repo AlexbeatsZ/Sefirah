@@ -76,7 +76,7 @@ $infoPlist = @"
     <key>CFBundleShortVersionString</key>
     <string>3.1.0</string>
     <key>CFBundleVersion</key>
-    <string>58</string>
+    <string>59</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>
