@@ -36,6 +36,12 @@ public partial class App : Application
         Console.WriteLine("[DEBUG] App constructor starting...");
         InitializeComponent();
         Console.WriteLine("[DEBUG] App InitializeComponent finished.");
+#if !WINDOWS
+        if (OperatingSystem.IsMacOS())
+        {
+            Sefirah.Platforms.Desktop.Mac.MacSymbolFontHelper.RegisterFluentSymbols();
+        }
+#endif
         // Configure exception handlers
         UnhandledException += (sender, e) =>
         {

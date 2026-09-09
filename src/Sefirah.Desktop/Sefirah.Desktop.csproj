@@ -10,7 +10,7 @@
         <ApplicationId>com.castle.sefirah</ApplicationId>
         <!-- Versions -->
         <ApplicationDisplayVersion>3.1.0</ApplicationDisplayVersion>
-        <ApplicationVersion>54</ApplicationVersion>
+        <ApplicationVersion>64</ApplicationVersion>
         <!-- Package Publisher -->
         <ApplicationPublisher>AlexbeatsZ</ApplicationPublisher>
         <!-- Package Description -->
