@@ -109,6 +109,8 @@
                                         HorizontalContentAlignment="Left"
                                         Background="Transparent"
                                         BorderBrush="Transparent"
+                                        Loaded="DeviceButton_Loaded"
+                                        PointerExited="DeviceButton_PointerExited"
                                         Tapped="DeviceButton_Tapped"
                                         Tag="{x:Bind}">
                                         <TextBlock FontSize="14" Text="{x:Bind DisplayText}" />
@@ -140,6 +142,8 @@
                                         HorizontalContentAlignment="Left"
                                         Background="Transparent"
                                         BorderBrush="Transparent"
+                                        Loaded="DeviceButton_Loaded"
+                                        PointerExited="DeviceButton_PointerExited"
                                         Tapped="DeviceButton_Tapped"
                                         Tag="{x:Bind}">
                                         <TextBlock FontSize="14" Text="{x:Bind DisplayName}" />

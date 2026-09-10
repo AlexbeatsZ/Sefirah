@@ -25,6 +25,7 @@ public sealed partial class HeadsetHandoffControl : UserControl
         if (sender is not Button { Tag: HeadsetDeviceItem item } button) return;
 
         var menu = new MenuFlyout();
+        menu.Closed += (_, _) => ResetDeviceButtonVisualState(button);
         menu.Items.Add(CreateEndpointAction(
             "BluetoothSwitchToThisDevice",
             item,
@@ -39,6 +40,27 @@ public sealed partial class HeadsetHandoffControl : UserControl
             Placement = FlyoutPlacementMode.BottomEdgeAlignedRight,
             ShowMode = FlyoutShowMode.Standard,
         });
+    }
+
+    private void DeviceButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+        {
+            ResetDeviceButtonVisualState(button);
+        }
+    }
+
+    private void DeviceButton_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Button button)
+        {
+            ResetDeviceButtonVisualState(button);
+        }
+    }
+
+    private static void ResetDeviceButtonVisualState(Button button)
+    {
+        VisualStateManager.GoToState(button, "Normal", false);
     }
 
     private MenuFlyoutItem CreateEndpointAction(

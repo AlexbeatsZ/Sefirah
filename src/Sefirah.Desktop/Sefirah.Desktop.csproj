@@ -97,7 +97,7 @@
     <!-- Resources, Assets, and Configuration -->
     <ItemGroup>
         <PRIResource Include="..\Sefirah\Strings\**\*.resw"
-                     Link="Strings\%(RecursiveDir)%(Filename)%(Extension)" />
+                     Link="Strings/%(RecursiveDir)%(Filename)%(Extension)" />
         <Content Include="..\Sefirah\Assets\**\*"
                  Link="Assets\%(RecursiveDir)%(Filename)%(Extension)"
                  CopyToOutputDirectory="PreserveNewest" />

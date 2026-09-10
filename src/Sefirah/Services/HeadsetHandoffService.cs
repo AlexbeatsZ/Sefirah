@@ -429,6 +429,38 @@ public sealed class HeadsetHandoffService(
                 var catalog = await GetCatalogAsync(bystanderEndpointId, cancellationToken);
                 if (!catalog.ControllerAvailable || !catalog.RadioEnabled) continue;
 
+                headset.EndpointDeviceKeys.TryGetValue(bystanderEndpointId, out var bystanderDeviceKey);
+                var headsetIsConnected = bystanderDeviceKey is not null && catalog.Devices.Any(device =>
+                    device.DeviceKey.Equals(bystanderDeviceKey, StringComparison.OrdinalIgnoreCase) &&
+                    device.IsConnected);
+                if (BluetoothHandoffFallbackPolicy.ShouldUsePerDeviceBystanderSuppression(
+                        catalog.SupportsPerDeviceControl,
+                        headsetIsConnected))
+                {
+                    if (!await TryPerDeviceActionAsync(
+                            operationId,
+                            headset,
+                            bystanderEndpointId,
+                            "disconnect",
+                            cancellationToken) ||
+                        !await WaitForDisconnectionAsync(
+                            headset,
+                            bystanderEndpointId,
+                            TimeSpan.FromSeconds(8),
+                            cancellationToken))
+                    {
+                        throw new InvalidOperationException(
+                            "Failed to disconnect the headset from a bystander endpoint");
+                    }
+                    continue;
+                }
+
+                if (!BluetoothHandoffFallbackPolicy.ShouldDisableBystanderRadio(
+                        catalog.SupportsPerDeviceControl))
+                {
+                    continue;
+                }
+
                 var result = await ExecuteEndpointCommandAsync(
                     bystanderEndpointId,
                     new BluetoothHandoffCommand

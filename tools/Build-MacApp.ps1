@@ -6,7 +6,8 @@ param(
     [switch]$DeployToMac,
     [string]$MacHost = '100.64.2.94',
     [string]$MacUser = 'meta',
-    [string]$MacDestination = '/Users/meta/Applications'
+    [string]$MacDestination = '/Users/meta/Applications',
+    [string]$CodeSignIdentity = 'Sefirah Local Code Signing'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -81,6 +82,8 @@ $infoPlist = @"
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Sefirah uses Bluetooth to show paired devices and hand off your selected headset between paired devices.</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
 </dict>
@@ -99,6 +102,9 @@ if ($DeployToMac) {
     if ($MacUser -notmatch '^[a-zA-Z0-9._-]+$' -or $MacDestination -ne "/Users/$MacUser/Applications") {
         throw 'Deployment currently supports the target user Applications directory only.'
     }
+    if ($CodeSignIdentity -notmatch '^[a-zA-Z0-9 ._()-]+$') {
+        throw 'The code-signing identity contains unsupported characters.'
+    }
     $remoteWork = '/tmp/.agents/sefirah-deploy-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
     $archive = Join-Path $artifactDirectory 'Sefirah-mac.tar.gz'
     & tar -czf $archive -C $artifactDirectory Sefirah.app
@@ -109,22 +115,30 @@ if ($DeployToMac) {
     if ($LASTEXITCODE -ne 0) { throw 'App upload failed.' }
     & scp (Join-Path $PSScriptRoot 'mac-launcher.c') "${MacUser}@${MacHost}:${remoteWork}/launcher.c"
     if ($LASTEXITCODE -ne 0) { throw 'Launcher upload failed.' }
+    & scp (Join-Path $PSScriptRoot 'mac-bluetooth-helper.m') "${MacUser}@${MacHost}:${remoteWork}/bluetooth-helper.m"
+    if ($LASTEXITCODE -ne 0) { throw 'Bluetooth helper upload failed.' }
     $deployScript = @'
 set -eu
 work='__WORK__'
 destination='__DEST__'
+signing_identity='__SIGNING_IDENTITY__'
 mkdir -p "$work/stage" "$destination"
+security find-identity -v -p codesigning | grep -F -- "\"$signing_identity\"" >/dev/null
 tar -xzf "$work/app.tar.gz" -C "$work/stage"
 test -f "$work/stage/Sefirah.app/Contents/MacOS/Sefirah.Desktop"
 mv "$work/stage/Sefirah.app/Contents/MacOS" "$work/stage/Sefirah.app/Contents/Resources/runtime"
 mkdir "$work/stage/Sefirah.app/Contents/MacOS"
 clang -O2 -Wall -Wextra -Werror -arch __ARCH__ "$work/launcher.c" -o "$work/stage/Sefirah.app/Contents/MacOS/Sefirah.Desktop"
+clang -O2 -Wall -Wextra -Werror -fobjc-arc -arch __ARCH__ -framework Foundation -framework IOBluetooth "$work/bluetooth-helper.m" -o "$work/stage/Sefirah.app/Contents/Resources/runtime/sefirah-bluetooth"
 chmod +x "$work/stage/Sefirah.app/Contents/Resources/runtime/Sefirah.Desktop"
+chmod +x "$work/stage/Sefirah.app/Contents/Resources/runtime/sefirah-bluetooth"
 while IFS= read -r -d '' binary; do
-    if file -b "$binary" | grep -q 'Mach-O'; then codesign --force --sign - "$binary"; fi
+    if file -b "$binary" | grep -q 'Mach-O'; then
+        codesign --force --timestamp=none --sign "$signing_identity" "$binary"
+    fi
 done < <(find "$work/stage/Sefirah.app/Contents/Resources/runtime" -type f -print0)
-codesign --force --sign - "$work/stage/Sefirah.app"
-codesign --verify "$work/stage/Sefirah.app"
+codesign --force --timestamp=none --sign "$signing_identity" "$work/stage/Sefirah.app"
+codesign --verify --deep --strict "$work/stage/Sefirah.app"
 for pid in $(pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop$" || true); do
     kill -TERM "$pid"
 done
@@ -153,7 +167,7 @@ open "$destination/Sefirah.app"
 echo "Installed. Rollback app and state: $work"
 '@
     $macArchitecture = if ($RuntimeIdentifier -eq 'osx-arm64') { 'arm64' } else { 'x86_64' }
-    $deployScript = $deployScript.Replace('__WORK__', $remoteWork).Replace('__DEST__', $MacDestination).Replace('__ARCH__', $macArchitecture).Replace("`r", '')
+    $deployScript = $deployScript.Replace('__WORK__', $remoteWork).Replace('__DEST__', $MacDestination).Replace('__ARCH__', $macArchitecture).Replace('__SIGNING_IDENTITY__', $CodeSignIdentity).Replace("`r", '')
     $deployScript | & ssh -o BatchMode=yes "$MacUser@$MacHost" 'bash -s'
     if ($LASTEXITCODE -ne 0) { throw 'Remote deployment failed; inspect the retained staging/backup directory.' }
     Write-Host 'App installed and launch requested. Verify runtime connectivity separately.' -ForegroundColor Green

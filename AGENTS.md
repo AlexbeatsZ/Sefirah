@@ -49,10 +49,32 @@ Run the smallest relevant regression suite first, then the complete affected Win
 
 ## Current State
 
-The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Windows package `3.1.0.12` uses the Windows symbol font for app-owned glyph icons. The macOS/Skia bundle ships Uno.Fonts.Fluent; its native launcher changes the process working directory to `Contents/Resources/runtime` before `exec`, and startup registers the bundled Symbols face with CoreText at process scope before constructing UI. Windows handles the system close action through cancellable `AppWindow.Closing` so the main window reliably hides to the tray, and reconciles the packaged startup task against `StartupOption` on every launch; the default `InTray` setting therefore starts at login without showing the window. The Windows frontend was rewritten on native WinUI 3 + Windows App SDK 2.4 (Uno Platform removed; the Skia/Linux desktop TFM code stays in `Platforms/Desktop` but is excluded from compilation). The title bar is a window-level control, the app host is a plain `Microsoft.Extensions.Hosting` Generic Host with Serilog, and localization goes through `ResourceLocalizer`/`ResourceString` over the packaged resw map. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The fork has no built-in Store/upstream automatic update check, update toast, or update action; repository and issue links target the AlexbeatsZ forks. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
+The feature branch contains the fork's Bluetooth catalog/handoff, control API, signed packaging, and Cloud Files provider work. Windows package `3.1.0.12` uses the Windows symbol font for app-owned glyph icons. The macOS/Skia bundle ships Uno.Fonts.Fluent; its native launcher changes the process working directory to `Contents/Resources/runtime` before `exec`, and startup registers the bundled Symbols face with CoreText at process scope before constructing UI. Its Bluetooth catalog reads the actual `system_profiler` connected/disconnected groups, treats native `IOBluetooth` per-device control independently from optional `blueutil`, and preserves stable headset rows across periodic refreshes. Windows handles the system close action through cancellable `AppWindow.Closing` so the main window reliably hides to the tray, and reconciles the packaged startup task against `StartupOption` on every launch; the default `InTray` setting therefore starts at login without showing the window. The Windows frontend was rewritten on native WinUI 3 + Windows App SDK 2.4 (Uno Platform removed; the Skia/Linux desktop TFM code stays in `Platforms/Desktop` but is excluded from compilation). The title bar is a window-level control, the app host is a plain `Microsoft.Extensions.Hosting` Generic Host with Serilog, and localization goes through `ResourceLocalizer`/`ResourceString` over the packaged resw map. Bluetooth endpoints whose privileged controller is unavailable remain visible with an actionable persistent error, but their mutating actions are disabled. The fork has no built-in Store/upstream automatic update check, update toast, or update action; repository and issue links target the AlexbeatsZ forks. The branch also carries selected upstream v3.0.1 correctness fixes while retaining the fork's capability-gated mixed-version protocol and deterministic collision policy. Installed versions and physical-device state are volatile; recheck them before deployment or hardware validation. Use Git history and tests for completed implementation evidence rather than adding completed task boards here.
 
 ## Durable Lessons
 
+- macOS `system_profiler` exposes Bluetooth connection state in the singular group names
+  `device_connected` and `device_not_connected`; it does not reliably add a connection field to
+  each device. Keep optional helper discovery separate from native framework availability, or an
+  absent `blueutil` can mask a working `IOBluetooth` fallback.
+- Native `IOBluetooth` access without `NSBluetoothAlwaysUsageDescription` does not produce a
+  catchable managed exception: TCC kills the macOS process. Keep the usage string in every bundle
+  assembly path and validate the packaged `Info.plist` before physical-device tests.
+- Ad-hoc macOS signatures produce a cdhash-based designated requirement that changes on rebuild,
+  causing TCC to treat later builds as a different Bluetooth client. Sign the bundle and nested
+  Mach-O files with the persistent `Sefirah Local Code Signing` identity; the private key remains
+  in the local login keychain and is never committed.
+- `IOBluetoothDevice.closeConnection` can block indefinitely when the device is already
+  disconnected. Read `isConnected` first and treat an already-satisfied connect/disconnect as
+  success before invoking the transition selector. Run the native transition through a bounded
+  signed helper subprocess so a stuck private API cannot consume the app's single control worker
+  indefinitely; JXA/`osascript` does not reliably inherit the parent app's Bluetooth TCC identity.
+- Clearing and repopulating a frequently refreshed collection under Uno/Skia `ItemsRepeater` can
+  recycle a button with stale `PointerOver` state. Reconcile rows by stable device identity and
+  explicitly restore `Normal` on pointer exit, load, and flyout close.
+- Uno's macOS resource generator treats a backslash in a linked PRI resource path as a literal
+  filename character. Use `/` in the `Link` path so local macOS builds generate `Strings/<locale>`
+  instead of `Strings\\<locale>`.
 - Native WinUI 3 close-to-tray must intercept the cancellable `AppWindow.Closing` event and set
   `AppWindowClosingEventArgs.Cancel` before hiding. `Window.Closed` is too late to provide reliable
   caption-button close semantics.

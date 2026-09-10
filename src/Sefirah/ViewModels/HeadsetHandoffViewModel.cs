@@ -180,9 +180,9 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
     private void ReloadSections(IEnumerable<HeadsetConfiguration> configurations)
     {
         latestConfigurations = configurations.ToList();
-        ConnectedDevices.Clear();
-        DisconnectedDevices.Clear();
         VisibilityOptions.Clear();
+        var connectedDevices = new List<HeadsetDeviceItem>();
+        var disconnectedDevices = new List<HeadsetDeviceItem>();
 
         var endpointsById = Endpoints.ToDictionary(item => item.Id, item => item.DisplayName);
         foreach (var device in deviceManager.PairedDevices)
@@ -199,7 +199,7 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
                 var endpointName = endpointsById.GetValueOrDefault(
                     headset.ActiveEndpointId!,
                     headset.ActiveEndpointId!);
-                ConnectedDevices.Add(CreateItem(
+                connectedDevices.Add(CreateItem(
                     headset,
                     headset.ActiveEndpointId,
                     endpointName,
@@ -207,14 +207,34 @@ public sealed partial class HeadsetHandoffViewModel : BaseViewModel
             }
             else
             {
-                DisconnectedDevices.Add(CreateItem(
+                disconnectedDevices.Add(CreateItem(
                     headset,
                     null,
                     null,
                     HeadsetDeviceSection.Disconnected));
             }
         }
+
+        ConnectedDevices.SynchronizeByKey(
+            connectedDevices,
+            item => item.HeadsetId,
+            HeadsetItemsEquivalent,
+            StringComparer.OrdinalIgnoreCase);
+        DisconnectedDevices.SynchronizeByKey(
+            disconnectedDevices,
+            item => item.HeadsetId,
+            HeadsetItemsEquivalent,
+            StringComparer.OrdinalIgnoreCase);
     }
+
+    private static bool HeadsetItemsEquivalent(HeadsetDeviceItem left, HeadsetDeviceItem right) =>
+        left.HeadsetId.Equals(right.HeadsetId, StringComparison.OrdinalIgnoreCase) &&
+        left.DisplayName == right.DisplayName &&
+        left.SourceEndpointId == right.SourceEndpointId &&
+        left.SourceEndpointName == right.SourceEndpointName &&
+        left.EndpointAvailable == right.EndpointAvailable &&
+        left.Section == right.Section &&
+        left.EndpointIds.SequenceEqual(right.EndpointIds, StringComparer.Ordinal);
 
     private bool MatchesFilter(HeadsetConfiguration configuration) =>
         SelectedFilterIndex == 0 || configuration.IsHeadset;
