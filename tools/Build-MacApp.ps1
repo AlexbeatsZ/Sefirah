@@ -19,6 +19,11 @@ $appBundle = Join-Path $artifactDirectory 'Sefirah.app'
 $contentsDir = Join-Path $appBundle 'Contents'
 $macOsDir = Join-Path $contentsDir 'MacOS'
 $resourcesDir = Join-Path $contentsDir 'Resources'
+$macIcon = Join-Path $root 'packaging\macos\AppIcon.icns'
+
+if (-not (Test-Path -LiteralPath $macIcon)) {
+    throw "macOS application icon not found at $macIcon"
+}
 
 Write-Host "Publishing Sefirah.Desktop for $RuntimeIdentifier ($Configuration)..." -ForegroundColor Cyan
 
@@ -54,6 +59,7 @@ if (Test-Path -LiteralPath $appBundle) {
 New-Item -ItemType Directory -Path $macOsDir, $resourcesDir -Force | Out-Null
 
 Copy-Item -Path "$publishDir\*" -Destination $macOsDir -Recurse -Force
+Copy-Item -LiteralPath $macIcon -Destination (Join-Path $resourcesDir 'AppIcon.icns') -Force
 
 $infoPlist = @"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -65,7 +71,7 @@ $infoPlist = @"
     <key>CFBundleExecutable</key>
     <string>Sefirah.Desktop</string>
     <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
+    <string>AppIcon.icns</string>
     <key>CFBundleIdentifier</key>
     <string>com.castle.sefirah</string>
     <key>CFBundleInfoDictionaryVersion</key>
