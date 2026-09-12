@@ -7,7 +7,7 @@ param(
     [string]$MacHost = '100.64.2.94',
     [string]$MacUser = 'meta',
     [string]$MacDestination = '/Users/meta/Applications',
-    [string]$CodeSignIdentity = 'Sefirah Local Code Signing'
+    [string]$CodeSignIdentity = 'Local Development Code Signing'
 )
 
 $ErrorActionPreference = 'Stop'

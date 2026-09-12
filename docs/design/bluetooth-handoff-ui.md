@@ -38,9 +38,11 @@ The Bluetooth page is a device catalog, not a view filtered to one selected peer
 - The app bundle must declare `NSBluetoothAlwaysUsageDescription`. macOS terminates the process at
   the TCC boundary before managed error handling runs when native `IOBluetooth` is accessed without
   that declaration.
-- Sign the app bundle and every nested Mach-O with the persistent `Sefirah Local Code Signing`
-  identity. Ad-hoc signatures use a changing code-directory hash as their designated requirement,
-  so TCC can request Bluetooth permission again after each rebuild.
+- Sign the app bundle and every nested Mach-O with the machine-level persistent identity
+  `Local Development Code Signing` (shared with other local projects; the requirement's
+  `identifier` is per-bundle, so grants never collide). Ad-hoc signatures use a changing
+  code-directory hash as their designated requirement, so TCC can request Bluetooth permission
+  again after each rebuild.
 - Check `IOBluetoothDevice.isConnected` before calling `openConnection` or `closeConnection`.
   Requesting the already-satisfied transition can block indefinitely on current macOS releases;
   keep the native helper in a subprocess with a bounded timeout as an additional safety net.

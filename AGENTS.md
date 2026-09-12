@@ -62,8 +62,11 @@ The feature branch contains the fork's Bluetooth catalog/handoff, control API, s
   assembly path and validate the packaged `Info.plist` before physical-device tests.
 - Ad-hoc macOS signatures produce a cdhash-based designated requirement that changes on rebuild,
   causing TCC to treat later builds as a different Bluetooth client. Sign the bundle and nested
-  Mach-O files with the persistent `Sefirah Local Code Signing` identity; the private key remains
-  in the local login keychain and is never committed.
+  Mach-O files with the machine-level persistent `Local Development Code Signing` identity (shared
+  with other local projects such as `codex-plus`); the private key remains in the local login
+  keychain and is never committed. Sharing one certificate is safe because the requirement's
+  `identifier` is per-bundle, so each app's grants stay independent. Recreating the identity on a
+  new machine: see `~/.agents/knowledge/macos-tcc-permissions.md`.
 - `IOBluetoothDevice.closeConnection` can block indefinitely when the device is already
   disconnected. Read `isConnected` first and treat an already-satisfied connect/disconnect as
   success before invoking the transition selector. Run the native transition through a bounded
