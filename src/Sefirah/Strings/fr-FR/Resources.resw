@@ -190,7 +190,7 @@
     <value>Option de démarrage</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Choisissez le mode de démarrage de l'application au démarrage de Windows</value>
+    <value>Choisissez le mode de démarrage de l’application à l’ouverture de session</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>Démarrer minimisé</value>
@@ -199,7 +199,7 @@
     <value>Démarrer maximisé</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>Démarrer dans la barre d'état système</value>
+    <value>Démarrer en arrière-plan</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>Désactivé</value>

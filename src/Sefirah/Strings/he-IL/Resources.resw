@@ -190,7 +190,7 @@
     <value>סוג הפעלה</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>בחר כיצד האפליקציה תופעל כאשר הWindows עולה</value>
+    <value>בחר כיצד האפליקציה תופעל בעת הכניסה למערכת</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>הפעל במצב ממוזער</value>
@@ -199,7 +199,7 @@
     <value>הפעל במצב חלון מרבי</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>הפעל במגש המערכת</value>
+    <value>הפעל ברקע</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>מושבת</value>

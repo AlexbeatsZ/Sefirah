@@ -20,9 +20,17 @@ $contentsDir = Join-Path $appBundle 'Contents'
 $macOsDir = Join-Path $contentsDir 'MacOS'
 $resourcesDir = Join-Path $contentsDir 'Resources'
 $macIcon = Join-Path $root 'packaging\macos\AppIcon.icns'
+$macLifecycleBridge = Join-Path $PSScriptRoot 'mac-app-lifecycle.m'
+$macLoginLauncher = Join-Path $PSScriptRoot 'mac-login-launcher.m'
+$macLoginLauncherInfoPlist = Join-Path $root 'packaging\macos\SefirahLoginLauncher-Info.plist'
 
 if (-not (Test-Path -LiteralPath $macIcon)) {
     throw "macOS application icon not found at $macIcon"
+}
+foreach ($requiredMacSource in @($macLifecycleBridge, $macLoginLauncher, $macLoginLauncherInfoPlist)) {
+    if (-not (Test-Path -LiteralPath $requiredMacSource)) {
+        throw "macOS lifecycle source not found at $requiredMacSource"
+    }
 }
 
 Write-Host "Publishing Sefirah.Desktop for $RuntimeIdentifier ($Configuration)..." -ForegroundColor Cyan
@@ -123,6 +131,12 @@ if ($DeployToMac) {
     if ($LASTEXITCODE -ne 0) { throw 'Launcher upload failed.' }
     & scp (Join-Path $PSScriptRoot 'mac-bluetooth-helper.m') "${MacUser}@${MacHost}:${remoteWork}/bluetooth-helper.m"
     if ($LASTEXITCODE -ne 0) { throw 'Bluetooth helper upload failed.' }
+    & scp $macLifecycleBridge "${MacUser}@${MacHost}:${remoteWork}/app-lifecycle.m"
+    if ($LASTEXITCODE -ne 0) { throw 'macOS lifecycle bridge upload failed.' }
+    & scp $macLoginLauncher "${MacUser}@${MacHost}:${remoteWork}/login-launcher.m"
+    if ($LASTEXITCODE -ne 0) { throw 'macOS login launcher upload failed.' }
+    & scp $macLoginLauncherInfoPlist "${MacUser}@${MacHost}:${remoteWork}/login-launcher-info.plist"
+    if ($LASTEXITCODE -ne 0) { throw 'macOS login launcher Info.plist upload failed.' }
     $deployScript = @'
 set -eu
 work='__WORK__'
@@ -133,32 +147,36 @@ security find-identity -v -p codesigning | grep -F -- "\"$signing_identity\"" >/
 tar -xzf "$work/app.tar.gz" -C "$work/stage"
 test -f "$work/stage/Sefirah.app/Contents/MacOS/Sefirah.Desktop"
 mv "$work/stage/Sefirah.app/Contents/MacOS" "$work/stage/Sefirah.app/Contents/Resources/runtime"
-mkdir "$work/stage/Sefirah.app/Contents/MacOS"
+mkdir -p "$work/stage/Sefirah.app/Contents/MacOS" "$work/stage/Sefirah.app/Contents/Library/LaunchServices"
 clang -O2 -Wall -Wextra -Werror -arch __ARCH__ "$work/launcher.c" -o "$work/stage/Sefirah.app/Contents/MacOS/Sefirah.Desktop"
 clang -O2 -Wall -Wextra -Werror -fobjc-arc -arch __ARCH__ -framework Foundation -framework IOBluetooth "$work/bluetooth-helper.m" -o "$work/stage/Sefirah.app/Contents/Resources/runtime/sefirah-bluetooth"
+clang -O2 -Wall -Wextra -Werror -fobjc-arc -fblocks -arch __ARCH__ -dynamiclib -framework AppKit -framework ServiceManagement "$work/app-lifecycle.m" -o "$work/stage/Sefirah.app/Contents/Resources/runtime/libSefirahMacLifecycle.dylib"
+clang -O2 -Wall -Wextra -Werror -fobjc-arc -fblocks -arch __ARCH__ -framework AppKit -Wl,-sectcreate,__TEXT,__info_plist,"$work/login-launcher-info.plist" "$work/login-launcher.m" -o "$work/stage/Sefirah.app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 chmod +x "$work/stage/Sefirah.app/Contents/Resources/runtime/Sefirah.Desktop"
 chmod +x "$work/stage/Sefirah.app/Contents/Resources/runtime/sefirah-bluetooth"
+chmod +x "$work/stage/Sefirah.app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 while IFS= read -r -d '' binary; do
     if file -b "$binary" | grep -q 'Mach-O'; then
         codesign --force --timestamp=none --sign "$signing_identity" "$binary"
     fi
 done < <(find "$work/stage/Sefirah.app/Contents/Resources/runtime" -type f -print0)
+codesign --force --timestamp=none --sign "$signing_identity" "$work/stage/Sefirah.app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 codesign --force --timestamp=none --sign "$signing_identity" "$work/stage/Sefirah.app"
 codesign --verify --deep --strict "$work/stage/Sefirah.app"
-for pid in $(pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop$" || true); do
+for pid in $(pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop( |$)" || true); do
     kill -TERM "$pid"
 done
 for attempt in 1 2 3 4 5; do
-    if ! pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop$" >/dev/null; then break; fi
+    if ! pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop( |$)" >/dev/null; then break; fi
     sleep 1
 done
-if pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop$" >/dev/null; then
-    for pid in $(pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop$"); do
+if pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop( |$)" >/dev/null; then
+    for pid in $(pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop( |$)"); do
         kill -KILL "$pid"
     done
     sleep 1
 fi
-if pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop$" >/dev/null; then
+if pgrep -f "^$destination/Sefirah.app/Contents/(MacOS|Resources/runtime)/Sefirah.Desktop( |$)" >/dev/null; then
     echo 'Existing Sefirah process could not be stopped; installation cancelled.' >&2
     exit 1
 fi
@@ -174,7 +192,18 @@ echo "Installed. Rollback app and state: $work"
 '@
     $macArchitecture = if ($RuntimeIdentifier -eq 'osx-arm64') { 'arm64' } else { 'x86_64' }
     $deployScript = $deployScript.Replace('__WORK__', $remoteWork).Replace('__DEST__', $MacDestination).Replace('__ARCH__', $macArchitecture).Replace('__SIGNING_IDENTITY__', $CodeSignIdentity).Replace("`r", '')
-    $deployScript | & ssh -o BatchMode=yes "$MacUser@$MacHost" 'bash -s'
-    if ($LASTEXITCODE -ne 0) { throw 'Remote deployment failed; inspect the retained staging/backup directory.' }
+    $localTempDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Temp\.agents'
+    New-Item -ItemType Directory -Path $localTempDirectory -Force | Out-Null
+    $localDeployScript = Join-Path $localTempDirectory ("sefirah-deploy-{0}.sh" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    try {
+        [System.IO.File]::WriteAllText($localDeployScript, $deployScript, [System.Text.UTF8Encoding]::new($false))
+        & scp $localDeployScript "${MacUser}@${MacHost}:${remoteWork}/deploy.sh"
+        if ($LASTEXITCODE -ne 0) { throw 'Remote deployment script upload failed.' }
+        & ssh -o BatchMode=yes "$MacUser@$MacHost" "bash '$remoteWork/deploy.sh'"
+        if ($LASTEXITCODE -ne 0) { throw 'Remote deployment failed; inspect the retained staging/backup directory.' }
+    }
+    finally {
+        Remove-Item -LiteralPath $localDeployScript -Force -ErrorAction SilentlyContinue
+    }
     Write-Host 'App installed and launch requested. Verify runtime connectivity separately.' -ForegroundColor Green
 }

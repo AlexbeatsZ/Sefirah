@@ -190,7 +190,7 @@
     <value>Startoptionen</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Wählen Sie, wie die App startet, wenn Windows startet</value>
+    <value>Wählen Sie, wie die App bei der Anmeldung startet</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>Minimiert starten</value>
@@ -199,7 +199,7 @@
     <value>Maximiert starten</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>Ins System-tray starten</value>
+    <value>Im Hintergrund starten</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>Deaktiviert</value>

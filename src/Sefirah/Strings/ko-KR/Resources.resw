@@ -190,7 +190,7 @@
     <value>시작 옵션</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>윈도우 부팅 시 앱의 활동 선택</value>
+    <value>로그인할 때 앱이 시작되는 방식을 선택</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>최소화 상태로 시작</value>
@@ -199,7 +199,7 @@
     <value>최대화 상태로 시작</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>작업 표시줄에서 시작</value>
+    <value>백그라운드에서 시작</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>비활성화</value>

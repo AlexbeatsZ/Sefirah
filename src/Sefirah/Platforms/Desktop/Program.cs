@@ -12,6 +12,7 @@ internal class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.SetLaunchArguments(args);
         var stdOut = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
         Console.SetOut(stdOut);
         var stdErr = new StreamWriter(Console.OpenStandardError()) { AutoFlush = true };

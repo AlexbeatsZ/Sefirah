@@ -198,6 +198,14 @@ public static class AppLifecycleHelper
         }
 
         Log.Information("Startup task state: {StartupTaskState}; requested enabled={StartupEnabled}", startupTask.State, enable);
+#else
+        if (OperatingSystem.IsMacOS())
+        {
+            var status = Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ReconcileLaunchAtLogin(enable);
+            Log.Information("macOS login agent status: {LoginAgentStatus}; requested enabled={StartupEnabled}", status, enable);
+        }
+
+        await Task.CompletedTask;
 #endif
     }
 }

@@ -190,7 +190,7 @@
     <value>Параметры запуска</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Выберите, как запускается приложение при загрузке Windows</value>
+    <value>Выберите, как приложение запускается при входе в систему</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>Запускать свернутым</value>
@@ -199,7 +199,7 @@
     <value>В полный экран</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>Запустить в системном трее</value>
+    <value>Запустить в фоновом режиме</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>Выкл</value>

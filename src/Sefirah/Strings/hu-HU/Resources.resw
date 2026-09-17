@@ -190,7 +190,7 @@
     <value>Indítási opciók</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Válassza ki hogyan indul az alkalmazás amikor bejelentkezik</value>
+    <value>Válassza ki, hogyan induljon az alkalmazás bejelentkezéskor</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>Indítás minimalizálva</value>
@@ -199,7 +199,7 @@
     <value>Indítás maximalizálva</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>Indítás tárcában</value>
+    <value>Indítás a háttérben</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>Ki</value>

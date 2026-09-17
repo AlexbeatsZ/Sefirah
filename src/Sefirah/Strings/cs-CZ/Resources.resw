@@ -190,7 +190,7 @@
     <value>Možnost spuštění</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Vyberte, jak se aplikace spustí po startu Windows</value>
+    <value>Zvolte, jak se aplikace spustí po přihlášení</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>Spustit minimalizovaně</value>
@@ -199,7 +199,7 @@
     <value>Spustit maximalizovaně</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>Spustit v oznamovací oblasti</value>
+    <value>Spustit na pozadí</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>Vypnuto</value>

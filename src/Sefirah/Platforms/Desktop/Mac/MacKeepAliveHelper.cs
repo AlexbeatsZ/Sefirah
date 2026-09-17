@@ -25,6 +25,7 @@ public static class MacKeepAliveHelper
     public static void EnsureMacAppKeepsRunning()
     {
         if (!OperatingSystem.IsMacOS()) return;
+        MacAppLifecycleHelper.EnsureReopenHandler();
         try
         {
             SetShouldTerminateCallback(KeepAliveDelegate);

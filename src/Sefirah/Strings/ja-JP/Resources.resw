@@ -190,7 +190,7 @@
     <value>スタートアップ オプション</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Windows の起動時にアプリを開始する方法を選択</value>
+    <value>ログイン時のアプリの起動方法を選択</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>開始時に最小化</value>
@@ -199,7 +199,7 @@
     <value>開始時に最大化</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>開始時にシステム トレイへ収納</value>
+    <value>バックグラウンドで開始</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>無効</value>

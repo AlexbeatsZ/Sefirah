@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using WinRT.Interop;
 using Sefirah.Data.Models;
+using Sefirah.Services;
 using Sefirah.Views.WindowViews;
 
 
@@ -128,19 +129,20 @@ public partial class App : Application
             Console.WriteLine("[DEBUG] ActivateAsync: Host started.");
 
             bool isStartupTask = false;
-            var startupOption = StartupOptions.Disabled;
+            var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
+            var startupOption = userSettingsService.GeneralSettingsService.StartupOption;
 #if WINDOWS
             var appActivationArguments = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
             isStartupTask = appActivationArguments.Kind == ExtendedActivationKind.StartupTask ||
                             appActivationArguments.Data is IStartupTaskActivatedEventArgs;
 
-            var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
-            startupOption = userSettingsService.GeneralSettingsService.StartupOption;
-            await AppLifecycleHelper.HandleStartupTaskAsync(startupOption != StartupOptions.Disabled);
-
             if (appActivationArguments.Data is ProtocolActivatedEventArgs protocolArgs)
                 HandleProtocolActivationArgs(protocolArgs);
+#else
+            isStartupTask = OperatingSystem.IsMacOS() &&
+                            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.IsLoginStartup;
 #endif
+            await AppLifecycleHelper.HandleStartupTaskAsync(startupOption != StartupOptions.Disabled);
             Console.WriteLine("[DEBUG] ActivateAsync: Hooking events & getting tray...");
             HookEventsForWindow();
             _ = Ioc.Default.GetRequiredService<ISystemTrayService>();
@@ -152,43 +154,42 @@ public partial class App : Application
 
             Ioc.Default.GetRequiredService<IAppThemeModeService>().ManageAppearance(MainWindow);
 
-            if (isStartupTask)
+            var initialWindowState = StartupWindowPolicy.Resolve(isStartupTask, startupOption);
+            Serilog.Log.Information(
+                "Initial window state: {InitialWindowState}; login startup={IsLoginStartup}; configured option={StartupOption}",
+                initialWindowState,
+                isStartupTask,
+                startupOption);
+
+            switch (initialWindowState)
             {
-                switch (startupOption)
-                {
-                    case StartupOptions.InTray:
-                        // Don't activate or show the window
-                        break;
-                    case StartupOptions.Minimized:
-                        // Need to show the window first, then minimize it
-                        MainWindow.Activate();
-                        await Task.Delay(200);
-                        OverlappedPresenter overlappedPresenter = (MainWindow.AppWindow.Presenter as OverlappedPresenter) ?? OverlappedPresenter.Create();
-                        if (overlappedPresenter.IsMinimizable)
-                        {
-                            overlappedPresenter.Minimize();
-                        }
-                        break;
-                    case StartupOptions.Maximized:
-                        MainWindow.Activate();
-                        MainWindow.AppWindow.Show();
-                        if (MainWindow.AppWindow.Presenter is OverlappedPresenter maximizedPresenter && maximizedPresenter.IsMaximizable)
-                            maximizedPresenter.Maximize();
-                        break;
-                    default:
-                        MainWindow.Activate();
-                        MainWindow.AppWindow.Show();
-                        break;
-                };
-            }
-            else
-            {
-                MainWindow.Activate();
+                case InitialWindowState.Hidden:
+                    // Build the UI and background services without ordering the native window onscreen.
+                    break;
+                case InitialWindowState.Minimized:
+                    MainWindow.Activate();
+                    await Task.Delay(200);
+                    var minimizedPresenter = (MainWindow.AppWindow.Presenter as OverlappedPresenter) ?? OverlappedPresenter.Create();
+                    if (minimizedPresenter.IsMinimizable)
+                        minimizedPresenter.Minimize();
+                    break;
+                case InitialWindowState.Maximized:
+                    MainWindow.Activate();
+                    MainWindow.AppWindow.Show();
+                    if (MainWindow.AppWindow.Presenter is OverlappedPresenter maximizedPresenter && maximizedPresenter.IsMaximizable)
+                        maximizedPresenter.Maximize();
+                    break;
+                default:
+                    MainWindow.Activate();
 #if WINDOWS
-                // Wait for the Window to initialize
-                await Task.Delay(10);
-                MainWindow.AppWindow.Show();
+                    await Task.Delay(10);
 #endif
+                    MainWindow.AppWindow.Show();
+#if !WINDOWS
+                    if (OperatingSystem.IsMacOS())
+                        Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ShowMainWindow();
+#endif
+                    break;
             }
 
             Console.WriteLine("[DEBUG] ActivateAsync: Navigating splash screen...");
@@ -316,10 +317,12 @@ public partial class App : Application
 #if WINDOWS
         MainWindow.Activated += Window_Activated;
         MainWindow.AppWindow.Closing += MainWindow_Closing;
+#else
+        if (OperatingSystem.IsMacOS())
+            MainWindow.AppWindow.Closing += MainWindow_Closing;
 #endif
     }
 
-#if WINDOWS
     private void MainWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         Console.WriteLine($"[DEBUG] MainWindow_Closing called! HandleClosedEvents={HandleClosedEvents}");
@@ -333,9 +336,13 @@ public partial class App : Application
         }
 
         args.Cancel = true;
+#if WINDOWS
         sender.Hide();
-    }
+#else
+        if (OperatingSystem.IsMacOS())
+            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.HideMainWindow();
 #endif
+    }
 
     public static void TrayStartScrcpy()
     {
@@ -360,6 +367,13 @@ public partial class App : Application
 
             MainWindow.AppWindow.Hide();
 #else
+            if (OperatingSystem.IsMacOS() &&
+                Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.IsMainWindowVisible())
+            {
+                Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.HideMainWindow();
+                return;
+            }
+
             ShowMainWindow();
 #endif
         });
@@ -376,6 +390,19 @@ public partial class App : Application
         MainWindow.Activate();
         InteropHelpers.SetForegroundWindow(WindowHandle);
 #else
+        if (OperatingSystem.IsMacOS())
+        {
+            if (MainWindow.AppWindow.Presenter is OverlappedPresenter presenter &&
+                presenter.State is OverlappedPresenterState.Minimized)
+            {
+                presenter.Restore();
+            }
+
+            MainWindow.Activate();
+            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ShowMainWindow();
+            return;
+        }
+
         MainWindow.Activate();
 #endif
     }

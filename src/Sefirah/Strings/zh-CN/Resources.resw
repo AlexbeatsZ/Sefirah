@@ -190,7 +190,7 @@
     <value>启动项</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>选择本应用在Windows启动时的运行方式</value>
+    <value>选择登录系统时本应用的启动方式</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>最小化</value>
@@ -199,7 +199,7 @@
     <value>最大化</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>系统托盘</value>
+    <value>后台启动</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>禁用</value>

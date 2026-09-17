@@ -190,7 +190,7 @@
     <value>Tuỳ chọn khởi động</value>
   </data>
   <data name="StartupOptionDescription" xml:space="preserve">
-    <value>Chọn cách mà ứng dụng này khởi động khi Windows khởi động</value>
+    <value>Chọn cách ứng dụng khởi động khi bạn đăng nhập</value>
   </data>
   <data name="StartupOptionMinimized.Content" xml:space="preserve">
     <value>Thu nhỏ sau khi khởi động</value>
@@ -199,7 +199,7 @@
     <value>Phóng to sau khi khởi động</value>
   </data>
   <data name="StartupOptionSystemTray.Content" xml:space="preserve">
-    <value>Khởi động ở khay hệ thống</value>
+    <value>Khởi động trong nền</value>
   </data>
   <data name="StartupOptionDisabled.Content" xml:space="preserve">
     <value>Tắt</value>
