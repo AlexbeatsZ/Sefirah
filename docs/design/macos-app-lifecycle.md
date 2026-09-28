@@ -53,7 +53,7 @@ Do not replace this with `Window.Activate()` alone. On macOS that does not relia
 4. sign the runtime Mach-O files, login launcher, and outer application with the same stable certificate;
 5. verify the result with `codesign --verify --deep --strict`.
 
-The installed application path must remain stable because the user LaunchAgent stores the absolute path to the embedded launcher. Startup reconciliation rewrites the plist on each launch so a supported relocation is repaired automatically.
+The default installation path is `/Applications/Sefirah.app`. The installed application path must remain stable because the user LaunchAgent stores the absolute path to the embedded launcher. Startup reconciliation rewrites the plist on each launch so a supported relocation is repaired automatically.
 
 The deployment process match must allow arguments after `Sefirah.Desktop`. Login-started processes carry `--login-startup`; an end-anchored executable-only pattern leaves the old process alive while replacing its bundle and makes the newly installed build appear to be running when it is not.
 

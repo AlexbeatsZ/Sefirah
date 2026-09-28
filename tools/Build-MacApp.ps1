@@ -6,7 +6,7 @@ param(
     [switch]$DeployToMac,
     [string]$MacHost = '100.64.2.94',
     [string]$MacUser = 'meta',
-    [string]$MacDestination = '/Users/meta/Applications',
+    [string]$MacDestination = '/Applications',
     [string]$CodeSignIdentity = 'Local Development Code Signing'
 )
 
@@ -113,8 +113,8 @@ $pkgInfoPath = Join-Path $contentsDir 'PkgInfo'
 Write-Host "Bundle assembled successfully at $appBundle" -ForegroundColor Green
 
 if ($DeployToMac) {
-    if ($MacUser -notmatch '^[a-zA-Z0-9._-]+$' -or $MacDestination -ne "/Users/$MacUser/Applications") {
-        throw 'Deployment currently supports the target user Applications directory only.'
+    if ($MacUser -notmatch '^[a-zA-Z0-9._-]+$' -or $MacDestination -notin @('/Applications', "/Users/$MacUser/Applications")) {
+        throw 'Deployment supports /Applications or the target user Applications directory only.'
     }
     if ($CodeSignIdentity -notmatch '^[a-zA-Z0-9 ._()-]+$') {
         throw 'The code-signing identity contains unsupported characters.'
