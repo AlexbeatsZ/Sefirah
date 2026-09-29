@@ -31,6 +31,8 @@ The local development bundle is signed by the machine-level `Local Development C
 
 The native lifecycle bridge writes the plist atomically and reconciles it through `launchctl bootstrap`, `enable`, and `bootout`. The job runs only the embedded `SefirahLoginLauncher`; it does not run the managed executable directly, which prevents duplicate app instances when registration occurs while Sefirah is already running. If an old main-app login item exists, the bridge removes it after the replacement agent is active.
 
+A separate login item added through System Settings or System Events can still open `Sefirah.app` directly. That launch has no `--login-startup` argument and displays the main window even when the saved option is `InTray`. Check System Events login items when this symptom occurs and remove only the direct Sefirah item; keep the per-user LaunchAgent.
+
 If production later adopts an Apple-issued Development or Developer ID identity with a real Team Identifier, migrating back to `SMAppService` is reasonable, but must be verified against the deployed signature and System Settings state before removing the legacy agent path.
 
 ## Native window ownership
@@ -63,5 +65,6 @@ The deployment process match must allow arguments after `Sefirah.Desktop`. Login
 - publish `Sefirah.Desktop` for `net10.0-desktop/osx-arm64`
 - compile both Objective-C sources with `-Wall -Wextra -Werror`
 - verify the installed LaunchAgent with `launchctl print gui/$(id -u)/com.castle.sefirah.login` and require `last exit code = 0`
+- verify no direct Sefirah item remains in System Events login items
 - launch `SefirahLoginLauncher` and verify the managed command line contains `--login-startup` while the home window remains hidden
 - open the already-running app from Finder or the Dock and verify the actual home window becomes visible after both minimize and close-to-background
