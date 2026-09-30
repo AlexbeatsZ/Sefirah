@@ -10,6 +10,7 @@ using Sefirah.Services;
 using Sefirah.Services.Transfer;
 using Sefirah.Services.Settings;
 using Sefirah.Services.Socket;
+using Sefirah.Utils;
 using Sefirah.ViewModels;
 using Sefirah.ViewModels.Settings;
 using Serilog;
@@ -30,84 +31,74 @@ public static class AppLifecycleHelper
 
     public static async Task InitializeAppComponentsAsync()
     {
-        try
-        {
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving discoveryService...");
-            var discoveryService = Ioc.Default.GetRequiredService<IDiscoveryService>();
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving networkService...");
-            var networkService = Ioc.Default.GetRequiredService<INetworkService>();
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving deviceManager...");
-            var deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving adbService...");
-            var adbService = Ioc.Default.GetRequiredService<IAdbService>();
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Resolving phoneLineService...");
-            var phoneLineService = Ioc.Default.GetRequiredService<IPhoneLineService>();
+        var discoveryService = Ioc.Default.GetRequiredService<IDiscoveryService>();
+        var networkService = Ioc.Default.GetRequiredService<INetworkService>();
+        var deviceManager = Ioc.Default.GetRequiredService<IDeviceManager>();
+        var adbService = Ioc.Default.GetRequiredService<IAdbService>();
+        var updateService = Ioc.Default.GetRequiredService<IUpdateService>();
+        var phoneLineService = Ioc.Default.GetRequiredService<IPhoneLineService>();
 #if WINDOWS
-            var notificationHandler = Ioc.Default.GetRequiredService<IPlatformNotificationHandler>();
-            await notificationHandler.RegisterForNotifications();
-            await Microsoft.Windows.AppNotifications.AppNotificationManager.Default
-                .RemoveByTagAndGroupAsync("app-update", "update");
+        var notificationHandler = Ioc.Default.GetRequiredService<IPlatformNotificationHandler>();
+        await notificationHandler.RegisterForNotifications();
 #endif
 
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Initializing DeviceManager...");
-            await deviceManager.Initialize();
+        await deviceManager.Initialize();
 
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Initializing Features...");
-            await Task.WhenAll(Ioc.Default.GetServices<IFeature>().Select(feature => feature.InitializeAsync()));
+        await Task.WhenAll(Ioc.Default.GetServices<IFeature>().Select(feature => feature.InitializeAsync()));
 
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Starting NetworkService...");
-            await networkService.StartServerAsync();
+        await networkService.StartServerAsync();
+        await discoveryService.StartDiscoveryAsync();
 
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Starting DiscoveryService...");
-            await discoveryService.StartDiscoveryAsync();
-
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Starting Adb and PhoneLine...");
-            _ = Task.WhenAll(
-                adbService.StartAsync(),
-                phoneLineService.InitializeAsync()
-            );
-            Console.WriteLine("[DEBUG] InitializeAppComponentsAsync: Complete.");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[FATAL] InitializeAppComponentsAsync failed: {ex}");
-            throw;
-        }
+        _ = Task.WhenAll(
+            adbService.StartAsync(),
+            updateService.CheckForUpdatesAsync(),
+            phoneLineService.InitializeAsync(),
+            Task.Run(LocalAppPaths.PruneTemporaryFolder)
+        );
     }
 
-    /// <summary>
-    /// Builds the generic host with Serilog logging and all application services.
-    /// </summary>
-    public static IHost BuildHost()
+    public static IApplicationBuilder ConfigureApp(this App app, LaunchActivatedEventArgs args)
     {
-        var builder = Host.CreateApplicationBuilder();
+        return app.CreateBuilder(args)
+            .Configure(host => host
+#if DEBUG
+                // Switch to Development environment when running in DEBUG
+                .UseEnvironment(Environments.Development)
+#endif
+                .UseLogging(configure: (context, logBuilder) =>
+                {
+                    // Configure log levels for different categories of logging
+                    logBuilder
+                        .SetMinimumLevel(
+                            context.HostingEnvironment.IsDevelopment() ?
+                                LogLevel.Debug :
+                                LogLevel.Warning)
 
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .Enrich.FromLogContext()
-            .WriteTo.Console()
-            .WriteTo.File(
-                Path.Combine(ApplicationData.Current.LocalFolder.Path, "Logs", "Log_.log"),
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 7
-            )
-            .CreateLogger();
+                        // Default filters for core Uno Platform namespaces
+                        .CoreLogLevel(LogLevel.Error);
 
-        builder.Logging.ClearProviders();
-        builder.Logging.AddSerilog(dispose: true);
-
-        builder.Services.AddSefirahServices();
-
-        return builder.Build();
-    }
-
-    public static IServiceCollection AddSefirahServices(this IServiceCollection services)
-    {
-        return services
+                }, enableUnoLogging: false)
+                .UseSerilog(
+                    consoleLoggingEnabled: true,
+                    fileLoggingEnabled: true,
+                    configureLogger: config =>
+                    {
+                        config.WriteTo.File(
+                            Path.Combine(ApplicationData.Current.LocalFolder.Path, "Logs", "Log_.log"),
+                            rollingInterval: RollingInterval.Day,
+                            retainedFileCountLimit: 7
+                        );
+                    }
+                )
+                .UseConfiguration(configure: configBuilder =>
+                    configBuilder
+                        .EmbeddedSource<App>()
+                        .Section<AppConfig>()
+                )
+                .UseLocalization()
+                .ConfigureServices((context, services) => services
 
                 .AddSingleton<ILogger>(sp => sp.GetRequiredService<ILogger<App>>())
-
-                .AddSingleton<IStringLocalizer, ResourceLocalizer>()
 
                 // Settings Services
                 .AddSingleton<IUserSettingsService, UserSettingsService>()
@@ -132,12 +123,12 @@ public static class AppLifecycleHelper
                 .AddSingleton<IMdnsService, MdnsService>()
                 .AddSingleton<IDiscoveryService, DiscoveryService>()
                 .AddSingleton<INetworkService, NetworkService>()
-                .AddSingleton<IHeadsetHandoffService, HeadsetHandoffService>()
 
                 .AddFeature<INotificationFeature, NotificationFeature>()
                 .AddFeature<IBatteryAlertFeature, BatteryAlertFeature>()
                 .AddFeature<IClipboardFeature, ClipboardFeature>()
                 .AddFeature<IRemoteMediaFeature, RemoteMediaFeature>()
+                .AddFeature<IPlaySoundFeature, PlaySoundFeature>()
                 .AddFeature<IActionFeature, ActionFeature>()
                 .AddSingleton<IFileTransferService, FileTransferService>()
                 .AddFeature<ISmsFeature, SmsFeature>()
@@ -154,8 +145,8 @@ public static class AppLifecycleHelper
                 .AddSingleton<AppsViewModel>()
                 .AddSingleton<MessagesViewModel>()
                 .AddSingleton<CallsPageViewModel>()
-                .AddSingleton<HeadsetHandoffViewModel>()
-                ;
+                )
+            );
     }
 
     /// <summary>
@@ -163,23 +154,7 @@ public static class AppLifecycleHelper
     /// </summary>
     public static void HandleAppUnhandledException(Exception? ex)
     {
-        ILogger? logger = null;
-        try
-        {
-            logger = Ioc.Default.GetService<ILogger>();
-        }
-        catch (InvalidOperationException)
-        {
-            // The app can fail before the service provider is configured.
-        }
-
-        if (logger is not null)
-        {
-            logger.LogCritical(ex, "Unhandled exception");
-            return;
-        }
-
-        Log.Logger.Fatal(ex, "Unhandled exception before dependency injection was initialized");
+        Ioc.Default.GetService<ILogger>()?.LogCritical("Unhandled exception {ex}", ex);
     }
 
     public static async Task HandleStartupTaskAsync(bool enable)
@@ -192,20 +167,11 @@ public static class AppLifecycleHelper
             if (startupTask.State is StartupTaskState.Disabled)
                 await startupTask.RequestEnableAsync();
         }
-        else if (startupTask.State is StartupTaskState.Enabled)
+        else
         {
-            startupTask.Disable();
+            if (startupTask.State is StartupTaskState.Enabled)
+                startupTask.Disable();
         }
-
-        Log.Information("Startup task state: {StartupTaskState}; requested enabled={StartupEnabled}", startupTask.State, enable);
-#else
-        if (OperatingSystem.IsMacOS())
-        {
-            var status = Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ReconcileLaunchAtLogin(enable);
-            Log.Information("macOS login agent status: {LoginAgentStatus}; requested enabled={StartupEnabled}", status, enable);
-        }
-
-        await Task.CompletedTask;
 #endif
     }
 }

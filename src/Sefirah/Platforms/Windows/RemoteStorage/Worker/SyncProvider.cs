@@ -22,53 +22,34 @@ public class SyncProvider(
     {
         taskQueue.Start(cancellation);
         shellCommandQueue.Start(cancellation);
-        try
+
+        // Hook up callback methods (in this class) for transferring files between client and server
+        using var connectDisposable = new Disposable<CF_CONNECTION_KEY>(syncProvider.Connect(), syncProvider.Disconnect);
+
+        // Create the placeholders in the client folder so the user sees something
+        if (contextAccessor.Context.PopulationPolicy is PopulationPolicy.AlwaysFull)
         {
-            // Hook up callback methods (in this class) for transferring files between client and server
-            using var connectDisposable = new Disposable<CF_CONNECTION_KEY>(syncProvider.Connect(), syncProvider.Disconnect);
-
-            // Create the placeholders in the client folder so the user sees something
-            if (contextAccessor.Context.PopulationPolicy is PopulationPolicy.AlwaysFull)
-            {
-                try
-                {
-                    placeholdersService.CreateBulk(string.Empty);
-                }
-                catch (Exception ex)
-                {
-                    logger.Warn("Initial placeholder population deferred until remote storage reconnects", ex);
-                }
-            }
-
-            // update local placeholders with the remote
-            try
-            {
-                syncProvider.RemoveStalePlaceholders(contextAccessor.Context.RootDirectory);
-            }
-            catch (Exception ex)
-            {
-                logger.Warn("Stale placeholder cleanup deferred until remote storage reconnects", ex);
-            }
-
-            // Stage 2: Running
-            //--------------------------------------------------------------------------------------------
-            // The file watcher loop for this sample will run until the user presses Ctrl-C.
-            // The file watcher will look for any changes on the files in the client (syncroot) in order
-            // to let the cloud know.
-            clientWatcher.Start();
-            var remoteWatcherTask = remoteWatcher.StartAsync(cancellation);
-
-            // Run until SIGTERM
-            await cancellation;
-            await remoteWatcherTask;
+            placeholdersService.CreateBulk(string.Empty);
         }
-        finally
-        {
-            await shellCommandQueue.Stop();
 
-            await taskQueue.Stop();
+        // update local placeholders with the remote
+        syncProvider.RemoveStalePlaceholders(contextAccessor.Context.RootDirectory);
 
-            logger.Debug("Disconnecting...");
-        }
+        // Stage 2: Running
+        //--------------------------------------------------------------------------------------------
+        // The file watcher loop for this sample will run until the user presses Ctrl-C.
+        // The file watcher will look for any changes on the files in the client (syncroot) in order
+        // to let the cloud know.
+        clientWatcher.Start();
+        remoteWatcher.Start(cancellation);
+
+        // Run until SIGTERM
+        await cancellation;
+
+        await shellCommandQueue.Stop();
+
+        await taskQueue.Stop();
+
+        logger.Debug("Disconnecting...");
     }
 }

@@ -21,6 +21,12 @@ public enum MediaActionType
     Shuffle,
     Repeat,
     PlaybackRate,
+    VolumeUpdate
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum AudioActionType
+{
     DefaultDevice,
     VolumeUpdate,
     ToggleMute
@@ -35,15 +41,14 @@ public enum AudioInfoType
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum ActionType
+public enum PowerKind
 {
     Lock,
-    Shutdown,
+    LogOff,
     Sleep,
     Hibernate,
     Restart,
-    Logoff,
-    Custom
+    Shutdown,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

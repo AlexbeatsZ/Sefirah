@@ -9,7 +9,6 @@ public class CallLogRepository(
     ILogger logger)
 {
     public const int MaxCallLogsPerDevice = 200;
-    private readonly CoalescingSerialExecutor<string> saveExecutor = new();
 
     public event EventHandler<(string deviceId, CallLog callLog)>? CallLogUpdated;
 
@@ -43,13 +42,7 @@ public class CallLogRepository(
         }
     }
 
-    public Task SaveCallLogAsync(string deviceId, CallLogInfo log)
-    {
-        var key = CallLogEntity.GetKey(deviceId, log.CallLogId);
-        return saveExecutor.RunAsync(key, () => SaveCallLogCoreAsync(deviceId, log));
-    }
-
-    private async Task SaveCallLogCoreAsync(string deviceId, CallLogInfo log)
+    public async Task SaveCallLogAsync(string deviceId, CallLogInfo log)
     {
         try
         {

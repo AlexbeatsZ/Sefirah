@@ -3,7 +3,10 @@ using Sefirah.Platforms.Windows.Abstractions;
 using Sefirah.Platforms.Windows.RemoteStorage.Commands;
 using Sefirah.Platforms.Windows.RemoteStorage.Sftp;
 using Sefirah.Platforms.Windows.RemoteStorage.Worker;
+using Sefirah.Utils;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Provider;
+using Windows.System;
 
 namespace Sefirah.Platforms.Windows.Features;
 
@@ -11,32 +14,51 @@ public class SftpFeature(
     ILogger logger,
     SyncRootRegistrar registrar,
     SyncProviderPool syncProviderPool,
-    IUserSettingsService userSettingsService) : ISftpFeature
+    IUserSettingsService userSettingsService,
+    ISessionManager sessionManager) : ISftpFeature
 {
     private static readonly string IconDllPath = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "Assets\\Icons", "IconResource.dll"));
 
+    private readonly Dictionary<string, (string Host, SftpServerInfo Info)> _sessions = [];
+
     public Task InitializeAsync()
     {
-        // Keep registered Cloud Files providers alive while a device is offline.
-        // The SFTP watcher owns reconnect attempts, and cached placeholders must
-        // remain browsable even when their remote content cannot be hydrated.
+        sessionManager.ConnectionStatusChanged += OnConnectionStatusChanged;
         return Task.CompletedTask;
     }
 
     private IEnumerable<SyncRootInfo> GetSyncRootsForDevice(string deviceId)
         => registrar.GetSyncRoots().Where(r => r.Id.Contains($"!{deviceId}_"));
 
-    public async Task InitializeAsync(PairedDevice device, SftpServerInfo info)
+    private async void OnConnectionStatusChanged(object? sender, PairedDevice device)
     {
+        if (device.IsConnected) return;
+
+        _sessions.Remove(device.Id);
+
+        try
+        {
+            await StopSyncRoots(GetSyncRootsForDevice(device.Id));
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Error stopping sync roots for device {device.Id}", ex);
+        }
+    }
+
+    public async Task Mount(PairedDevice device, SftpServerInfo info)
+    {
+        if (string.IsNullOrEmpty(device.Address)) return;
+
+        _sessions[device.Id] = (device.Address, info);
+
         if (!device.DeviceSettings.StorageAccess) return;
         if (!StorageProviderSyncRootManager.IsSupported()) return;
 
         try
         {
-            if (string.IsNullOrEmpty(device.Address)) return;
-
-            logger.Info($"Initializing SFTP service, IP: {device.Address}, Port: {info.Port}, Username: {info.Username}");
+            logger.Info($"Mounting SFTP for {device.Name}, IP: {device.Address}, Port: {info.Port}, Username: {info.Username}");
 
             var baseDirectory = userSettingsService.GeneralSettingsService.RemoteStoragePath;
             Directory.CreateDirectory(baseDirectory);
@@ -71,18 +93,94 @@ public class SftpFeature(
         }
         catch (Exception ex)
         {
-            logger.Error("Failed to initialize SFTP service", ex);
+            logger.Error($"Failed to mount SFTP for {device.Name}", ex);
         }
     }
 
-    public async void RemoveAll()
+    public async Task BrowseAsync(PairedDevice device)
     {
+        if (!_sessions.TryGetValue(device.Id, out var session))
+        {
+            return;
+        }
+
+        try
+        {
+            // Prefer the cloud sync folder only while the sync provider is actively running.
+            var syncRoots = GetSyncRootsForDevice(device.Id)
+                .Where(r => syncProviderPool.Has(r.Id))
+                .ToList();
+            if (syncRoots.Count > 0)
+            {
+                var folderPath = syncRoots.Count == 1
+                    ? syncRoots[0].Directory
+                    : Path.Combine(userSettingsService.GeneralSettingsService.RemoteStoragePath, device.Name);
+
+                await Launcher.LaunchFolderPathAsync(folderPath);
+                return;
+            }
+
+            // Fallback when storage sync isn't connected (or never registered).
+            await LaunchSftpUriAsync(session);
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Failed to browse device {device.Name}", ex);
+        }
+    }
+
+    public async Task BrowseUriAsync(PairedDevice device)
+    {
+        if (!_sessions.TryGetValue(device.Id, out var session))
+        {
+            logger.Warn($"No SFTP session available to browse device {device.Name}");
+            return;
+        }
+
+        try
+        {
+            await LaunchSftpUriAsync(session);
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Failed to browse device {device.Name} via SFTP URI", ex);
+        }
+    }
+
+    private static async Task LaunchSftpUriAsync((string Host, SftpServerInfo Info) session)
+    {
+        var path = session.Info.Paths.Count == 1 ? session.Info.Paths[0] : "/";
+        var uri = SftpUriHelper.CreateBrowseUri(
+            session.Host,
+            session.Info.Port,
+            session.Info.Username,
+            session.Info.Password,
+            path);
+
+        var dataPackage = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+        dataPackage.SetText(uri.AbsoluteUri);
+        Clipboard.SetContent(dataPackage);
+
+        if (!await Launcher.LaunchUriAsync(uri))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = uri.AbsoluteUri,
+                UseShellExecute = true
+            });
+        }
+    }
+
+    public async Task RemoveAll()
+    {
+        _sessions.Clear();
         await StopAndUnregister(registrar.GetSyncRoots());
     }
 
-    public Task RemoveAsync(string deviceId)
+    public async void Remove(string deviceId)
     {
-        return StopAndUnregister(GetSyncRootsForDevice(deviceId));
+        _sessions.Remove(deviceId);
+        await StopAndUnregister(GetSyncRootsForDevice(deviceId));
     }
 
     private async Task StopSyncRoots(IEnumerable<SyncRootInfo> syncRoots)
@@ -127,10 +225,7 @@ public class SftpFeature(
             var storageFolder = await StorageFolder.GetFolderFromPathAsync(directory);
             var syncRootInfo = registrar.Register(registerCommand, storageFolder, context);
             if (syncRootInfo is not null)
-            {
-                await syncProviderPool.StartAsync(syncRootInfo);
-                logger.Debug($"Started sync provider for {name} ({accountId})");
-            }
+                syncProviderPool.Start(syncRootInfo);
         }
         catch (Exception ex)
         {

@@ -1,5 +1,6 @@
 using CommunityToolkit.WinUI;
 using Sefirah.Data.Models;
+using Sefirah.Utils;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.System;
@@ -16,11 +17,7 @@ public class ClipboardFeature(
 {
     private readonly DispatcherQueue dispatcher = App.MainWindow.DispatcherQueue;
     private bool isMonitoring = false;
-    private readonly object eventIdLock = new();
-    private readonly HashSet<string> receivedEventIds = [];
-    private readonly Queue<string> receivedEventIdOrder = [];
     private const int DirectTransferThreshold = 2 * 1024 * 1024; // 2MB threshold
-    private const int ReceivedEventIdLimit = 256;
 
     private static readonly Dictionary<string, string> SupportedImageFileTypes = new()
     {
@@ -96,68 +93,7 @@ public class ClipboardFeature(
                 if (devicesWithClipboardSync.Count == 0) return;
 
                 logger.Debug("Sending clipboard content");
-
-                var dataPackageView = Clipboard.GetContent();
-
-                if (dataPackageView.Contains(StandardDataFormats.Text))
-                {
-                    await TryHandleTextContent(dataPackageView, devicesWithClipboardSync);
-                    return;
-                }
-
-                // Check if any device has image clipboard enabled
-                var devicesWithImageSync = devicesWithClipboardSync
-                    .Where(d => d.DeviceSettings.ClipboardIncludeImages)
-                    .ToList();
-
-                if (devicesWithImageSync.Count == 0) return; 
-
-                if (dataPackageView.Contains(StandardDataFormats.StorageItems))
-                {
-                    var storageItems = await dataPackageView.GetStorageItemsAsync();
-                    var file = storageItems.OfType<StorageFile>().FirstOrDefault();
-                    if (file is IStorageFile)
-                    {
-                        var mimeType = file.ContentType;
-                        var fileExtension = file.FileType[1..];
-
-                        // Validate that this is a supported image type and get MIME type
-                        if (!SupportedImageFileTypes.TryGetValue(fileExtension, out var detectedMimeType))
-                            return;
-
-                        // Content type from StorageFile can be unreliable
-                        if (string.IsNullOrEmpty(mimeType))
-                        {
-                            mimeType = detectedMimeType;
-                        }
-
-                        logger.Info($"fileName: {file.Name}, fileExtension: {fileExtension}, Mime type: {mimeType}");
-
-                        if ((long)(await file.GetBasicPropertiesAsync()).Size > DirectTransferThreshold)
-                            await HandleLargeImageTransfer(file, fileExtension, mimeType, devicesWithImageSync);
-                        else
-                            await HandleSmallImageTransfer(await file.OpenStreamForReadAsync(), mimeType, devicesWithImageSync);
-                    }
-                    return;
-                }
-
-                if (dataPackageView.Contains(StandardDataFormats.Bitmap))
-                {
-                    var bitmapRef = await dataPackageView.GetBitmapAsync();  
-                    using var bitmap = await bitmapRef.OpenReadAsync();
-#if WINDOWS
-                    var stream = new MemoryStream();
-                    var decoder = await BitmapDecoder.CreateAsync(bitmap);
-                    var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
-                    var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream.AsRandomAccessStream());
-                    encoder.SetSoftwareBitmap(softwareBitmap);
-                    await encoder.FlushAsync();
-                    stream.Position = 0;
-#else
-                    var stream = bitmap.AsStream();
-#endif
-                    await HandleSmallImageTransfer(stream, "image/png", devicesWithImageSync);
-                }
+                await SendClipboardContentAsync(devicesWithClipboardSync);
             }
             catch (Exception ex)
             {
@@ -165,9 +101,87 @@ public class ClipboardFeature(
             }
         });
     }
+
+    public async void SendToDevice(PairedDevice device)
+    {
+        if (!device.IsConnected) return;
+
+        await dispatcher.EnqueueAsync(async () =>
+        {
+            try
+            {
+                await SendClipboardContentAsync([device]);
+            }
+            catch (Exception ex)
+            {
+                logger.Error("Error sending clipboard content", ex);
+            }
+        });
+    }
+
+    private async Task SendClipboardContentAsync(List<PairedDevice> devices)
+    {
+        var dataPackageView = Clipboard.GetContent();
+        if (dataPackageView.Contains(StandardDataFormats.Text))
+        {
+            await TryHandleTextContent(dataPackageView, devices);
+            return;
+        }
+
+        var devicesWithImageSync = devices
+            .Where(d => d.DeviceSettings.ClipboardIncludeImages)
+            .ToList();
+
+        if (devicesWithImageSync.Count == 0) return;
+
+        if (dataPackageView.Contains(StandardDataFormats.StorageItems))
+        {
+            var storageItems = await dataPackageView.GetStorageItemsAsync();
+            var file = storageItems.OfType<StorageFile>().FirstOrDefault();
+            if (file is IStorageFile)
+            {
+                var mimeType = file.ContentType;
+                var fileExtension = file.FileType[1..];
+
+                // Validate that this is a supported image type and get MIME type
+                if (!SupportedImageFileTypes.TryGetValue(fileExtension, out var detectedMimeType))
+                    return;
+
+                // Content type from StorageFile can be unreliable
+                if (string.IsNullOrEmpty(mimeType))
+                    mimeType = detectedMimeType;
+
+                logger.Info($"fileName: {file.Name}, fileExtension: {fileExtension}, Mime type: {mimeType}");
+
+                if ((long)(await file.GetBasicPropertiesAsync()).Size > DirectTransferThreshold)
+                    await HandleLargeImageTransfer(file, fileExtension, mimeType, devicesWithImageSync);
+                else
+                    await HandleSmallImageTransfer(await file.OpenStreamForReadAsync(), mimeType, devicesWithImageSync);
+            }
+            return;
+        }
+
+        if (dataPackageView.Contains(StandardDataFormats.Bitmap))
+        {
+            var bitmapRef = await dataPackageView.GetBitmapAsync();
+            using var bitmap = await bitmapRef.OpenReadAsync();
+#if WINDOWS
+            var stream = new MemoryStream();
+            var decoder = await BitmapDecoder.CreateAsync(bitmap);
+            var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+            var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream.AsRandomAccessStream());
+            encoder.SetSoftwareBitmap(softwareBitmap);
+            await encoder.FlushAsync();
+            stream.Position = 0;
+#else
+            var stream = bitmap.AsStream();
+#endif
+            await HandleSmallImageTransfer(stream, "image/png", devicesWithImageSync);
+        }
+    }
     
 
-    private async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
+    private static async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
     {
         if (!dataPackageView.Contains(StandardDataFormats.Text)) return;
 
@@ -177,14 +191,7 @@ public class ClipboardFeature(
         // Convert Windows CRLF to Unix LF 
         text = text.Replace("\r\n", "\n");
         
-        var localDevice = await deviceManager.GetLocalDeviceAsync();
-        var message = new ClipboardInfo
-        {
-            Content = text,
-            ClipboardType = "text/plain",
-            EventId = Guid.NewGuid().ToString(),
-            OriginDeviceId = localDevice.DeviceId,
-        };
+        var message = new ClipboardInfo { Content = text, ClipboardType = "text/plain" };
 
         devices.ForEach(d => d.SendMessage(message));
     }
@@ -204,6 +211,24 @@ public class ClipboardFeature(
 
         var message = new ClipboardInfo { Content = Convert.ToBase64String(buffer), ClipboardType = mimeType };
         devices.ForEach(d => d.SendMessage(message));
+    }
+
+    public async Task SetContentAsync(ClipboardInfo clipboard, PairedDevice sourceDevice)
+    {
+        if (clipboard.ClipboardType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            var file = await CreateClipboardImageFileAsync(clipboard.Content, clipboard.ClipboardType);
+            if (file is null)
+            {
+                logger.Error("Failed to decode remote clipboard image");
+                return;
+            }
+
+            await SetContentAsync(file, sourceDevice);
+            return;
+        }
+
+        await SetContentAsync(clipboard.Content, sourceDevice);
     }
 
     public async Task SetContentAsync(object content, PairedDevice sourceDevice)
@@ -267,26 +292,26 @@ public class ClipboardFeature(
         });
     }
 
-    public Task SetContentAsync(ClipboardInfo clipboard, PairedDevice sourceDevice)
+    private static async Task<StorageFile?> CreateClipboardImageFileAsync(string base64Content, string mimeType)
     {
-        if (!TryRegisterEventId(clipboard.EventId)) return Task.CompletedTask;
-        return SetContentAsync(clipboard.Content, sourceDevice);
-    }
-
-    private bool TryRegisterEventId(string? eventId)
-    {
-        if (string.IsNullOrEmpty(eventId)) return true;
-
-        lock (eventIdLock)
+        try
         {
-            if (!receivedEventIds.Add(eventId)) return false;
+            var bytes = Convert.FromBase64String(base64Content);
+            if (bytes.Length == 0) return null;
 
-            receivedEventIdOrder.Enqueue(eventId);
-            while (receivedEventIdOrder.Count > ReceivedEventIdLimit)
-            {
-                receivedEventIds.Remove(receivedEventIdOrder.Dequeue());
-            }
-            return true;
+            var extension = mimeType.Contains('/')
+                ? mimeType[(mimeType.IndexOf('/') + 1)..].Split(';')[0].Trim().ToLowerInvariant()
+                : "png";
+            if (string.IsNullOrWhiteSpace(extension))
+                extension = "png";
+
+            var path = LocalAppPaths.CreateClipboardFilePath(extension);
+            await File.WriteAllBytesAsync(path, bytes);
+            return await StorageFile.GetFileFromPathAsync(path);
+        }
+        catch
+        {
+            return null;
         }
     }
 

@@ -109,9 +109,6 @@
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xF0E3;" />
                     </wuc:SettingsCard.HeaderIcon>
-                    <wuc:SettingsCard.ActionIcon>
-                        <FontIcon FontSize="11" Glyph="&#xE76C;" />
-                    </wuc:SettingsCard.ActionIcon>
                     <wuc:Segmented SelectionMode="Multiple" SelectionChanged="ClipboardSyncSegmented_SelectionChanged" Loaded="ClipboardSyncSegmented_Loaded">
                         <wuc:SegmentedItem AutomationProperties.Name="{helpers:ResourceString Name=ReceiveClipboard}">
                             <wuc:SegmentedItem.Icon>
@@ -133,13 +130,67 @@
                     Header="{helpers:ResourceString Name=NotificationSettings}"
                     IsClickEnabled="True">
                     <wuc:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xF0E3;" />
+                        <FontIcon Glyph="&#xE7E7;" />
                     </wuc:SettingsCard.HeaderIcon>
-                    <wuc:SettingsCard.ActionIcon>
-                        <FontIcon FontSize="11" Glyph="&#xE76C;" />
-                    </wuc:SettingsCard.ActionIcon>
                     <ToggleSwitch IsOn="{x:Bind ViewModel.NotificationSync, Mode=TwoWay}" />
                 </wuc:SettingsCard>
+
+                <!--  Low Battery Alerts  -->
+                <wuc:SettingsExpander
+                    Description="{helpers:ResourceString Name=LowBatteryAlertsDescription}"
+                    Header="{helpers:ResourceString Name=LowBatteryAlerts}">
+                    <wuc:SettingsExpander.HeaderIcon>
+                        <FontIcon Glyph="&#xE850;" />
+                    </wuc:SettingsExpander.HeaderIcon>
+                    <wuc:SettingsExpander.Content>
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.LowBatteryAlertsEnabled, Mode=TwoWay}" />
+                    </wuc:SettingsExpander.Content>
+                    <wuc:SettingsExpander.ItemsHeader>
+                        <StackPanel
+                            Padding="58,16,44,16"
+                            HorizontalAlignment="Stretch"
+                            Background="{ThemeResource ExpanderHeaderBackground}"
+                            BorderBrush="{ThemeResource ExpanderHeaderBorderBrush}"
+                            Spacing="8">
+                            <Slider
+                                HorizontalAlignment="Stretch"
+                                Maximum="50"
+                                Minimum="5"
+                                SmallChange="1"
+                                StepFrequency="1"
+                                TickFrequency="5"
+                                TickPlacement="Outside"
+                                Value="{x:Bind ViewModel.LowBatteryAlertThreshold, Mode=TwoWay}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    Grid.Column="0"
+                                    HorizontalAlignment="Left"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="5%" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                    <Run Text="{x:Bind ViewModel.LowBatteryAlertThreshold, Mode=OneWay}" />
+                                    <Run Text="%" />
+                                </TextBlock>
+                                <TextBlock
+                                    Grid.Column="2"
+                                    HorizontalAlignment="Right"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="50%" />
+                            </Grid>
+                        </StackPanel>
+                    </wuc:SettingsExpander.ItemsHeader>
+                </wuc:SettingsExpander>
 
                 <!--  Screen Mirror Settings  -->
                 <wuc:SettingsCard
@@ -150,9 +201,6 @@
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xEC15;" />
                     </wuc:SettingsCard.HeaderIcon>
-                    <wuc:SettingsCard.ActionIcon>
-                        <FontIcon FontSize="11" Glyph="&#xE76C;" />
-                    </wuc:SettingsCard.ActionIcon>
                 </wuc:SettingsCard>
 
                 <!--  ADB Settings  -->
@@ -164,9 +212,6 @@
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xEC7A;" />
                     </wuc:SettingsCard.HeaderIcon>
-                    <wuc:SettingsCard.ActionIcon>
-                        <FontIcon FontSize="11" Glyph="&#xE76C;" />
-                    </wuc:SettingsCard.ActionIcon>
                 </wuc:SettingsCard>
 
                 <!--  Address Settings  -->
@@ -178,9 +223,6 @@
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xE8F7;" />
                     </wuc:SettingsCard.HeaderIcon>
-                    <wuc:SettingsCard.ActionIcon>
-                        <FontIcon FontSize="11" Glyph="&#xE76C;" />
-                    </wuc:SettingsCard.ActionIcon>
                 </wuc:SettingsCard>
 
 
@@ -199,9 +241,6 @@
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xEA69;" />
                     </wuc:SettingsCard.HeaderIcon>
-                    <wuc:SettingsCard.ActionIcon>
-                        <FontIcon FontSize="11" Glyph="&#xE76C;" />
-                    </wuc:SettingsCard.ActionIcon>
                     <wuc:Segmented SelectionMode="Multiple" SelectionChanged="MediaSessionSyncSegmented_SelectionChanged" Loaded="MediaSessionSyncSegmented_Loaded">
                         <wuc:SegmentedItem AutomationProperties.Name="{helpers:ResourceString Name=ReceiveMediaSessions}">
                             <wuc:SegmentedItem.Icon>

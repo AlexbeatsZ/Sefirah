@@ -57,29 +57,17 @@ public class ContactRepository(DatabaseContext context, ILogger<ContactRepositor
     public Task LoadContacts() =>
         Task.Run(() =>
         {
-            try
-            {
-                Console.WriteLine("[DEBUG] LoadContacts starting query...");
-                const string sql =
-                    "SELECT c.rowid AS RowId, c.Key AS ContactKey, c.DeviceId, c.DisplayName, length(c.Avatar) AS AvatarLen, p.Number " +
-                    "FROM ContactEntity c " +
-                    "INNER JOIN PhoneNumberEntity p ON p.ContactKey = c.Key";
+            const string sql =
+                "SELECT c.rowid AS RowId, c.Key AS ContactKey, c.DeviceId, c.DisplayName, length(c.Avatar) AS AvatarLen, p.Number " +
+                "FROM ContactEntity c " +
+                "INNER JOIN PhoneNumberEntity p ON p.ContactKey = c.Key";
 
-                var query = context.Database.Query<ContactRow>(sql);
-                Console.WriteLine($"[DEBUG] LoadContacts query returned {query.Count} rows.");
-                foreach (var row in query)
-                {
-                    var contact = CreateContact(row.ContactKey, row.Number, row.DisplayName, row.AvatarLen > 0, row.RowId);
-                    var cacheKey = PhoneNumberUtils.Normalize(row.Number);
-                    if (!string.IsNullOrEmpty(cacheKey))
-                        GetOrCreateDeviceCache(row.DeviceId)[cacheKey] = contact;
-                }
-                Console.WriteLine("[DEBUG] LoadContacts finished.");
-            }
-            catch (Exception ex)
+            foreach (var row in context.Database.Query<ContactRow>(sql))
             {
-                Console.Error.WriteLine($"[FATAL] LoadContacts failed: {ex}");
-                throw;
+                var contact = CreateContact(row.ContactKey, row.Number, row.DisplayName, row.AvatarLen > 0, row.RowId);
+                var cacheKey = PhoneNumberUtils.Normalize(row.Number);
+                if (!string.IsNullOrEmpty(cacheKey))
+                    GetOrCreateDeviceCache(row.DeviceId)[cacheKey] = contact;
             }
         });
 

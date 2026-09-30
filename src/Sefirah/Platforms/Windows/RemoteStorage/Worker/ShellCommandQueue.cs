@@ -19,102 +19,83 @@ public sealed partial class ShellCommandQueue(
 {
     private string RootDirectory => contextAccessor.Context.RootDirectory;
     private readonly CancellationTokenSource _disposeTokenSource = new();
-    private CancellationTokenSource? _linkedTokenSource;
     private Task? _runningTask = null;
 
     public void Start(CancellationToken stoppingToken)
     {
-        if (_runningTask is not null)
+        var cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _disposeTokenSource.Token).Token;
+        _runningTask = Task.Factory.StartNew(async () =>
         {
-            throw new InvalidOperationException("Shell command queue is already running.");
-        }
-
-        _linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
-            stoppingToken,
-            _disposeTokenSource.Token);
-        _runningTask = RunAsync(_linkedTokenSource.Token);
-    }
-
-    private async Task RunAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (await taskReader.WaitToReadAsync(cancellationToken))
+            while (!cancellationToken.IsCancellationRequested)
             {
-                while (taskReader.TryRead(out var shellCommand))
+                var shellCommand = await taskReader.ReadAsync(cancellationToken);
+                try
                 {
-                    try
+                    if (!shellCommand.FullPath.StartsWith(RootDirectory, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (!shellCommand.FullPath.StartsWith(RootDirectory, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    }
+
+                    var state = CloudFilter.GetPlaceholderState(shellCommand.FullPath);                    
+                    // Broken upload, state is just "No State"
+                    logger.Info($"placeholder state {state}");
+                    if (state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_NO_STATES ||
+                        state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC ||
+                        state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER)
+                    {
+                        var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
+                        var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
+                        using var locker = await fileLocker.Lock(relativePath);
+                        
+                        if (isDirectory)
                         {
-                            continue;
+                            await placeholderService.CreateOrUpdateDirectory(relativePath);
                         }
-
-                        var state = CloudFilter.GetPlaceholderState(shellCommand.FullPath);
-                        // Broken upload, state is just "No State"
-                        logger.Info($"placeholder state {state}");
-                        if (state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_NO_STATES ||
-                            state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC ||
-                            state is CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER)
+                        else
                         {
-                            var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
-                            var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
-                            using var locker = await fileLocker.Lock(relativePath);
-
-                            if (isDirectory)
-                            {
-                                await placeholderService.CreateOrUpdateDirectory(relativePath);
-                            }
-                            else
-                            {
-                                var fileInfo = new FileInfo(shellCommand.FullPath);
-                                if (remoteService.Exists(relativePath))
-                                {
-                                    await placeholderService.CreateOrUpdateFile(relativePath);
-                                }
-                                else
-                                {
-                                    await remoteService.CreateFile(fileInfo, relativePath);
-                                }
-
-                                // Add explicit sync state setting here
-                                try
-                                {
-                                    if (!CloudFilter.IsPlaceholder(shellCommand.FullPath))
-                                        CloudFilter.ConvertToPlaceholder(shellCommand.FullPath);
-                                    CloudFilter.SetInSyncState(shellCommand.FullPath);
-                                }
-                                catch (Exception ex)
-                                {
-                                    logger.Error($"Failed to set sync state for {shellCommand.FullPath}", ex);
-                                }
-                            }
-                        }
-                        else if (state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK))
-                        {
-                            var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
-                            var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
-                            if (isDirectory)
-                            {
-                                await placeholderService.CreateOrUpdateDirectory(relativePath);
-                            }
-                            else
+                            var fileInfo = new FileInfo(shellCommand.FullPath);
+                            if (remoteService.Exists(relativePath))
                             {
                                 await placeholderService.CreateOrUpdateFile(relativePath);
                             }
+                            else
+                            {
+                                await remoteService.CreateFile(fileInfo, relativePath);
+                            }
+                            
+                            // Add explicit sync state setting here
+                            try
+                            {
+                                if (!CloudFilter.IsPlaceholder(shellCommand.FullPath))
+                                    CloudFilter.ConvertToPlaceholder(shellCommand.FullPath);
+                                CloudFilter.SetInSyncState(shellCommand.FullPath);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.Error($"Failed to set sync state for {shellCommand.FullPath}", ex);
+                            }
                         }
                     }
-                    catch (Exception ex)
+                    else if (state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK))
                     {
-                        logger.Error("Error in handling shell command", ex);
+                        var isDirectory = File.GetAttributes(shellCommand.FullPath).HasFlag(FileAttributes.Directory);
+                        var relativePath = PathMapper.GetRelativePath(shellCommand.FullPath, RootDirectory);
+                        if (isDirectory)
+                        {
+                            await placeholderService.CreateOrUpdateDirectory(relativePath);
+                        }
+                        else
+                        {
+                            await placeholderService.CreateOrUpdateFile(relativePath);
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    logger.Error("Error in handling shell command", ex);
+                }
             }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Expected shutdown.
-        }
+        });
     }
 
     public Task Stop()
@@ -126,7 +107,6 @@ public sealed partial class ShellCommandQueue(
     public void Dispose()
     {
         _disposeTokenSource.Cancel();
-        _linkedTokenSource?.Dispose();
         _disposeTokenSource.Dispose();
     }
 }

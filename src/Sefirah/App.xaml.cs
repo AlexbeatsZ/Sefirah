@@ -10,7 +10,6 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using WinRT.Interop;
 using Sefirah.Data.Models;
-using Sefirah.Services;
 using Sefirah.Views.WindowViews;
 
 
@@ -22,200 +21,122 @@ using Sefirah.Platforms.Windows.Interop;
 namespace Sefirah;
 public partial class App : Application
 {
-    public static TaskCompletionSource? SplashScreenLoadingTCS { get; private set; }
     public static bool HandleClosedEvents { get; set; } = true;
     public static nint WindowHandle { get; private set; }
     public static Window MainWindow { get; private set; } = null!;
     protected IHost? Host { get; private set; }
-    private Frame? _rootFrame;
     
     // Track open DeviceSettingsWindow instances
     private static readonly Dictionary<string, DeviceSettingsWindow> DeviceSettingsWindows = [];
 
     public App()
     {
-        Console.WriteLine("[DEBUG] App constructor starting...");
         InitializeComponent();
-        Console.WriteLine("[DEBUG] App InitializeComponent finished.");
-#if !WINDOWS
-        if (OperatingSystem.IsMacOS())
-        {
-            Sefirah.Platforms.Desktop.Mac.MacSymbolFontHelper.RegisterFluentSymbols();
-        }
-#endif
         // Configure exception handlers
-        UnhandledException += (sender, e) =>
-        {
-            Console.Error.WriteLine($"[FATAL] UnhandledException: {e.Exception}");
-            AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
-        };
-        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
-        {
-            Console.Error.WriteLine($"[FATAL] AppDomain.UnhandledException: {e.ExceptionObject}");
-            AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
-        };
-        TaskScheduler.UnobservedTaskException += (sender, e) =>
-        {
-            Console.Error.WriteLine($"[FATAL] TaskScheduler.UnobservedTaskException: {e.Exception}");
-            AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
-            e.SetObserved();
-        };
-#if !WINDOWS
-        if (OperatingSystem.IsMacOS())
-        {
-            Sefirah.Platforms.Desktop.Mac.MacKeepAliveHelper.EnsureMacAppKeepsRunning();
-        }
-#endif
+        UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Console.WriteLine("[DEBUG] App.OnLaunched entered.");
-        _ = LogStartupFailuresAsync(ActivateAsync());
-
-        async Task LogStartupFailuresAsync(Task activation)
-        {
-            try
-            {
-                Console.WriteLine("[DEBUG] Awaiting ActivateAsync()...");
-                await activation;
-                Console.WriteLine("[DEBUG] ActivateAsync() completed successfully.");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[FATAL] Startup failure: {ex}");
-                Console.Error.Flush();
-                // Fire-and-forget activation failures would otherwise be swallowed
-                // silently, leaving the splash screen visible with no diagnosis.
-                AppLifecycleHelper.HandleAppUnhandledException(ex);
-                try
-                {
-                    if (Host is not null)
-                        await Host.StopAsync();
-                }
-                catch (Exception stopException)
-                {
-                    AppLifecycleHelper.HandleAppUnhandledException(
-                        new AggregateException("Host shutdown failed after app activation failed", ex, stopException));
-                }
-                finally
-                {
-                    Current.Exit();
-                }
-            }
-        }
+        _ = ActivateAsync();
 
         async Task ActivateAsync()
         {
-            Console.WriteLine("[DEBUG] ActivateAsync: Building host...");
-            Host = AppLifecycleHelper.BuildHost();
-            Console.WriteLine("[DEBUG] ActivateAsync: Configuring services...");
-            Ioc.Default.ConfigureServices(Host.Services);
-            Console.WriteLine("[DEBUG] ActivateAsync: Creating MainWindow...");
-            MainWindow = new Window();
+            var builder = this.ConfigureApp(args);
+            MainWindow = builder.Window;
             MainWindow.AppWindow.Title = "Sefirah";
             MainWindow.SetWindowIcon();
+            if (MainWindow.AppWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.PreferredMinimumWidth = 360;
+                presenter.PreferredMinimumHeight = 400;
+            }
 #if WINDOWS
             WindowHandle = WindowNative.GetWindowHandle(MainWindow);
             MainWindow.ExtendsContentIntoTitleBar = true;
-#else
-            if (OperatingSystem.IsMacOS())
-            {
-                Sefirah.Platforms.Desktop.Mac.MacKeepAliveHelper.EnsureMacAppKeepsRunning();
-            }
 #endif
-            Console.WriteLine("[DEBUG] ActivateAsync: Starting host...");
+#if DEBUG
+            MainWindow.UseStudio();
+#endif
+            Host = builder.Build();
+            Ioc.Default.ConfigureServices(Host.Services);
             await Host.StartAsync();
-            Console.WriteLine("[DEBUG] ActivateAsync: Host started.");
 
             bool isStartupTask = false;
-            var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
-            var startupOption = userSettingsService.GeneralSettingsService.StartupOption;
 #if WINDOWS
             var appActivationArguments = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
-            isStartupTask = appActivationArguments.Kind == ExtendedActivationKind.StartupTask ||
-                            appActivationArguments.Data is IStartupTaskActivatedEventArgs;
+            isStartupTask = appActivationArguments.Data is IStartupTaskActivatedEventArgs;
+
+            bool isStartupRegistered = ApplicationData.Current.LocalSettings.Values["isStartupRegistered"] is null;
+            if (isStartupRegistered)
+            {
+                await AppLifecycleHelper.HandleStartupTaskAsync(true);
+                ApplicationData.Current.LocalSettings.Values["isStartupRegistered"] = true;
+            }
 
             if (appActivationArguments.Data is ProtocolActivatedEventArgs protocolArgs)
                 HandleProtocolActivationArgs(protocolArgs);
-#else
-            isStartupTask = OperatingSystem.IsMacOS() &&
-                            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.IsLoginStartup;
 #endif
-            await AppLifecycleHelper.HandleStartupTaskAsync(startupOption != StartupOptions.Disabled);
-            Console.WriteLine("[DEBUG] ActivateAsync: Hooking events & getting tray...");
             HookEventsForWindow();
             _ = Ioc.Default.GetRequiredService<ISystemTrayService>();
 
-            Console.WriteLine("[DEBUG] ActivateAsync: Initializing root frame...");
             var rootFrame = EnsureWindowIsInitialized();
             if (rootFrame is null)
                 return;
 
             Ioc.Default.GetRequiredService<IAppThemeModeService>().ManageAppearance(MainWindow);
 
-            var initialWindowState = StartupWindowPolicy.Resolve(isStartupTask, startupOption);
-            Serilog.Log.Information(
-                "Initial window state: {InitialWindowState}; login startup={IsLoginStartup}; configured option={StartupOption}",
-                initialWindowState,
-                isStartupTask,
-                startupOption);
-
-            switch (initialWindowState)
+            if (isStartupTask)
             {
-                case InitialWindowState.Hidden:
-                    // Build the UI and background services without ordering the native window onscreen.
-                    break;
-                case InitialWindowState.Minimized:
-                    MainWindow.Activate();
-                    await Task.Delay(200);
-                    var minimizedPresenter = (MainWindow.AppWindow.Presenter as OverlappedPresenter) ?? OverlappedPresenter.Create();
-                    if (minimizedPresenter.IsMinimizable)
-                        minimizedPresenter.Minimize();
-                    break;
-                case InitialWindowState.Maximized:
-                    MainWindow.Activate();
-                    MainWindow.AppWindow.Show();
-                    if (MainWindow.AppWindow.Presenter is OverlappedPresenter maximizedPresenter && maximizedPresenter.IsMaximizable)
-                        maximizedPresenter.Maximize();
-                    break;
-                default:
-                    MainWindow.Activate();
-#if WINDOWS
-                    await Task.Delay(10);
-#endif
-                    MainWindow.AppWindow.Show();
-#if !WINDOWS
-                    if (OperatingSystem.IsMacOS())
-                        Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ShowMainWindow();
-#endif
-                    break;
-            }
-
-            Console.WriteLine("[DEBUG] ActivateAsync: Navigating splash screen...");
-            rootFrame.Navigate(typeof(Views.SplashScreen));
-
-            Console.WriteLine("[DEBUG] ActivateAsync: Initializing app components...");
-            await Task.WhenAll(
-                Task.Run(AppLifecycleHelper.InitializeAppComponentsAsync),
-                Task.Delay(500));
-            Console.WriteLine("[DEBUG] ActivateAsync: App components initialized.");
-
-            bool isOnboarding = ApplicationData.Current.LocalSettings.Values["HasCompletedOnboarding"] == null;
-            Console.WriteLine($"[DEBUG] ActivateAsync: isOnboarding = {isOnboarding}");
-            if (isOnboarding)
-            {
-                Console.WriteLine("[DEBUG] ActivateAsync: Navigating to WelcomePage...");
-                // Navigate to onboarding page
-                rootFrame.Navigate(typeof(WelcomePage), null, new SuppressNavigationTransitionInfo());
-                Console.WriteLine("[DEBUG] ActivateAsync: Navigated to WelcomePage.");
+                var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
+                var startupOption = userSettingsService.GeneralSettingsService.StartupOption;
+                switch (startupOption)
+                {
+                    case StartupOptions.InTray:
+                        // Don't activate or show the window
+                        break;
+                    case StartupOptions.Minimized:
+                        // Need to show the window first, then minimize it
+                        MainWindow.Activate();
+                        await Task.Delay(200);
+                        OverlappedPresenter overlappedPresenter = (MainWindow.AppWindow.Presenter as OverlappedPresenter) ?? OverlappedPresenter.Create();
+                        if (overlappedPresenter.IsMinimizable)
+                        {
+                            overlappedPresenter.Minimize();
+                        }
+                        break;
+                    default:
+                        MainWindow.Activate();
+                        MainWindow.AppWindow.Show();
+                        break;
+                };
             }
             else
             {
-                Console.WriteLine("[DEBUG] ActivateAsync: Navigating to MainPage...");
+                MainWindow.Activate();
+                // Wait for the Window to initialize
+                await Task.Delay(10);
+                MainWindow.AppWindow.Show();
+            }
+
+            rootFrame.Navigate(typeof(Views.SplashScreen));
+
+            await Task.WhenAll(
+                AppLifecycleHelper.InitializeAppComponentsAsync(),
+                Task.Delay(500));
+
+            bool isOnboarding = ApplicationData.Current.LocalSettings.Values["HasCompletedOnboarding"] == null;
+            if (isOnboarding)
+            {
+                // Navigate to onboarding page
+                rootFrame.Navigate(typeof(WelcomePage), null, new SuppressNavigationTransitionInfo());
+            }
+            else
+            {
                 // Navigate to main page
                 rootFrame.Navigate(typeof(MainPage), null, new SuppressNavigationTransitionInfo());
-                Console.WriteLine("[DEBUG] ActivateAsync: Navigated to MainPage.");
             }
         }
     }
@@ -223,37 +144,22 @@ public partial class App : Application
     public Frame? EnsureWindowIsInitialized()
     {
         try
+    {
+        //  NOTE:
+        //  Do not repeat app initialization when the Window already has content,
+        //  just ensure that the window is active
+        if (MainWindow.Content is not Frame rootFrame)
         {
-            // Do not rebuild the root content on a later activation.
-            if (_rootFrame is null)
-            {
-                // Create a Frame to act as the navigation context and navigate to the first page
-                var rootFrame = new Frame { CacheSize = 1 };
-                rootFrame.NavigationFailed += OnNavigationFailed;
+            // Create a Frame to act as the navigation context and navigate to the first page
+            rootFrame = new() { CacheSize = 1 };
+            rootFrame.NavigationFailed += OnNavigationFailed;
 
-                // Host the custom title bar at the window level so every page gets
-                // the native caption strip instead of each page drawing its own.
-                var rootGrid = new Grid();
-                rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
-                rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-                var titleBar = new UserControls.TitleBar();
-                Grid.SetRow(titleBar, 0);
-                rootGrid.Children.Add(titleBar);
-
-                Grid.SetRow(rootFrame, 1);
-                rootGrid.Children.Add(rootFrame);
-
-                // Place the frame in the current Window
-                MainWindow.Content = rootGrid;
-#if WINDOWS
-                MainWindow.SetTitleBar(titleBar);
-#endif
-                _rootFrame = rootFrame;
-            }
-
-            return _rootFrame;
+            // Place the frame in the current Window
+            MainWindow.Content = rootFrame;
         }
+
+        return rootFrame;
+    }
 
         catch (COMException)
         {
@@ -316,32 +222,20 @@ public partial class App : Application
     {
 #if WINDOWS
         MainWindow.Activated += Window_Activated;
-        MainWindow.AppWindow.Closing += MainWindow_Closing;
-#else
-        if (OperatingSystem.IsMacOS())
-            MainWindow.AppWindow.Closing += MainWindow_Closing;
 #endif
+        MainWindow.Closed += Window_Closed;
     }
 
-    private void MainWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+    private void Window_Closed(object sender, WindowEventArgs args)
     {
-        Console.WriteLine($"[DEBUG] MainWindow_Closing called! HandleClosedEvents={HandleClosedEvents}");
         if (!HandleClosedEvents)
             return;
 
         if (Ioc.Default.GetService<ISystemTrayService>() is not { IsAvailable: true })
-        {
-            Console.WriteLine("[DEBUG] MainWindow_Closing: System tray is unavailable; allowing the window to close.");
             return;
-        }
 
-        args.Cancel = true;
-#if WINDOWS
-        sender.Hide();
-#else
-        if (OperatingSystem.IsMacOS())
-            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.HideMainWindow();
-#endif
+        args.Handled = true;
+        MainWindow.AppWindow.Hide();
     }
 
     public static void TrayStartScrcpy()
@@ -355,7 +249,6 @@ public partial class App : Application
     {
         MainWindow.DispatcherQueue.TryEnqueue(() =>
         {
-#if WINDOWS
             var presenter = MainWindow.AppWindow.Presenter as OverlappedPresenter;
             var isMinimized = presenter?.State is OverlappedPresenterState.Minimized;
 
@@ -366,44 +259,19 @@ public partial class App : Application
             }
 
             MainWindow.AppWindow.Hide();
-#else
-            if (OperatingSystem.IsMacOS() &&
-                Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.IsMainWindowVisible())
-            {
-                Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.HideMainWindow();
-                return;
-            }
-
-            ShowMainWindow();
-#endif
         });
     }
 
     public static void ShowMainWindow()
     {
-#if WINDOWS
         var presenter = MainWindow.AppWindow.Presenter as OverlappedPresenter;
         if (presenter?.State is OverlappedPresenterState.Minimized)
             presenter.Restore();
 
         MainWindow.AppWindow.Show();
         MainWindow.Activate();
+#if WINDOWS
         InteropHelpers.SetForegroundWindow(WindowHandle);
-#else
-        if (OperatingSystem.IsMacOS())
-        {
-            if (MainWindow.AppWindow.Presenter is OverlappedPresenter presenter &&
-                presenter.State is OverlappedPresenterState.Minimized)
-            {
-                presenter.Restore();
-            }
-
-            MainWindow.Activate();
-            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ShowMainWindow();
-            return;
-        }
-
-        MainWindow.Activate();
 #endif
     }
 
@@ -437,10 +305,7 @@ public partial class App : Application
 #endif
 
     private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
-        => AppLifecycleHelper.HandleAppUnhandledException(
-            new InvalidOperationException(
-                "Failed to load Page " + e.SourcePageType.FullName,
-                e.Exception));
+        => new Exception("Failed to load Page " + e.SourcePageType.FullName);
 
     /// <summary>
     /// Opens DeviceSettingsWindow for the specified device.
@@ -467,5 +332,23 @@ public partial class App : Application
     public static void RemoveDeviceSettingsWindow(string deviceId)
     {
         DeviceSettingsWindows.Remove(deviceId);
+    }
+
+    /// <summary>
+    /// Closes an open DeviceSettingsWindow for the given device, if any.
+    /// </summary>
+    public static void CloseDeviceSettingsWindow(string deviceId)
+    {
+        if (!DeviceSettingsWindows.TryGetValue(deviceId, out var window))
+            return;
+
+        try
+        {
+            window.Close();
+        }
+        catch (Exception)
+        {
+            DeviceSettingsWindows.Remove(deviceId);
+        }
     }
 }

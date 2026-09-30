@@ -51,11 +51,15 @@ public partial class DeviceManager(
 
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
-            if (PairedDevices.Remove(device) && ActiveDevice == device)
-            {
-                ActiveDevice = PairedDevices.FirstOrDefault();
-            }
+            if (ActiveDevice == device)
+                ActiveDevice = PairedDevices.FirstOrDefault(d => d != device);
+
+            device.Wallpaper = null;
         });
+
+        await App.MainWindow.DispatcherQueue.EnqueueAsync(
+            () => PairedDevices.Remove(device),
+            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low);
     }
 
     public async Task UpdateDevice(PairedDevice device)
@@ -129,17 +133,10 @@ public partial class DeviceManager(
 
     public async Task Initialize()
     {
-        Console.WriteLine("[DEBUG] DeviceManager.Initialize: getting paired devices...");
-        var pairedDevicesList = await repository.GetPairedDevices().ConfigureAwait(false);
-        Console.WriteLine($"[DEBUG] DeviceManager.Initialize: got {pairedDevicesList.Count} paired devices.");
-        await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
-        {
-            PairedDevices = pairedDevicesList.ToObservableCollection();
-            ActiveDevice = PairedDevices.FirstOrDefault();
-        });
-        Console.WriteLine("[DEBUG] DeviceManager.Initialize: loading contacts...");
-        await contactRepository.LoadContacts().ConfigureAwait(false);
-        Console.WriteLine("[DEBUG] DeviceManager.Initialize: completed.");
+        var pairedDevicesList = await repository.GetPairedDevices();
+        PairedDevices = pairedDevicesList.ToObservableCollection();
+        ActiveDevice = PairedDevices.FirstOrDefault();
+        await contactRepository.LoadContacts();
     }
 
     public async Task UpdateDeviceInfo(PairedDevice device, DeviceInfo deviceInfo)
@@ -156,7 +153,6 @@ public partial class DeviceManager(
         {
             device.Name = deviceInfo.DeviceName;
             device.PhoneNumbers = deviceInfo.PhoneNumbers;
-            device.Capabilities = deviceInfo.Capabilities.ToHashSet(StringComparer.Ordinal);
             device.Wallpaper = await existingDevice.WallpaperBytes.ToBitmapAsync();
         });
 

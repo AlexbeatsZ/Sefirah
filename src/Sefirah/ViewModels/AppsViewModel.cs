@@ -2,6 +2,7 @@ using CommunityToolkit.WinUI;
 using Sefirah.Data.AppDatabase.Repository;
 using Sefirah.Data.Models;
 using Sefirah.Utils;
+using Uno.Extensions.Specialized;
 
 namespace Sefirah.ViewModels;
 

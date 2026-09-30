@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Sefirah.Dialogs"
     xmlns:vm="using:Sefirah.ViewModels.Dialogs"
+    xmlns:models="using:Sefirah.Data.Models"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -16,10 +17,9 @@
                 <StackLayout Orientation="Vertical" Spacing="12" />
             </ItemsRepeater.Layout>
             <ItemsRepeater.ItemTemplate>
-                <DataTemplate x:DataType="vm:DeviceSelectorOption">
+                <DataTemplate x:DataType="models:PairedDevice">
                     <CheckBox
-                        Content="{x:Bind DisplayName, Mode=OneWay}"
-                        IsChecked="{x:Bind IsSelected, Mode=OneWay}"
+                        Content="{x:Bind Name, Mode=OneWay}"
                         Tag="{x:Bind}"
                         Checked="DeviceCheckBox_Checked"
                         Unchecked="DeviceCheckBox_Unchecked" />

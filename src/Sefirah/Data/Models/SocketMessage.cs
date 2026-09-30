@@ -4,9 +4,11 @@ namespace Sefirah.Data.Models;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(ActionInfo), nameof(ActionInfo))]
+[JsonDerivedType(typeof(ActionList), nameof(ActionList))]
 [JsonDerivedType(typeof(ApplicationInfo), nameof(ApplicationInfo))]
 [JsonDerivedType(typeof(ApplicationList), nameof(ApplicationList))]
 [JsonDerivedType(typeof(Authentication), nameof(Authentication))]
+[JsonDerivedType(typeof(AudioAction), nameof(AudioAction))]
 [JsonDerivedType(typeof(AudioDeviceInfo), nameof(AudioDeviceInfo))]
 [JsonDerivedType(typeof(AudioStreamState), nameof(AudioStreamState))]
 [JsonDerivedType(typeof(BatteryState), nameof(BatteryState))]
@@ -14,8 +16,6 @@ namespace Sefirah.Data.Models;
 [JsonDerivedType(typeof(CallLogInfo), nameof(CallLogInfo))]
 [JsonDerivedType(typeof(ClearNotifications), nameof(ClearNotifications))]
 [JsonDerivedType(typeof(ClipboardInfo), nameof(ClipboardInfo))]
-[JsonDerivedType(typeof(ConnectionAck), nameof(ConnectionAck))]
-[JsonDerivedType(typeof(ConnectionHeartbeat), nameof(ConnectionHeartbeat))]
 [JsonDerivedType(typeof(ContactInfo), nameof(ContactInfo))]
 [JsonDerivedType(typeof(ConversationInfo), nameof(ConversationInfo))]
 [JsonDerivedType(typeof(DeviceInfo), nameof(DeviceInfo))]
@@ -29,18 +29,10 @@ namespace Sefirah.Data.Models;
 [JsonDerivedType(typeof(PairMessage), nameof(PairMessage))]
 [JsonDerivedType(typeof(BluetoothPairingRequest), nameof(BluetoothPairingRequest))]
 [JsonDerivedType(typeof(BluetoothPairingResult), nameof(BluetoothPairingResult))]
-[JsonDerivedType(typeof(BluetoothDeviceCatalogRequest), nameof(BluetoothDeviceCatalogRequest))]
-[JsonDerivedType(typeof(BluetoothDeviceCatalog), nameof(BluetoothDeviceCatalog))]
-[JsonDerivedType(typeof(BluetoothHandoffRequest), nameof(BluetoothHandoffRequest))]
-[JsonDerivedType(typeof(BluetoothDisconnectRequest), nameof(BluetoothDisconnectRequest))]
-[JsonDerivedType(typeof(BluetoothHandoffRefreshRequest), nameof(BluetoothHandoffRefreshRequest))]
-[JsonDerivedType(typeof(BluetoothHeadsetVisibilityRequest), nameof(BluetoothHeadsetVisibilityRequest))]
-[JsonDerivedType(typeof(BluetoothHandoffCommand), nameof(BluetoothHandoffCommand))]
-[JsonDerivedType(typeof(BluetoothHandoffResult), nameof(BluetoothHandoffResult))]
-[JsonDerivedType(typeof(BluetoothHandoffState), nameof(BluetoothHandoffState))]
-[JsonDerivedType(typeof(BluetoothHandoffConfiguration), nameof(BluetoothHandoffConfiguration))]
+[JsonDerivedType(typeof(PlaySound), nameof(PlaySound))]
 [JsonDerivedType(typeof(PlaybackInfo), nameof(PlaybackInfo))]
 [JsonDerivedType(typeof(RequestApplicationList), nameof(RequestApplicationList))]
+[JsonDerivedType(typeof(RequestWorkerLaunch), nameof(RequestWorkerLaunch))]
 [JsonDerivedType(typeof(RingerModeState), nameof(RingerModeState))]
 [JsonDerivedType(typeof(SftpServerInfo), nameof(SftpServerInfo))]
 [JsonDerivedType(typeof(TextMessage), nameof(TextMessage))]
@@ -48,15 +40,16 @@ namespace Sefirah.Data.Models;
 [JsonDerivedType(typeof(UdpBroadcast), nameof(UdpBroadcast))]
 public class SocketMessage;
 
-public class ConnectionAck : SocketMessage;
-
-public class ConnectionHeartbeat : SocketMessage;
-
 public class Disconnect : SocketMessage;
 
 public class ClearNotifications : SocketMessage;
 
 public class RequestApplicationList : SocketMessage;
+
+public class RequestWorkerLaunch : SocketMessage
+{
+    public required string Command { get; set; }
+}
 
 public class Authentication : SocketMessage
 {
@@ -82,107 +75,6 @@ public class BluetoothPairingResult : SocketMessage
     public string? DeviceName { get; set; }
 }
 
-public class BluetoothDeviceCatalogRequest : SocketMessage
-{
-    public required string RequestId { get; set; }
-}
-
-public class BluetoothDeviceCatalog : SocketMessage
-{
-    public required string RequestId { get; set; }
-    public bool ControllerAvailable { get; set; }
-    public bool RadioEnabled { get; set; }
-    public bool SupportsPerDeviceControl { get; set; }
-    public List<BluetoothCatalogDevice> Devices { get; set; } = [];
-    public string? ErrorCode { get; set; }
-    public string? ErrorMessage { get; set; }
-}
-
-public class BluetoothCatalogDevice
-{
-    public required string DeviceKey { get; set; }
-    public required string DisplayName { get; set; }
-    public bool IsConnected { get; set; }
-    public string? BluetoothAddress { get; set; }
-    public bool IsHeadset { get; set; }
-}
-
-public class BluetoothHandoffRequest : SocketMessage
-{
-    public required string OperationId { get; set; }
-    public required string HeadsetId { get; set; }
-    public required string TargetEndpointId { get; set; }
-}
-
-public class BluetoothDisconnectRequest : SocketMessage
-{
-    public required string OperationId { get; set; }
-    public required string HeadsetId { get; set; }
-    public required string EndpointId { get; set; }
-}
-
-public class BluetoothHandoffRefreshRequest : SocketMessage;
-
-public class BluetoothHeadsetVisibilityRequest : SocketMessage
-{
-    public required string HeadsetId { get; set; }
-    public bool IsVisible { get; set; }
-}
-
-public class BluetoothHandoffCommand : SocketMessage
-{
-    public required string OperationId { get; set; }
-    public required string Action { get; set; }
-    public string? DeviceKey { get; set; }
-    public bool? Enabled { get; set; }
-}
-
-public class BluetoothHandoffResult : SocketMessage
-{
-    public required string OperationId { get; set; }
-    public required string Action { get; set; }
-    public bool Success { get; set; }
-    public bool? RadioEnabled { get; set; }
-    public bool? DeviceConnected { get; set; }
-    public string? ErrorCode { get; set; }
-    public string? ErrorMessage { get; set; }
-}
-
-public class BluetoothHandoffState : SocketMessage
-{
-    public required string OperationId { get; set; }
-    public required string HeadsetId { get; set; }
-    public required string Status { get; set; }
-    public string? SourceEndpointId { get; set; }
-    public required string TargetEndpointId { get; set; }
-    public string? ActiveEndpointId { get; set; }
-    public string? Message { get; set; }
-}
-
-public class BluetoothHandoffConfiguration : SocketMessage
-{
-    public List<BluetoothHeadsetDescriptor> Headsets { get; set; } = [];
-    public List<BluetoothEndpointDescriptor> Endpoints { get; set; } = [];
-    public long Revision { get; set; }
-}
-
-public class BluetoothHeadsetDescriptor
-{
-    public required string Id { get; set; }
-    public required string DisplayName { get; set; }
-    public bool IsVisible { get; set; } = true;
-    public bool IsHeadset { get; set; }
-    public string? BluetoothAddress { get; set; }
-    public List<string> EndpointIds { get; set; } = [];
-    public string? ActiveEndpointId { get; set; }
-}
-
-public class BluetoothEndpointDescriptor
-{
-    public required string Id { get; set; }
-    public required string DisplayName { get; set; }
-}
-
 public class UdpBroadcast : SocketMessage
 {
     public int Port { get; set; }
@@ -199,8 +91,6 @@ public class DeviceInfo : SocketMessage
     public string? Avatar { get; set; } = null;
 
     public List<PhoneNumber> PhoneNumbers { get; set; } = [];
-
-    public List<string> Capabilities { get; set; } = [];
 }
 
 public class BatteryState : SocketMessage
@@ -410,10 +300,6 @@ public class ClipboardInfo : SocketMessage
     public required string ClipboardType { get; set; }
 
     public required string Content { get; set; }
-
-    public string? EventId { get; set; }
-
-    public string? OriginDeviceId { get; set; }
 }
 
 public class PlaybackInfo : SocketMessage
@@ -466,6 +352,20 @@ public class MediaAction : SocketMessage
     public double? Value { get; set; }
 }
 
+public class AudioAction : SocketMessage
+{
+    public AudioActionType ActionType { get; set; }
+
+    public required string Source { get; set; }
+
+    public double? Value { get; set; }
+}
+
+public class PlaySound : SocketMessage
+{
+    public bool IsPlaying { get; set; }
+}
+
 public class ApplicationList : SocketMessage
 {
     public required List<ApplicationInfo> AppList { get; set; }
@@ -485,4 +385,13 @@ public class ActionInfo : SocketMessage
     public required string ActionId { get; set; }
 
     public required string ActionName { get; set; }
+
+    public string? Icon { get; set; }
+
+    public bool AskForConfirmation { get; set; }
+}
+
+public class ActionList : SocketMessage
+{
+    public List<ActionInfo> Actions { get; set; } = [];
 }

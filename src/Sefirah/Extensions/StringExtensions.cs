@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 namespace Sefirah.Extensions;
 
 /// <summary>
@@ -7,9 +5,7 @@ namespace Sefirah.Extensions;
 /// </summary>
 public static class StringExtensions
 {
-    private static IStringLocalizer? _stringLocalizer;
-    private static IStringLocalizer? StringLocalizer =>
-        _stringLocalizer ??= Ioc.Default?.GetService<IStringLocalizer>();
+    private static readonly IStringLocalizer stringLocalizer = Ioc.Default.GetRequiredService<IStringLocalizer>();
 
     /// <summary>
     /// Retrieves a localized resource string from the resource map.
@@ -20,18 +16,11 @@ public static class StringExtensions
     {
         try
         {
-            var localizer = StringLocalizer;
-            if (localizer is not null)
-            {
-                var localized = localizer[resourceKey];
-                if (!string.IsNullOrEmpty(localized?.Value))
-                    return localized.Value;
-            }
+            return stringLocalizer[resourceKey] ?? string.Empty;
         }
-        catch
+        catch (Exception)
         {
-            // fallback to key
+            return resourceKey;
         }
-        return resourceKey;
     }
 }

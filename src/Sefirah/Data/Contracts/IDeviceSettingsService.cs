@@ -1,3 +1,5 @@
+using Sefirah.Data.Models;
+
 namespace Sefirah.Data.Contracts;
 
 public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyChanged
@@ -108,6 +110,11 @@ public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyC
     bool PhysicalKeyboard { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether scrcpy's --clipboard-autosync flag is enabled.
+    /// </summary>
+    bool ScrcpyClipboardAutosync { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether to unlock the device before launching scrcpy.
     /// </summary>
     bool UnlockDeviceBeforeLaunch { get; set; }
@@ -150,7 +157,7 @@ public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyC
     /// <summary>
     /// Gets or sets the unlock commands.
     /// </summary>
-    string? UnlockCommands { get; set; }
+    List<UnlockCommandEntry> UnlockCommands { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to disable video forwarding.
@@ -251,11 +258,6 @@ public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyC
     /// Gets or sets a value indicating whether to sync audio device information and controls.
     /// </summary>
     bool AudioSync { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to enable TCP/IP mode for ADB.
-    /// </summary>
-    bool AdbTcpipModeEnabled { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to automatically connect via ADB.

@@ -12,14 +12,14 @@ public partial class SyncProviderWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await ConnectAll();
+        ConnectAll();
 
         await stoppingToken;
 
         await pool.StopAll();
     }
 
-    private async Task ConnectAll()
+    private void ConnectAll()
     {
         var syncRootsInfos = StorageProviderSyncRootManager.GetCurrentSyncRoots()
             .Where(x => x.Id.StartsWith($"{providerOptions.Value.ProviderId}!"))
@@ -32,7 +32,7 @@ public partial class SyncProviderWorker(
                 continue;
             }
 
-            await pool.StartAsync(syncRootInfo);
+            pool.Start(syncRootInfo);
         }
     }
 }

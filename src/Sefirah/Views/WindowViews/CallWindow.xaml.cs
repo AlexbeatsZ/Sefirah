@@ -1,8 +1,4 @@
 using Microsoft.UI.Windowing;
-#if WINDOWS
-using Sefirah.Platforms.Windows.Helpers;
-#endif
-using Sefirah.Helpers;
 using Sefirah.UserControls;
 using Sefirah.ViewModels;
 using Windows.Graphics;
@@ -22,7 +18,7 @@ public sealed partial class CallWindow : Window
         InitializeComponent();
         Content = new CallView(ViewModel);
 
-        Title = "CallWindowTitle".GetLocalizedResource();
+        Title = "Call window";
         this.SetWindowIcon();
 
         var overlapped = (AppWindow.Presenter as OverlappedPresenter) ?? OverlappedPresenter.Create();

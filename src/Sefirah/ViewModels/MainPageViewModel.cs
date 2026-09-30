@@ -12,17 +12,37 @@ public sealed partial class MainPageViewModel : BaseViewModel
     private INotificationFeature NotificationFeature { get; } = Ioc.Default.GetRequiredService<INotificationFeature>();
     private RemoteAppRepository RemoteAppsRepository { get; } = Ioc.Default.GetRequiredService<RemoteAppRepository>();
     private ISessionManager SessionManager { get; } = Ioc.Default.GetRequiredService<ISessionManager>();
+    private IUpdateService UpdateService { get; } = Ioc.Default.GetRequiredService<IUpdateService>();
     private IFileTransferService FileTransferService { get; } = Ioc.Default.GetRequiredService<IFileTransferService>();
     private IAdbService AdbService { get; } = Ioc.Default.GetRequiredService<IAdbService>();
+    private IClipboardFeature ClipboardFeature { get; } = Ioc.Default.GetRequiredService<IClipboardFeature>();
+    private ISftpFeature SftpFeature { get; } = Ioc.Default.GetRequiredService<ISftpFeature>();
+    private IPlaySoundFeature PlaySoundFeature { get; } = Ioc.Default.GetRequiredService<IPlaySoundFeature>();
     #endregion
 
     #region Properties
     public ObservableCollection<PairedDevice> PairedDevices => DeviceManager.PairedDevices;
 
-    public PairedDevice? Device => DeviceManager.ActiveDevice;
+    public PairedDevice? Device
+    {
+        get => DeviceManager.ActiveDevice;
+        set
+        {
+            if (value is not null)
+                DeviceManager.ActiveDevice = value;
+        }
+    }
 
     [ObservableProperty]
     public partial bool LoadingScrcpy { get; set; } = false;
+
+    private bool _isUpdateAvailable;
+    public bool IsUpdateAvailable { get => _isUpdateAvailable; set => SetProperty(ref _isUpdateAvailable, value); }
+
+    private bool _isUpdating;
+    public bool IsUpdating { get => _isUpdating; set => SetProperty(ref _isUpdating, value); }
+
+    public bool IsUpdateAvailableOrUpdating => IsUpdateAvailable || IsUpdating;
 
     /// <summary>
     /// Active device's notifications
@@ -104,6 +124,12 @@ public sealed partial class MainPageViewModel : BaseViewModel
     }
 
     [RelayCommand]
+    public void Update()
+    {
+        UpdateService.DownloadUpdatesAsync();
+    }
+
+    [RelayCommand]
     public void RemoveNotification(Notification notification)
     {
         NotificationFeature.RemoveNotification(Device!, notification);
@@ -116,9 +142,12 @@ public sealed partial class MainPageViewModel : BaseViewModel
     }
 
     [RelayCommand]
-    public void OpenDeviceSettings()
+    public void TogglePlaySound()
     {
-        App.OpenDeviceSettingsWindow(Device!);
+        if (Device is null)
+            return;
+
+        PlaySoundFeature.Toggle(Device);
     }
 
     #endregion
@@ -181,6 +210,30 @@ public sealed partial class MainPageViewModel : BaseViewModel
         FileTransferService.SendFilesWithPicker(storageItems);
     }
 
+    public void SendClipboard()
+    {
+        if (Device is null)
+            return;
+
+        ClipboardFeature.SendToDevice(Device);
+    }
+
+    public async Task BrowseFiles()
+    {
+        if (Device is null || !Device.IsConnected)
+            return;
+
+        await SftpFeature.BrowseAsync(Device);
+    }
+
+    public async Task BrowseFilesViaUri()
+    {
+        if (Device is null || !Device.IsConnected)
+            return;
+
+        await SftpFeature.BrowseUriAsync(Device);
+    }
+
     public void HandleNotificationReply(Notification notification, string replyText)
     {
         NotificationFeature.ProcessReplyAction(Device!, notification.Key, notification.ReplyResultKey!, replyText);
@@ -220,5 +273,17 @@ public sealed partial class MainPageViewModel : BaseViewModel
     public MainPageViewModel()
     {
         DeviceManager.ActiveDeviceChanged += (_, _) => OnPropertyChanged(nameof(Device));
+
+        IsUpdateAvailable = UpdateService.IsUpdateAvailable;
+        IsUpdating = UpdateService.IsUpdating;
+
+        UpdateService.PropertyChanged += UpdateService_OnPropertyChanged;
+    }
+
+    private void UpdateService_OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        IsUpdateAvailable = UpdateService.IsUpdateAvailable;
+        IsUpdating = UpdateService.IsUpdating;
+        OnPropertyChanged(nameof(IsUpdateAvailableOrUpdating));
     }
 }

@@ -22,6 +22,7 @@ public static class Constants
         public const string FileTransfer = "FileTransfer";
         public const string RemoteNotification = "RemoteNotification";
         public const string Clipboard = "Clipboard";
+        public const string Update = "Update";
         public const string IncomingPhoneCall = "IncomingPhoneCall";
     }
     public static class LocalSettings
@@ -36,13 +37,14 @@ public static class Constants
 
     public static class ExternalUrl
     {
-        public const string AndroidGitHubRepoUrl = @"https://github.com/AlexbeatsZ/Sefirah-Android";
-        public const string GitHubRepoUrl = @"https://github.com/AlexbeatsZ/Sefirah";
+        public const string ReleasesUrl = @"https://github.com/shrimqy/Sefirah/releases/latest";
+        public const string AndroidGitHubRepoUrl = @"https://github.com/shrimqy/Sefirah-Android";
+        public const string GitHubRepoUrl = @"https://github.com/shrimqy/Sefirah";
         public const string DiscordUrl = @"https://discord.gg/MuvMqv4MES";
-        public const string FeatureRequestUrl = @"https://github.com/AlexbeatsZ/Sefirah/issues/new?template=request_feature.yml";
-        public const string BugReportUrl = @"https://github.com/AlexbeatsZ/Sefirah/issues/new?template=report_issue.yml";
-        public const string PrivacyPolicyUrl = @"https://github.com/AlexbeatsZ/Sefirah/blob/master/.github/Privacy.md";
-        public const string LicenseUrl = @"https://github.com/AlexbeatsZ/Sefirah/blob/master/LICENSE";
+        public const string FeatureRequestUrl = @"https://github.com/shrimqy/Sefirah/issues/new?template=request_feature.yml";
+        public const string BugReportUrl = @"https://github.com/shrimqy/Sefirah/issues/new?template=report_issue.yml";
+        public const string PrivacyPolicyUrl = @"https://github.com/shrimqy/Sefirah/blob/master/.github/Privacy.md";
+        public const string LicenseUrl = @"https://github.com/shrimqy/Sefirah/blob/master/LICENSE";
         public const string DonateUrl = @"https://linktr.ee/shrimqy";
     }
 

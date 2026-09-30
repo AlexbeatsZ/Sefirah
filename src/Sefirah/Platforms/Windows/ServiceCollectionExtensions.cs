@@ -3,7 +3,6 @@ using Microsoft.Extensions.Configuration;
 using Renci.SshNet;
 using Sefirah.Platforms.Windows.Bluetooth;
 using Sefirah.Platforms.Windows.Calling;
-using Sefirah.Platforms.Windows.Control;
 using Sefirah.Platforms.Windows.Features;
 using Sefirah.Platforms.Windows.RemoteStorage.Abstractions;
 using Sefirah.Platforms.Windows.RemoteStorage.Configuration;
@@ -28,8 +27,10 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IPlatformNotificationHandler, NotificationHandler>();
         services.AddFeature<IMediaFeature, MediaFeature>();
+        services.AddFeature<IAudioFeature, AudioFeature>();
         services.AddFeature<IBatteryFeature, BatteryFeature>();
         services.AddFeature<ISftpFeature, SftpFeature>();
+        services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<IAppShortcutService, AppShortcutService>();
         services.AddSingleton<ISystemTrayService, SystemTrayService>();
 
@@ -41,12 +42,10 @@ public static class ServiceCollectionExtensions
         services.AddCommonClassObjects();
         services.AddSingleton<ShellRegistrar>();
         services.AddHostedService<ShellWorker>();
-        services.AddHostedService<ControlApiWorker>();
 
         services.AddSingleton<SyncProviderWorker>();
         services.AddSingleton<IPhoneLineService, PhoneLineService>();
         services.AddSingleton<BluetoothRadioManager>();
-        services.AddSingleton<ILocalBluetoothController, LocalBluetoothController>();
         services.AddSingleton<IBluetoothPairingService, BluetoothPairingService>();
         services.AddSingleton<BluetoothPairingService>(sp => (BluetoothPairingService)sp.GetRequiredService<IBluetoothPairingService>());
         return services;

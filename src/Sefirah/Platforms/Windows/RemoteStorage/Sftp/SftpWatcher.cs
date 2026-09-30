@@ -27,7 +27,7 @@ public sealed partial class SftpWatcher(
     public event RemoteRenameHandler? Renamed;
     public event RemoteDeleteHandler? Deleted;
     
-    public async Task StartAsync(CancellationToken stoppingToken = default)
+    public async void Start(CancellationToken stoppingToken = default)
     {
         ObjectDisposedException.ThrowIf(_cancellationTokenSource.IsCancellationRequested, this);
         if (_running)
@@ -60,19 +60,13 @@ public sealed partial class SftpWatcher(
                         var removedFiles = _knownFiles.Keys.Except(foundFiles.Keys).ToArray();
                         foreach (var removedFile in removedFiles)
                         {
-                            if (Deleted is not null)
-                            {
-                                await Deleted(removedFile);
-                            }
+                            Deleted?.Invoke(removedFile);
                         }
 
                         var addedFiles = foundFiles.Keys.Except(_knownFiles.Keys).ToArray();
                         foreach (var addedFile in addedFiles)
                         {
-                            if (Created is not null)
-                            {
-                                await Created(addedFile);
-                            }
+                            Created?.Invoke(addedFile);
                         }
 
                         var updatedFiles = foundFiles
@@ -81,10 +75,7 @@ public sealed partial class SftpWatcher(
                             .ToArray();
                         foreach (var updatedFile in updatedFiles)
                         {
-                            if (Changed is not null)
-                            {
-                                await Changed(updatedFile);
-                            }
+                            Changed?.Invoke(updatedFile);
                         }
 
                         _knownFiles = foundFiles;

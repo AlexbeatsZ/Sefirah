@@ -1,5 +1,4 @@
-using Sefirah.Data.Models.Actions;
-using Sefirah.Data.Models;
+using Sefirah.Actions;
 
 namespace Sefirah.Data.Contracts;
 
@@ -38,24 +37,38 @@ public interface IGeneralSettingsService : IBaseSettingsService, INotifyProperty
     string ReceivedFilesPath { get; set; }
 
     /// <summary>
-    /// Gets or sets the list of custom actions.
+    /// Gets or sets how device storage is mounted over SFTP on Linux (GVfs vs sshfs).
     /// </summary>
-    List<BaseAction> Actions { get; set; }
+    StorageMountPreference StorageMountPreference { get; set; }
 
-    List<HeadsetConfiguration> Headsets { get; set; }
+    /// <summary>
+    /// Gets the list of custom actions.
+    /// </summary>
+    List<ActionItem> Actions { get; }
+
+    /// <summary>
+    /// Gets or sets whether the built-in default actions still need to be added to the catalog.
+    /// Cleared once they have been (or once an existing catalog was found).
+    /// </summary>
+    bool AddDefaultActions { get; set; }
+
+    /// <summary>
+    /// Replaces the full actions list (e.g. after reordering).
+    /// </summary>
+    void SetActions(IEnumerable<ActionItem> actions);
 
     /// <summary>
     /// Adds a new action to the settings.
     /// </summary>
-    void AddAction(BaseAction action);
+    void AddAction(ActionItem action);
 
     /// <summary>
     /// Updates an existing action in the settings.
     /// </summary>
-    void UpdateAction(BaseAction action);
+    void UpdateAction(ActionItem action);
 
     /// <summary>
     /// Removes an action from the settings.
     /// </summary>
-    void RemoveAction(BaseAction action);
+    void RemoveAction(ActionItem action);
 }

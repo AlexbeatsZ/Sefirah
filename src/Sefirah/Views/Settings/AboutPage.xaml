@@ -44,7 +44,7 @@
                 <Button
                     x:Name="CopyVersionInfo"
                     Command="{x:Bind ViewModel.CopyVersionCommand}"
-                    ToolTipService.ToolTip="{helpers:ResourceString Name=CopyVersion}">
+                    ToolTipService.ToolTip="Copy version">
                     <FontIcon Glyph="&#xE8C8;" />
                 </Button>
             </wuc:SettingsCard>

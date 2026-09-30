@@ -14,14 +14,15 @@ public class MessageHandler(
     ISmsFeature smsFeature,
     IFileTransferService fileTransferService,
     IMediaFeature mediaFeature,
+    IAudioFeature audioFeature,
     IRemoteMediaFeature remoteMediaFeature,
     IActionFeature actionFeature,
     ISftpFeature sftpFeature,
     ISessionManager sessionManager,
     ICallFeature callFeature,
     IBluetoothPairingService bluetoothPairingService,
-    ILocalBluetoothController localBluetoothController,
-    IHeadsetHandoffService headsetHandoffService,
+    IPlaySoundFeature playSoundFeature,
+    IAdbService adbService,
     ILogger<MessageHandler> logger) : IMessageHandler
 {
     public async void HandleMessageAsync(PairedDevice device, SocketMessage message)
@@ -40,6 +41,10 @@ public class MessageHandler(
 
                 case NotificationInfo notificationMessage:
                     await notificationFeature.HandleNotificationMessage(device, notificationMessage);
+                    break;
+
+                case AudioAction action:
+                    await audioFeature.HandleAudioActionAsync(action);
                     break;
 
                 case MediaAction action:
@@ -80,18 +85,11 @@ public class MessageHandler(
                     break;
 
                 case ActionInfo action:
-                    if (RemoteActionPolicy.CanExecute(device.Capabilities))
-                    {
-                        actionFeature.HandleActionMessage(action);
-                    }
-                    else
-                    {
-                        logger.Warn($"Ignored remote action from device without controller capability: {device.Name}");
-                    }
+                    await actionFeature.HandleActionMessage(action);
                     break;
 
                 case SftpServerInfo sftpServerInfo:
-                    await sftpFeature.InitializeAsync(device, sftpServerInfo);
+                    await sftpFeature.Mount(device, sftpServerInfo);
                     break;
 
                 case FileTransferInfo fileTransfer:
@@ -100,8 +98,6 @@ public class MessageHandler(
 
                 case DeviceInfo deviceInfo:
                     await deviceManager.UpdateDeviceInfo(device, deviceInfo);
-                    if (device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
-                        await headsetHandoffService.SendConfigurationAsync(device);
                     break;
 
                 case CallInfo callInfo:
@@ -116,53 +112,13 @@ public class MessageHandler(
                     bluetoothPairingService.HandleBluetoothPairingResult(device, pairingResult);
                     break;
 
-                case BluetoothDeviceCatalogRequest catalogRequest:
-                    if (!device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
-                    {
-                        logger.Warn($"Ignored Bluetooth catalog request from unsupported device: {device.Name}");
-                        break;
-                    }
-                    device.SendMessage(await localBluetoothController.GetCatalogAsync(catalogRequest.RequestId));
+                case PlaySound playSound:
+                    await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+                        playSoundFeature.HandleRemoteState(device, playSound.IsPlaying));
                     break;
 
-                case BluetoothDeviceCatalog catalog:
-                    headsetHandoffService.HandleCatalog(device, catalog);
-                    break;
-
-                case BluetoothHandoffCommand command:
-                    if (!device.SupportsCapability(ProtocolCapabilities.BluetoothHandoffV1))
-                    {
-                        logger.Warn($"Ignored Bluetooth command from unsupported device: {device.Name}");
-                        break;
-                    }
-                    device.SendMessage(await localBluetoothController.ExecuteAsync(command));
-                    break;
-
-                case BluetoothHandoffResult handoffResult:
-                    headsetHandoffService.HandleResult(device, handoffResult);
-                    break;
-
-                case BluetoothHandoffRequest handoffRequest:
-                    headsetHandoffService.HandleRequest(device, handoffRequest);
-                    break;
-
-                case BluetoothDisconnectRequest disconnectRequest:
-                    headsetHandoffService.HandleDisconnectRequest(device, disconnectRequest);
-                    break;
-
-                case BluetoothHandoffRefreshRequest refreshRequest:
-                    headsetHandoffService.HandleRefreshRequest(device, refreshRequest);
-                    break;
-
-                case BluetoothHeadsetVisibilityRequest visibilityRequest:
-                    headsetHandoffService.HandleVisibilityRequest(device, visibilityRequest);
-                    break;
-
-                case BluetoothHandoffConfiguration:
-                case BluetoothHandoffState:
-                    // Desktop peers own their local configuration and state. These messages
-                    // are companion-facing, but are valid between capability-compatible peers.
-                    logger.Debug($"Ignored companion Bluetooth state from desktop peer: {device.Name}");
+                case RequestWorkerLaunch requestWorkerLaunch:
+                    await adbService.TryStartWorkerAsync(device, requestWorkerLaunch.Command);
                     break;
 
                 case Disconnect:

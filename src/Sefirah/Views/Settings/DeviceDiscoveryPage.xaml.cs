@@ -62,7 +62,7 @@ public sealed partial class DeviceDiscoveryPage : Page
         }
 
         QrCodeImage.Source = bitmapImage;
-        QrCodeStatusText.Text = "ScanQrCodeToConnect".GetLocalizedResource();
+        QrCodeStatusText.Text = $"Scan this QR code to connect";
     }
 
 }

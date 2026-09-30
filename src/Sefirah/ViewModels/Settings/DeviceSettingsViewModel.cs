@@ -267,6 +267,19 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
         }
     }
 
+    public bool ScrcpyClipboardAutosync
+    {
+        get => DeviceSettings.ScrcpyClipboardAutosync;
+        set
+        {
+            if (DeviceSettings.ScrcpyClipboardAutosync != value)
+            {
+                DeviceSettings.ScrcpyClipboardAutosync = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public bool UnlockDeviceBeforeLaunch
     {
         get => DeviceSettings.UnlockDeviceBeforeLaunch;
@@ -293,19 +306,9 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
         }
     }
 
-    public string? UnlockCommands
-    {
-        get => DeviceSettings.UnlockCommands;
-        set
-        {
-            if (DeviceSettings.UnlockCommands != value)
-            {
-                DeviceSettings.UnlockCommands = value;
-                OnPropertyChanged();
-            }
-        }
-    }
+    public ObservableCollection<UnlockCommandEntry> UnlockCommands { get; }
 
+    public bool HasUnlockCommands => UnlockCommands.Count > 0;
 
     public string? CustomArguments
     {
@@ -634,19 +637,6 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
 
     #region ADB Settings
 
-    public bool AdbTcpipModeEnabled
-    {
-        get => DeviceSettings.AdbTcpipModeEnabled;
-        set
-        {
-            if (DeviceSettings.AdbTcpipModeEnabled != value)
-            {
-                DeviceSettings.AdbTcpipModeEnabled = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
     public bool AdbAutoConnect
     {
         get => DeviceSettings.AdbAutoConnect;
@@ -677,7 +667,7 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
                 // If storage access is disabled, remove the sync root
                 if (!value)
                 {
-                    _ = sftpFeature.RemoveAsync(Device.Id);
+                    sftpFeature.Remove(Device.Id);
                 }
             }
         }
@@ -739,6 +729,9 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(SelectedScrcpyDevicePreference));
         LoadApps(device.Id);
 
+        UnlockCommands = [.. DeviceSettings.UnlockCommands];
+        UnlockCommands.CollectionChanged += UnlockCommands_CollectionChanged;
+
         Device.Addresses.CollectionChanged += Addresses_CollectionChanged;
     }
 
@@ -786,6 +779,50 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
         isBulkOperation = false;
         OnPropertyChanged(nameof(CanRemoveAddress));
         SaveDevice();
+    }
+
+    private void UnlockCommands_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasUnlockCommands));
+
+        if (isBulkOperation) return;
+
+        // Reordering ListView updates the collection twice with no dedicated event.
+        if (isDragging)
+        {
+            isDragging = false;
+            return;
+        }
+        isDragging = true;
+        SaveUnlockCommands();
+    }
+
+    public void SaveUnlockCommands() =>
+        DeviceSettings.UnlockCommands =
+        [
+            .. UnlockCommands.Select(static c => new UnlockCommandEntry
+            {
+                Command = c.Command,
+                DelayMs = c.DelayMs
+            })
+        ];
+
+    [RelayCommand]
+    private void AddUnlockCommand()
+    {
+        isBulkOperation = true;
+        UnlockCommands.Add(new UnlockCommandEntry());
+        isBulkOperation = false;
+        SaveUnlockCommands();
+    }
+
+    [RelayCommand]
+    private void RemoveUnlockCommand(UnlockCommandEntry entry)
+    {
+        isBulkOperation = true;
+        UnlockCommands.Remove(entry);
+        isBulkOperation = false;
+        SaveUnlockCommands();
     }
 
     public void LoadApps(string id)

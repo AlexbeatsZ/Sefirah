@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml.Media.Animation;
 using Sefirah.Data.Items;
-using Sefirah.Extensions;
 
 namespace Sefirah.Views.Settings;
 

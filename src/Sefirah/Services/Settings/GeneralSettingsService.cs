@@ -1,5 +1,4 @@
-using Sefirah.Data.Models.Actions;
-using Sefirah.Data.Models;
+using Sefirah.Actions;
 using Sefirah.Utils.Serialization;
 
 namespace Sefirah.Services.Settings;
@@ -53,39 +52,53 @@ internal sealed partial class GeneralSettingsService : BaseObservableJsonSetting
         set => Set(value);
     }
 
-    public List<BaseAction> Actions
+    public StorageMountPreference StorageMountPreference
     {
-        get => Get<List<BaseAction>>([]);
+        get => Get(StorageMountPreference.Auto);
         set => Set(value);
     }
 
-    public List<HeadsetConfiguration> Headsets
+    public List<ActionItem> Actions
     {
-        get => Get<List<HeadsetConfiguration>>([]);
+        get => Get<List<ActionItem>>([]);
+        private set => Set(value);
+    }
+
+    public bool AddDefaultActions
+    {
+        get => Get(true);
         set => Set(value);
     }
 
-    public void AddAction(BaseAction action)
+    public void SetActions(IEnumerable<ActionItem> actions)
     {
+        ArgumentNullException.ThrowIfNull(actions);
+        Actions = actions.Select(static a => a.Clone()).ToList();
+    }
+
+    public void AddAction(ActionItem action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
         var actions = Actions.ToList();
-        actions.Add(action);
+        actions.Add(action.Clone());
         Actions = actions;
     }
 
-    public void UpdateAction(BaseAction action)
+    public void UpdateAction(ActionItem action)
     {
+        ArgumentNullException.ThrowIfNull(action);
         var actions = Actions.ToList();
         var index = actions.FindIndex(a => a.Id == action.Id);
         if (index != -1)
         {
-            actions.RemoveAt(index);
-            actions.Insert(index, action);
+            actions[index] = action.Clone();
             Actions = actions;
         }
     }
 
-    public void RemoveAction(BaseAction action)
+    public void RemoveAction(ActionItem action)
     {
+        ArgumentNullException.ThrowIfNull(action);
         var actions = Actions.ToList();
         var index = actions.FindIndex(a => a.Id == action.Id);
         if (index != -1)

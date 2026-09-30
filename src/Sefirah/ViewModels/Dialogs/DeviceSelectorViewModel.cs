@@ -4,44 +4,28 @@ namespace Sefirah.ViewModels.Dialogs;
 
 public partial class DeviceSelectorViewModel : ObservableObject
 {
-    public ObservableCollection<DeviceSelectorOption> Devices { get; } = [];
+    public ObservableCollection<PairedDevice> Devices { get; } = [];
 
-    public bool IsSingleSelection { get; }
+    public List<PairedDevice> SelectedDevices { get; set; } = [];
 
-    public List<PairedDevice> SelectedDevices => Devices
-        .Where(option => option.IsSelected)
-        .Select(option => option.Device)
-        .ToList();
-
-    public DeviceSelectorViewModel(List<PairedDevice> devices, bool isSingleSelection = false)
+    public DeviceSelectorViewModel(List<PairedDevice> devices)
     {
-        IsSingleSelection = isSingleSelection;
         foreach (var device in devices)
         {
-            Devices.Add(new DeviceSelectorOption(device));
+            Devices.Add(device);
         }
     }
 
-    public void SetDeviceSelected(DeviceSelectorOption option, bool isSelected)
+    public void SetDeviceSelected(PairedDevice device, bool isSelected)
     {
-        if (isSelected && IsSingleSelection)
+        if (isSelected)
         {
-            foreach (var other in Devices.Where(item => item != option))
-            {
-                other.IsSelected = false;
-            }
+            SelectedDevices.Add(device);
         }
-
-        option.IsSelected = isSelected;
+        else
+        {
+            SelectedDevices.Remove(device);
+        }
     }
-}
-
-public sealed partial class DeviceSelectorOption(PairedDevice device) : ObservableObject
-{
-    public PairedDevice Device { get; } = device;
-    public string DisplayName => device.Name;
-
-    [ObservableProperty]
-    public partial bool IsSelected { get; set; }
 }
 

@@ -59,10 +59,10 @@ public sealed partial class GeneralPage : Page
     {
         var dialog = new ContentDialog
         {
-            Title = "RemoteStorageWarningTitle".GetLocalizedResource(),
-            Content = "RemoteStorageWarningMessage".GetLocalizedResource(),
-            PrimaryButtonText = "Continue".GetLocalizedResource(),
-            CloseButtonText = "Cancel".GetLocalizedResource(),
+            Title = "Warning: Remote Storage Location",
+            Content = "DO NOT set the remote storage location to a pre-existing folder as it will delete the contents of that folder. Are you sure you want to continue?",
+            PrimaryButtonText = "Continue",
+            CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = App.MainWindow.Content!.XamlRoot
         };
