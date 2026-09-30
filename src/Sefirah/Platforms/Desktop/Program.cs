@@ -12,6 +12,7 @@ internal class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.SetLaunchArguments(args);
         DBusConnection? connection = null;
         InstanceHandler? handler = null;
         var shouldRedirect = false;
@@ -88,10 +89,12 @@ internal class Program
         {
             var host = UnoPlatformHostBuilder.Create()
                 .App(() => new App())
+                .UseMacOS()
                 .UseX11()
                 .UseLinuxFrameBuffer()
                 .Build();
 
+            Sefirah.Platforms.Desktop.Mac.MacKeepAliveHelper.EnsureMacAppKeepsRunning();
             host.Run();
         }
         finally

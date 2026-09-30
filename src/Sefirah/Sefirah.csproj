@@ -78,6 +78,7 @@
     </PropertyGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-desktop'">
+        <PackageReference Include="Uno.WinUI.Runtime.Skia.MacOS" VersionOverride="6.8.0-dev.46" />
         <PackageReference Include="Tmds.DBus.Protocol" />
         <PackageReference Include="Tmds.DBus.Generator">
             <PrivateAssets>all</PrivateAssets>

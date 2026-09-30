@@ -32,6 +32,9 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+#if !WINDOWS
+        Sefirah.Platforms.Desktop.Mac.MacSymbolFontHelper.RegisterFluentSymbols();
+#endif
         // Configure exception handlers
         UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
@@ -65,6 +68,14 @@ public partial class App : Application
             await Host.StartAsync();
 
             bool isStartupTask = false;
+#if !WINDOWS
+            if (OperatingSystem.IsMacOS())
+            {
+                isStartupTask = Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.IsLoginStartup;
+                var startup = Ioc.Default.GetRequiredService<IUserSettingsService>().GeneralSettingsService.StartupOption;
+                Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ReconcileLaunchAtLogin(startup != StartupOptions.Disabled);
+            }
+#endif
 #if WINDOWS
             var appActivationArguments = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
             isStartupTask = appActivationArguments.Data is IStartupTaskActivatedEventArgs;
@@ -235,6 +246,13 @@ public partial class App : Application
             return;
 
         args.Handled = true;
+#if !WINDOWS
+        if (OperatingSystem.IsMacOS())
+        {
+            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.HideMainWindow();
+            return;
+        }
+#endif
         MainWindow.AppWindow.Hide();
     }
 
@@ -264,6 +282,14 @@ public partial class App : Application
 
     public static void ShowMainWindow()
     {
+#if !WINDOWS
+        if (OperatingSystem.IsMacOS())
+        {
+            MainWindow.Activate();
+            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ShowMainWindow();
+            return;
+        }
+#endif
         var presenter = MainWindow.AppWindow.Presenter as OverlappedPresenter;
         if (presenter?.State is OverlappedPresenterState.Minimized)
             presenter.Restore();

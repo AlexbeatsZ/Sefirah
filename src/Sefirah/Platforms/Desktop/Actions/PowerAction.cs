@@ -14,6 +14,11 @@ public sealed partial class PowerAction
         {
             try
             {
+                if (OperatingSystem.IsMacOS())
+                {
+                    ExecuteMacPowerAction(kind, logger);
+                    return;
+                }
                 switch (kind)
                 {
                     case PowerKind.Lock:
@@ -60,6 +65,43 @@ public sealed partial class PowerAction
         {
             Run("loginctl", $"terminate-user {user}");
         }
+    }
+
+    private static void ExecuteMacPowerAction(PowerKind kind, ILogger logger)
+    {
+        if (kind == PowerKind.Lock)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "/usr/bin/osascript",
+                ArgumentList = { "-e", "tell application \"System Events\" to key code 12 using {control down, command down}" },
+                UseShellExecute = false
+            });
+            return;
+        }
+        if (kind == PowerKind.Sleep)
+        {
+            Run("/usr/bin/pmset", "sleepnow");
+            return;
+        }
+        string? script = kind switch
+        {
+            PowerKind.LogOff => "tell application \"System Events\" to log out",
+            PowerKind.Restart => "tell application \"System Events\" to restart",
+            PowerKind.Shutdown => "tell application \"System Events\" to shut down",
+            _ => null
+        };
+        if (script is null)
+        {
+            logger.Warn($"Power action {kind} has no supported macOS equivalent");
+            return;
+        }
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "/usr/bin/osascript",
+            ArgumentList = { "-e", script },
+            UseShellExecute = false
+        });
     }
 
     private static void Run(string fileName, string arguments)

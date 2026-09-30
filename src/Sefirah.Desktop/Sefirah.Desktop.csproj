@@ -1,0 +1,99 @@
+<Project Sdk="Uno.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0-desktop</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <UnoSingleProject>true</UnoSingleProject>
+
+        <!-- Display name -->
+        <ApplicationTitle>Sefirah</ApplicationTitle>
+        <!-- App Identifier -->
+        <ApplicationId>com.castle.sefirah</ApplicationId>
+        <!-- Versions -->
+        <ApplicationDisplayVersion>3.1.0</ApplicationDisplayVersion>
+        <ApplicationVersion>65</ApplicationVersion>
+        <!-- Package Publisher -->
+        <ApplicationPublisher>shrimqy (local macOS adaptation)</ApplicationPublisher>
+        <!-- Package Description -->
+        <Description>Sefirah Desktop client for macOS and Linux.</Description>
+
+        <Platforms>x64;ARM64</Platforms>
+        <LangVersion>Preview</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <StartupObject>Program</StartupObject>
+
+        <UnoFeatures>
+            Lottie;
+            Hosting;
+            Toolkit;
+            Logging;
+            LoggingSerilog;
+            Mvvm;
+            Configuration;
+            Localization;
+            ThemeService;
+            SkiaRenderer;
+        </UnoFeatures>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Uno.WinUI.Runtime.Skia.MacOS" VersionOverride="6.8.0-dev.46" />
+        <PackageReference Include="Uno.WinUI.Runtime.Skia.X11" VersionOverride="6.8.0-dev.46" />
+        <PackageReference Include="Uno.WinUI.Runtime.Skia.Linux.FrameBuffer" VersionOverride="6.8.0-dev.46" />
+        <PackageReference Include="Tmds.DBus.Protocol" />
+        <PackageReference Include="Tmds.DBus.Generator">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <AdditionalFiles Include="..\Sefirah\Platforms\Desktop\Tray\DBusXml\com.canonical.dbusmenu.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Handler" />
+        <AdditionalFiles Include="..\Sefirah\Platforms\Desktop\Tray\DBusXml\com.castle.sefirah.SingleInstance.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Handler" />
+        <AdditionalFiles Include="..\Sefirah\Platforms\Desktop\Tray\DBusXml\org.kde.StatusNotifierItem.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Handler" />
+        <AdditionalFiles Include="..\Sefirah\Platforms\Desktop\Tray\DBusXml\org.kde.StatusNotifierWatcher.xml" Namespace="Sefirah.Platforms.Desktop.Tray.DBus" DBusGeneratorMode="Proxy" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Uno.Fonts.Fluent" />
+        <PackageReference Include="AdvancedSharpAdbClient" />
+        <PackageReference Include="BouncyCastle.Cryptography" />
+        <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
+        <PackageReference Include="CommunityToolkit.WinUI.Converters" />
+        <PackageReference Include="CommunityToolkit.WinUI.Extensions" />
+        <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" />
+        <PackageReference Include="libphonenumber-csharp" />
+        <PackageReference Include="MeaMod.DNS" />
+        <PackageReference Include="NetCoreServer" />
+        <PackageReference Include="QRCoder" />
+        <PackageReference Include="sqlite-net-pcl" />
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+        <PackageReference Include="SSH.NET" />
+        <PackageReference Include="Tmds.DBus" />
+    </ItemGroup>
+
+    <!-- Link the official source without Windows-only services. -->
+    <ItemGroup>
+        <Compile Include="..\Sefirah\**\*.cs"
+                 Exclude="..\Sefirah\Platforms\Windows\**;..\Sefirah\bin\**;..\Sefirah\obj\**;..\Sefirah\AppPackages\**;..\Sefirah\BundleArtifacts\**"
+                 Link="SharedCore\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Page Include="..\Sefirah\**\*.xaml"
+              Exclude="..\Sefirah\Platforms\Windows\**;..\Sefirah\bin\**;..\Sefirah\obj\**;..\Sefirah\App.xaml"
+              Link="SharedViews\%(RecursiveDir)%(Filename)%(Extension)" />
+        <ApplicationDefinition Include="..\Sefirah\App.xaml"
+                               Link="App.xaml"
+                               SubType="Designer"
+                               Generator="MSBuild:Compile" />
+    </ItemGroup>
+
+    <!-- Resources, Assets, and Configuration -->
+    <ItemGroup>
+        <PRIResource Include="..\Sefirah\Strings\**\*.resw"
+                     Link="Strings/%(RecursiveDir)%(Filename)%(Extension)" />
+        <Content Include="..\Sefirah\Assets\**\*"
+                 Link="Assets\%(RecursiveDir)%(Filename)%(Extension)"
+                 CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Sefirah\appsettings*.json"
+                 Link="%(Filename)%(Extension)"
+                 CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+</Project>
