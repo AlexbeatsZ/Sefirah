@@ -207,6 +207,15 @@
   <data name="StartupOption" xml:space="preserve">
     <value>Startup option</value>
   </data>
+  <data name="MacLoginStartup" xml:space="preserve">
+    <value>Login startup</value>
+  </data>
+  <data name="MacLoginStartupDescription" xml:space="preserve">
+    <value>Choose how Sefirah opens when you log in to macOS</value>
+  </data>
+  <data name="MacStartupBackground" xml:space="preserve">
+    <value>Start in the background</value>
+  </data>
   <data name="StartupOptionDescription" xml:space="preserve">
     <value>Choose how the app starts when Windows boots</value>
   </data>

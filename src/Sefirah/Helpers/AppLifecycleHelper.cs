@@ -172,6 +172,13 @@ public static class AppLifecycleHelper
             if (startupTask.State is StartupTaskState.Enabled)
                 startupTask.Disable();
         }
+#else
+        if (OperatingSystem.IsMacOS())
+        {
+            var result = await Task.Run(() => Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.ReconcileLaunchAtLogin(enable));
+            if (result < 0)
+                Ioc.Default.GetService<ILogger>()?.LogWarning("Could not update macOS login startup: {result}", result);
+        }
 #endif
     }
 }

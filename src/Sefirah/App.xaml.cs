@@ -121,6 +121,10 @@ public partial class App : Application
                     default:
                         MainWindow.Activate();
                         MainWindow.AppWindow.Show();
+#if !WINDOWS
+                        if (OperatingSystem.IsMacOS() && startupOption == StartupOptions.Maximized)
+                            Sefirah.Platforms.Desktop.Mac.MacAppLifecycleHelper.MaximizeMainWindow();
+#endif
                         break;
                 };
             }

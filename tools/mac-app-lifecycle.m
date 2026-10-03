@@ -186,6 +186,17 @@ void sefirah_macos_hide_main_window(void)
     });
 }
 
+void sefirah_macos_maximize_main_window(void)
+{
+    SefirahRunOnMainThread(^{
+        NSWindow *window = SefirahMainWindow();
+        NSScreen *screen = window.screen ?: NSScreen.mainScreen;
+        if (window != nil && screen != nil) {
+            [window setFrame:screen.visibleFrame display:YES];
+        }
+    });
+}
+
 static BOOL SefirahUnregisterIfPresent(SMAppService *service)
 {
     if (service.status == SMAppServiceStatusNotRegistered ||

@@ -207,6 +207,15 @@
   <data name="StartupOption" xml:space="preserve">
     <value>启动项</value>
   </data>
+  <data name="MacLoginStartup" xml:space="preserve">
+    <value>登录启动</value>
+  </data>
+  <data name="MacLoginStartupDescription" xml:space="preserve">
+    <value>选择登录 macOS 时 Sefirah 的启动方式</value>
+  </data>
+  <data name="MacStartupBackground" xml:space="preserve">
+    <value>后台启动</value>
+  </data>
   <data name="StartupOptionDescription" xml:space="preserve">
     <value>选择本应用在Windows启动时的运行方式</value>
   </data>

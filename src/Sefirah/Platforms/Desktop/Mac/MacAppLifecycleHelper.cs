@@ -117,6 +117,21 @@ public static class MacAppLifecycleHelper
         }
     }
 
+    public static void MaximizeMainWindow()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        try
+        {
+            MaximizeMainWindowNative();
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        {
+            Console.WriteLine($"[WARN] Could not maximize the macOS main window: {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Reconciles the per-user launch agent. Its embedded launcher starts Sefirah with an
     /// explicit argument so a login launch can be distinguished from a user opening the app.
@@ -167,6 +182,9 @@ public static class MacAppLifecycleHelper
 
     [DllImport(NativeLibrary, EntryPoint = "sefirah_macos_hide_main_window")]
     private static extern void HideMainWindowNative();
+
+    [DllImport(NativeLibrary, EntryPoint = "sefirah_macos_maximize_main_window")]
+    private static extern void MaximizeMainWindowNative();
 
     [DllImport(NativeLibrary, EntryPoint = "sefirah_macos_reconcile_launch_at_login")]
     private static extern int ReconcileLaunchAtLoginNative(int enable);

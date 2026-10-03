@@ -15,6 +15,11 @@ public sealed partial class GeneralViewModel : BaseViewModel
     #endregion
 
     #region Properties
+    public bool SupportsLoginStartup => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+    public bool IsLinux => OperatingSystem.IsLinux();
+    public string StartupHeader => (OperatingSystem.IsMacOS() ? "MacLoginStartup" : "StartupOption").GetLocalizedResource();
+    public string StartupDescription => (OperatingSystem.IsMacOS() ? "MacLoginStartupDescription" : "StartupOptionDescription").GetLocalizedResource();
+
     // Language
     public ObservableCollection<AppLanguageItem> SupportedLanguages => AppLanguageHelper.SupportedLanguages;
 
@@ -115,7 +120,7 @@ public sealed partial class GeneralViewModel : BaseViewModel
     public Dictionary<StartupOptions, string> StartupTypes { get; } = new()
     {
         { StartupOptions.Disabled, "StartupOptionDisabled/Content".GetLocalizedResource() },
-        { StartupOptions.InTray, "StartupOptionSystemTray/Content".GetLocalizedResource() },
+        { StartupOptions.InTray, (OperatingSystem.IsMacOS() ? "MacStartupBackground" : "StartupOptionSystemTray/Content").GetLocalizedResource() },
         { StartupOptions.Minimized, "StartupOptionMinimized/Content".GetLocalizedResource() },
         { StartupOptions.Maximized, "StartupOptionMaximized/Content".GetLocalizedResource() }
     };

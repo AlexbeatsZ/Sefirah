@@ -38,9 +38,9 @@
                 </BreadcrumbBar.ItemTemplate>
             </BreadcrumbBar>
 
-            <win:StackPanel Spacing="4">
+            <StackPanel Visibility="{x:Bind ViewModel.SupportsLoginStartup}" Spacing="4">
                 <!--  Startup -->
-                <wuc:SettingsCard Description="{helpers:ResourceString Name=StartupOptionDescription}" Header="{helpers:ResourceString Name=StartupOption}">
+                <wuc:SettingsCard Description="{x:Bind ViewModel.StartupDescription}" Header="{x:Bind ViewModel.StartupHeader}">
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xE7E8;" />
                     </wuc:SettingsCard.HeaderIcon>
@@ -49,7 +49,9 @@
                         ItemsSource="{x:Bind ViewModel.StartupTypes.Values}"
                         SelectedItem="{x:Bind ViewModel.SelectedStartupType, Mode=TwoWay}" />
                 </wuc:SettingsCard>
+            </StackPanel>
 
+            <win:StackPanel Spacing="4">
                 <!--  Backdrop material -->
                 <wuc:SettingsCard Header="{helpers:ResourceString Name=BackdropMaterial}">
                     <wuc:SettingsCard.HeaderIcon>
@@ -110,7 +112,7 @@
             </wuc:SettingsCard>
 
             <!--  Linux storage mount preference  -->
-            <not_win:StackPanel Spacing="4">
+            <not_win:StackPanel Visibility="{x:Bind ViewModel.IsLinux}" Spacing="4">
                 <wuc:SettingsCard
                     Description="{helpers:ResourceString Name=StorageMountDescription}"
                     Header="{helpers:ResourceString Name=StorageMount}">

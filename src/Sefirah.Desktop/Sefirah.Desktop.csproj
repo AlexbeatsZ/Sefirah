@@ -10,7 +10,7 @@
         <ApplicationId>com.castle.sefirah</ApplicationId>
         <!-- Versions -->
         <ApplicationDisplayVersion>3.1.0</ApplicationDisplayVersion>
-        <ApplicationVersion>65</ApplicationVersion>
+        <ApplicationVersion>66</ApplicationVersion>
         <!-- Package Publisher -->
         <ApplicationPublisher>shrimqy (local macOS adaptation)</ApplicationPublisher>
         <!-- Package Description -->
