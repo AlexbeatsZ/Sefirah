@@ -10,7 +10,7 @@
         <ApplicationId>com.castle.sefirah</ApplicationId>
         <!-- Versions -->
         <ApplicationDisplayVersion>3.1.0</ApplicationDisplayVersion>
-        <ApplicationVersion>66</ApplicationVersion>
+        <ApplicationVersion>67</ApplicationVersion>
         <!-- Package Publisher -->
         <ApplicationPublisher>shrimqy (local macOS adaptation)</ApplicationPublisher>
         <!-- Package Description -->
@@ -56,7 +56,7 @@
     <ItemGroup>
         <PackageReference Include="Uno.Fonts.Fluent" />
         <PackageReference Include="AdvancedSharpAdbClient" />
-        <PackageReference Include="BouncyCastle.Cryptography" />
+        <PackageReference Include="BouncyCastle.Cryptography" VersionOverride="2.7.0" />
         <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
         <PackageReference Include="CommunityToolkit.WinUI.Converters" />
         <PackageReference Include="CommunityToolkit.WinUI.Extensions" />
@@ -67,7 +67,7 @@
         <PackageReference Include="QRCoder" />
         <PackageReference Include="sqlite-net-pcl" />
         <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
-        <PackageReference Include="SSH.NET" />
+        <PackageReference Include="SSH.NET" VersionOverride="2026.0.0" />
         <PackageReference Include="Tmds.DBus" />
     </ItemGroup>
 

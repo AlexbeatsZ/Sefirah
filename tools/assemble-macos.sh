@@ -12,6 +12,8 @@ tar -xzf "$work/mac-runtime.tar.gz" -C "$app/Contents/Resources"
 runtime="$app/Contents/Resources/runtime"
 clang -O2 -Wall -Wextra -Werror -arch arm64 "$work/mac-launcher.c" -o "$app/Contents/MacOS/Sefirah.Desktop"
 clang -O2 -Wall -Wextra -Werror -arch arm64 -dynamiclib -framework AppKit -framework ServiceManagement "$work/mac-app-lifecycle.m" -o "$runtime/libSefirahMacLifecycle.dylib"
+clang -O2 -Wall -Wextra -Werror -arch arm64 -dynamiclib -framework Foundation -framework CoreAudio "$work/mac-audio.m" -o "$runtime/libSefirahMacAudio.dylib"
+clang -O2 -Wall -Wextra -Werror -fobjc-arc -arch arm64 -dynamiclib -framework AppKit -framework UserNotifications "$work/mac-notifications.m" -o "$runtime/libSefirahMacNotifications.dylib"
 clang -O2 -Wall -Wextra -Werror -arch arm64 -framework AppKit "$work/mac-login-launcher.m" -Wl,-sectcreate,__TEXT,__info_plist,"$work/SefirahLoginLauncher-Info.plist" -o "$app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 cp "$work/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 cat > "$app/Contents/Info.plist" <<'PLIST'
@@ -23,7 +25,7 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>Sefirah</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>3.1.0</string>
-<key>CFBundleVersion</key><string>66</string>
+<key>CFBundleVersion</key><string>67</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>

@@ -40,6 +40,9 @@ public static class AppLifecycleHelper
 #if WINDOWS
         var notificationHandler = Ioc.Default.GetRequiredService<IPlatformNotificationHandler>();
         await notificationHandler.RegisterForNotifications();
+#else
+        if (OperatingSystem.IsMacOS())
+            await Ioc.Default.GetRequiredService<IPlatformNotificationHandler>().RegisterForNotifications();
 #endif
 
         await deviceManager.Initialize();

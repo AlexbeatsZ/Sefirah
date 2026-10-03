@@ -139,10 +139,23 @@ public class NotificationFeature(
         UpdateBadge();
     }
 
+    private static string? GetPlatformTag(string? tag, string key) =>
+        OperatingSystem.IsMacOS() && string.IsNullOrEmpty(tag) ? key : tag;
+
     private async Task HandleRemovedNotification(PairedDevice device, Data.Models.NotificationInfo message)
     {
+#if !WINDOWS
+        var nativeNotification = OperatingSystem.IsMacOS()
+            ? notificationRepository.GetNotification(device.Id, message.NotificationKey)
+            : null;
+#endif
         var deleted = await notificationRepository.DeleteNotificationAsync(device.Id, message.NotificationKey);
         if (!deleted) return;
+#if !WINDOWS
+        if (nativeNotification is not null)
+            await platformNotificationHandler.RemoveNotificationsByTagAndGroup(
+                GetPlatformTag(nativeNotification.Tag, message.NotificationKey), nativeNotification.GroupKey);
+#endif
 
         if (device == deviceManager.ActiveDevice)
         {
@@ -185,7 +198,7 @@ public class NotificationFeature(
             await App.MainWindow.DispatcherQueue.EnqueueAsync(() => Notifications.Remove(notification));
             UpdateBadge();
 
-            await platformNotificationHandler.RemoveNotificationsByTagAndGroup(notification.Tag, notification.GroupKey);
+            await platformNotificationHandler.RemoveNotificationsByTagAndGroup(GetPlatformTag(notification.Tag, notification.Key), notification.GroupKey);
 
             if (device.IsConnected)
             {
@@ -240,7 +253,7 @@ public class NotificationFeature(
             {
                 foreach (var notification in Notifications.Where(n => !n.Pinned).ToList())
                 {
-                    await platformNotificationHandler.RemoveNotificationsByTagAndGroup(notification.Tag, notification.GroupKey);
+                    await platformNotificationHandler.RemoveNotificationsByTagAndGroup(GetPlatformTag(notification.Tag, notification.Key), notification.GroupKey);
                 }
                 await ClearHistoryAsync(activeDevice);
             });
