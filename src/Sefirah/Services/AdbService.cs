@@ -9,6 +9,7 @@ using AdvancedSharpAdbClient.Receivers;
 using CommunityToolkit.WinUI;
 using Sefirah.Data.Items;
 using Sefirah.Data.Models;
+using Sefirah.Utils;
 
 namespace Sefirah.Services;
 
@@ -101,6 +102,7 @@ public class AdbService(
     {
         try
         {
+            ExternalToolLocator.EnsureConfigured(userSettingsService.GeneralSettingsService);
             var adbPath = userSettingsService.GeneralSettingsService.AdbPath;
             if (IsMonitoring || string.IsNullOrEmpty(adbPath)) return;
 
@@ -441,6 +443,7 @@ public class AdbService(
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            ExternalToolLocator.ConfigureEnvironment(processInfo, userSettingsService.GeneralSettingsService.AdbPath);
 
             using var process = new Process { StartInfo = processInfo };
             var outputBuilder = new StringBuilder();

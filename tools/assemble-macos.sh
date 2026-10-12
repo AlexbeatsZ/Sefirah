@@ -16,6 +16,10 @@ clang -O2 -Wall -Wextra -Werror -arch arm64 -dynamiclib -framework Foundation -f
 clang -O2 -Wall -Wextra -Werror -fobjc-arc -arch arm64 -dynamiclib -framework AppKit -framework UserNotifications "$work/mac-notifications.m" -o "$runtime/libSefirahMacNotifications.dylib"
 clang -O2 -Wall -Wextra -Werror -arch arm64 -framework AppKit "$work/mac-login-launcher.m" -Wl,-sectcreate,__TEXT,__info_plist,"$work/SefirahLoginLauncher-Info.plist" -o "$app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 cp "$work/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
+# Official scrcpy release from fetch-scrcpy-macos.sh; scrcpy finds scrcpy-server and icons beside itself.
+test -x "$work/scrcpy/scrcpy"
+cp -R "$work/scrcpy" "$app/Contents/Resources/scrcpy"
+chmod +x "$app/Contents/Resources/scrcpy/scrcpy" "$app/Contents/Resources/scrcpy/adb"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -25,7 +29,7 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>Sefirah</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>3.1.0</string>
-<key>CFBundleVersion</key><string>67</string>
+<key>CFBundleVersion</key><string>68</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>
@@ -34,7 +38,7 @@ PLIST
 chmod +x "$runtime/Sefirah.Desktop"
 while IFS= read -r -d '' binary; do
     if file -b "$binary" | grep -q 'Mach-O'; then codesign --force --sign "$identity" "$binary"; fi
-done < <(find "$runtime" -type f -print0)
+done < <(find "$runtime" "$app/Contents/Resources/scrcpy" -type f -print0)
 codesign --force --sign "$identity" "$app/Contents/MacOS/Sefirah.Desktop"
 codesign --force --sign "$identity" "$app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 codesign --force --sign "$identity" "$app"

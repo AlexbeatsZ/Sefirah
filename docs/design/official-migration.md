@@ -44,6 +44,14 @@ Windows tar archives do not retain the published Mach-O executable bit. Always `
 
 SSH code signing may fail with `errSecInternalComponent` because its session cannot access the login keychain identity. A temporary LaunchAgent in the existing GUI user's domain can sign with the same identity without changing keychain permissions. Remove temporary sign/debug agents and Windows migration tasks when finished; keep only the established login-startup agent.
 
+## Screen mirroring tools
+
+The bundle ships the official Genymobile scrcpy 5.0.1 macOS arm64 release in `Contents/Resources/scrcpy` (fetched and sha256-verified by `tools/fetch-scrcpy-macos.sh`, signed with the app identity by `assemble-macos.sh`). scrcpy locates `scrcpy-server`, `scrcpy.png` and `disconnected.png` beside its own executable. Version 5.0 adds VideoToolbox hardware decoding and has no command-line breaking changes relative to the arguments Sefirah builds.
+
+When the scrcpy or adb setting is empty or points to a missing file, startup fills it from the bundle, then PATH, then Homebrew/MacPorts bin directories. A user-selected path that still exists is never replaced. Every scrcpy process (mirroring and `--list-encoders`) receives `ADB=<configured adb>` and a PATH that includes package-manager bin directories, because Finder/LaunchAgent processes inherit only the system PATH. The native picker resolves symlinks, so selections under `Cellar/` or `Caskroom/` are mapped back to `/opt/homebrew/bin/<tool>` to survive `brew upgrade`. The bundled and Homebrew adb share the default 5037 server; matching versions avoid server restarts.
+
+This approach follows the bundling design in madeye/Sefirah-Mac (a separate SwiftUI rewrite) but keeps the whole release in one Resources directory instead of splitting Mach-O helpers into `Contents/MacOS`, because this bundle is locally signed rather than notarized.
+
 ## macOS limits
 
 The upstream Linux media-session implementation remains a no-op on macOS. The adaptation exposes one system output for volume/mute. CoreAudio listeners follow the default output and its volume/mute properties; a 100 ms debounce reads the system state and sends Active updates to connected AudioSync peers. Registration changes and callbacks are serialized on the main queue, while AppleScript reads/actions are bounded to five seconds. Initial connection still sends New; duplicate state broadcasts are suppressed. The adaptation does not enumerate separate output devices. SFTP browsing launches a configured external handler; it does not mount a filesystem. Hibernate has no supported macOS equivalent and logs that limitation; no global power configuration is changed. Power commands may require the existing Automation/Accessibility grants and are not acceptance-tested by disrupting a logged-in session.

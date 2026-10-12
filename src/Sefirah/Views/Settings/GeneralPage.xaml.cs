@@ -81,8 +81,9 @@ public sealed partial class GeneralPage : Page
         var file = await PickerHelper.PickFileAsync();
         if (file?.Path is string path)
         {
+            path = ExternalToolLocator.NormalizePickedPath(path);
             ViewModel.ScrcpyPath = path;
-            TrySetCompanionTool(path, "adb.exe", p => ViewModel.AdbPath = p);
+            TrySetCompanionTool(path, ExternalToolLocator.Adb, p => ViewModel.AdbPath = p);
         }
     }
 
@@ -91,18 +92,15 @@ public sealed partial class GeneralPage : Page
         var file = await PickerHelper.PickFileAsync();
         if (file?.Path is string path)
         {
+            path = ExternalToolLocator.NormalizePickedPath(path);
             ViewModel.AdbPath = path;
-            TrySetCompanionTool(path, "scrcpy.exe", p => ViewModel.ScrcpyPath = p);
+            TrySetCompanionTool(path, ExternalToolLocator.Scrcpy, p => ViewModel.ScrcpyPath = p);
         }
     }
 
-    public static void TrySetCompanionTool(string selectedPath, string companionName, Action<string> setPath)
+    public static void TrySetCompanionTool(string selectedPath, string companionTool, Action<string> setPath)
     {
-        var directory = Path.GetDirectoryName(selectedPath);
-        if (string.IsNullOrEmpty(directory)) return;
-
-        var companionPath = Path.GetFullPath(Path.Combine(directory, companionName));
-        if (File.Exists(companionPath))
+        if (ExternalToolLocator.CompanionPath(selectedPath, companionTool) is string companionPath)
         {
             setPath(companionPath);
         }

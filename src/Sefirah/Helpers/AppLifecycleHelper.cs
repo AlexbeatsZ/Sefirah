@@ -160,6 +160,33 @@ public static class AppLifecycleHelper
         Ioc.Default.GetService<ILogger>()?.LogCritical("Unhandled exception {ex}", ex);
     }
 
+    /// <summary>
+    /// NetCoreServer can abandon a pending SslStream read when a stale connection is closed,
+    /// so the cancelled read surfaces later on the finalizer thread. That is expected during
+    /// reconnects and not a crash; keep critical logging for everything else.
+    /// </summary>
+    public static void HandleUnobservedTaskException(UnobservedTaskExceptionEventArgs e)
+    {
+        var inner = e.Exception.Flatten().InnerExceptions;
+        if (inner.Count > 0 && inner.All(IsCancelledTransportRead))
+        {
+            e.SetObserved();
+            Ioc.Default.GetService<ILogger>()?.LogDebug("Ignored cancelled transport read: {message}", inner[0].Message);
+            return;
+        }
+
+        HandleAppUnhandledException(e.Exception);
+    }
+
+    private static bool IsCancelledTransportRead(Exception ex) => ex switch
+    {
+        OperationCanceledException => true,
+        System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.OperationAborted } => true,
+        System.Net.Sockets.SocketException { ErrorCode: 89 } => true, // ECANCELED on macOS
+        IOException { InnerException: { } innerException } => IsCancelledTransportRead(innerException),
+        _ => false
+    };
+
     public static async Task HandleStartupTaskAsync(bool enable)
     {
 #if WINDOWS

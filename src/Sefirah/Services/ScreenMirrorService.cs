@@ -53,6 +53,7 @@ public class ScreenMirrorService(
         var deviceSettings = device.DeviceSettings;
         try
         {
+            ExternalToolLocator.EnsureConfigured(userSettingsService.GeneralSettingsService);
             var scrcpyPath = userSettingsService.GeneralSettingsService.ScrcpyPath;
             if (!File.Exists(scrcpyPath))
             {
@@ -314,6 +315,8 @@ public class ScreenMirrorService(
                 },
                 EnableRaisingEvents = true
             };
+
+            ExternalToolLocator.ConfigureEnvironment(process.StartInfo, userSettingsService.GeneralSettingsService.AdbPath);
 
             if (isStartApp && File.Exists(IconUtils.ScrcpyWindowIconPath))
             {
@@ -657,8 +660,9 @@ public class ScreenMirrorService(
         var file = await PickerHelper.PickFileAsync();
         if (file?.Path is string path)
         {
+            path = ExternalToolLocator.NormalizePickedPath(path);
             userSettingsService.GeneralSettingsService.ScrcpyPath = path;
-            GeneralPage.TrySetCompanionTool(path, "adb.exe", p => userSettingsService.GeneralSettingsService.AdbPath = p);
+            GeneralPage.TrySetCompanionTool(path, ExternalToolLocator.Adb, p => userSettingsService.GeneralSettingsService.AdbPath = p);
             await adbService.StartAsync();
             return path;
         }

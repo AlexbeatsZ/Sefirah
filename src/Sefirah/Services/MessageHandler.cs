@@ -125,6 +125,12 @@ public class MessageHandler(
                     sessionManager.DisconnectDevice(device, true);
                     break;
 
+                // Desktop peers announce these to phones; another desktop has no handler for them.
+                case AudioDeviceInfo:
+                case ActionList:
+                    logger.Debug($"Ignoring desktop-only message: {message.GetType().Name}");
+                    break;
+
                 default:
                     logger.Warn($"Unknown message type received: {message.GetType().Name}");
                     break;
