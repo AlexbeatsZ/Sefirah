@@ -22,6 +22,12 @@ For Android, verify signing compatibility before `adb install -r -d`. The offici
 
 Compare local IDs, schema, peer certificate bytes and the private PFX before/after. Do not compare a whole live database hash: address discovery and ordinary message delivery change it. A TCP connection alone does not prove trusted authentication. Use explicit `Paired device ... verified` logs or the Android connected UI with current battery/audio messages.
 
+## Update policy
+
+All peers must run the same Sefirah release, and the user upgrades them only manually and together. A 3.1.0 peer could not authenticate with a 3.2.0 peer: unknown message types made it discard whole receive batches, including Authentication. The only automatic updater was the Microsoft Store. On 2026-10-16, OMEN and ROG received `HKLM\SOFTWARE\Policies\Microsoft\WindowsStore` `AutoDownload=2` (DWORD). The Store has no per-app switch, so this stops automatic updates for every Store app on those machines. Remove the value to restore Store auto-updates. The in-app Windows UpdateService only notifies and downloads after a click. The macOS UpdateService is a no-op, and both Android devices run a locally re-signed APK with no installer package. Neither can change version unattended.
+
+To upgrade, merge the upstream tag into the macOS branch and deploy the Mac build. Re-sign the upstream APK with OMEN's `~/.android/debug.keystore`, then `adb install -r` it on the phone and tablet. Update the Windows Store packages manually. Only then check authentication across all peers.
+
 ## Legacy actions and missing Android icons
 
 The fork stored polymorphic `$type: Process` actions with top-level `Path` and `Arguments`. Official 3.1.0 uses `ActionId`, `Icon` and a `Settings` object. Copying old JSON without conversion results in generic Apps icons and unusable command configuration.
