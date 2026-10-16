@@ -37,7 +37,7 @@ There is one residual Store-build hazard. A Windows client can start a second `C
 
 ## Upstream proposal
 
-Items 1, 3 and 4 are protocol-compatible and fix the asymmetry once both ends run them. Item 2 is a mixed-version compatibility shim for servers without item 1. It is worth upstreaming while older desktop builds remain in use. Android needs no change.
+Submitted as draft https://github.com/shrimqy/Sefirah/pull/303 with items 1–3. Item 4 duplicates upstream PR #281 and is left out of #303. Items 1, 3 and 4 are protocol-compatible and fix the asymmetry once both ends run them. Item 2 is a mixed-version compatibility shim for servers without item 1. It is worth upstreaming while older desktop builds remain in use. Android needs no change.
 
 ## Verification
 
