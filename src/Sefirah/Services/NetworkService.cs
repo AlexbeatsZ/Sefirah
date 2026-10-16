@@ -30,6 +30,8 @@ public class NetworkService(
     private readonly HashSet<string> connectingDeviceIds = [];
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> handshakeCompletion = [];
     private readonly ConcurrentDictionary<string, CancellationTokenSource> connectionCancellationTokens = [];
+    // Pinned client connections to paired devices that have not yet confirmed us
+    private readonly ConcurrentDictionary<Guid, PairedDevice> awaitingServerAuthentication = [];
 
     private sealed class DeviceAuth
     {
@@ -182,30 +184,42 @@ public class NetworkService(
 
             if (string.IsNullOrEmpty(messageString)) continue;
 
-            logger.Debug($"Processing message: {(messageString.Length > 100 ? string.Concat(messageString.AsSpan(0, 100), "...") : messageString)}");
+            var preview = messageString.Length > 100 ? string.Concat(messageString.AsSpan(0, 100), "...") : messageString;
+            logger.Debug($"Processing message: {preview}");
 
-            var socketMessage = JsonMessageSerializer.DeserializeMessage(messageString);
-            if (socketMessage is not null)
+            // Skip only this line: a newer peer's unknown message type must not drop the rest of the batch
+            try
             {
-                messages.Add(socketMessage);
+                var socketMessage = JsonMessageSerializer.DeserializeMessage(messageString);
+                if (socketMessage is not null)
+                {
+                    messages.Add(socketMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Warn($"Skipping undeserializable message: {preview}", ex);
             }
         }
         return messages;
     }
 
-    public async void SendAuthenticationMessage(Action<SocketMessage> send)
+    private async Task<Authentication> CreateAuthenticationMessageAsync()
     {
         var localDevice = await deviceManager.GetLocalDeviceAsync();
 
-        var authResponse = new Authentication
+        return new Authentication
         {
             DeviceId = localDevice.DeviceId,
             DeviceName = localDevice.DeviceName,
             PublicKey = SslHelper.DevicePublicKeyString,
             Model = Environment.MachineName
         };
+    }
 
-        send(authResponse);
+    public async void SendAuthenticationMessage(Action<SocketMessage> send)
+    {
+        send(await CreateAuthenticationMessageAsync());
     }
 
     #region Server events
@@ -391,7 +405,7 @@ public class NetworkService(
     {
         logger.Info($"Paired device {pairedDevice.Name} verified, updating connection");
 
-        if (pairedDevice.IsConnected && pairedDevice.Session is not null)
+        if (pairedDevice.IsConnected && pairedDevice.Session is not null && pairedDevice.Session != session)
         {
             DisconnectSession(pairedDevice.Session);
         }
@@ -400,6 +414,12 @@ public class NetworkService(
 
         pairedDevice.Session = session;
         pairedDevice.Address = address;
+
+        // Reply like Android servers do, so a connecting desktop can mark this server connected.
+        // Sent before ConnectionStatusChanged so it precedes DeviceInfo on the wire.
+        var authReply = await CreateAuthenticationMessageAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+        SendMessage(session, authReply);
 
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
@@ -536,6 +556,7 @@ public class NetworkService(
         {
             logger.Debug($"disconnecing client session: {client.Id}");
             connectionBuffers.TryRemove(client.Id, out _);
+            awaitingServerAuthentication.TryRemove(client.Id, out _);
             CancelAuth(client.Id);
 
             client.Disconnect();
@@ -701,8 +722,9 @@ public class NetworkService(
 
                     cts.Token.ThrowIfCancellationRequested();
 
-                    SendAuthenticationMessage(m => SendMessage(client, m));
                     device.Client = client;
+                    awaitingServerAuthentication[client.Id] = device;
+                    SendAuthenticationMessage(m => SendMessage(client, m));
                     return;
                 }
                 catch (OperationCanceledException)
@@ -791,6 +813,7 @@ public class NetworkService(
             {
                 if (socketMessage is Authentication authMessage)
                 {
+                    awaitingServerAuthentication.TryRemove(client.Id, out _);
                     var deviceAuth = StartAuth(client.Id);
                     AuthenticateClientAsync(client, authMessage, deviceAuth);
                     continue;
@@ -799,6 +822,14 @@ public class NetworkService(
                 if (deviceAuths.TryGetValue(client.Id, out var active))
                 {
                     active.Deferred.Enqueue(socketMessage);
+                    continue;
+                }
+
+                if (awaitingServerAuthentication.TryRemove(client.Id, out var legacyServer))
+                {
+                    var deviceAuth = StartAuth(client.Id);
+                    deviceAuth.Deferred.Enqueue(socketMessage);
+                    AcceptLegacyServerAsync(client, legacyServer, deviceAuth);
                     continue;
                 }
 
@@ -823,6 +854,35 @@ public class NetworkService(
         catch (OperationCanceledException)
         {
             logger.Debug($"Auth superseded for client {client.Id}");
+        }
+        finally
+        {
+            FinalizeAuth(client.Id, deviceAuth);
+        }
+    }
+
+    /// <summary>
+    /// Desktop servers up to 3.2.0 accept a paired client without replying Authentication.
+    /// The TLS session is pinned to the paired certificate and a server sends application
+    /// messages (DeviceInfo first) only after accepting us, so the first one confirms the link.
+    /// </summary>
+    private async void AcceptLegacyServerAsync(Client client, PairedDevice pairedDevice, DeviceAuth deviceAuth)
+    {
+        try
+        {
+            if (pairedDevice.Client != client || pairedDevice.IsConnected) return;
+            if (client.Socket.RemoteEndPoint is not IPEndPoint endPoint) return;
+
+            logger.Info($"Paired device {pairedDevice.Name} accepted this client without an Authentication reply");
+            await AuthenticatePairedDeviceServer(client, pairedDevice, endPoint.Address.ToString(), deviceAuth.Cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            logger.Debug($"Legacy acceptance superseded for client {client.Id}");
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Error accepting legacy server", ex);
         }
         finally
         {
@@ -872,6 +932,11 @@ public class NetworkService(
 
     private async Task AuthenticatePairedDeviceServer(Client client, PairedDevice pairedDevice, string address, CancellationToken cancellationToken)
     {
+        // Already accepted on this client (e.g. legacy acceptance followed by a late Authentication);
+        // disconnecting pairedDevice.Client here would close this very connection.
+        if (pairedDevice.IsConnected && pairedDevice.Client == client)
+            return;
+
         if (pairedDevice.IsConnected && pairedDevice.Client is not null)
         {
             logger.Warn($"Device {pairedDevice.Name} is already connected, disconnect the current client");

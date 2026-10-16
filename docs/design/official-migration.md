@@ -4,7 +4,7 @@
 
 Windows runs the upstream Microsoft Store-signed package (`shrimqy.Seki-PhoneLink`, Store ID 9PJV6D1JPG0H). Android runs the upstream APK payload re-signed with the existing installation key: the Android Debug key in OMEN's `~/.android/debug.keystore` (certificate SHA-256 7967ceba…). This keeps the installed Android UID, data, permission grants and certificate identity; a differently signed upstream APK cannot replace it directly. To upgrade, `zipalign -p 4` the release APK, sign it with apksigner using that keystore, verify the signer digest, then `adb install -r`. Delete the copied keystore afterwards.
 
-The Store updates Windows by itself; when it moves to a new protocol version, every peer must follow. A 3.1.0 peer could not parse v3.2.0's ConversationsRequest. `GetMessagesFromBuffer` throws for that line, discarding the whole received batch, including an Authentication message in the same read. Phone, tablet, Mac and Windows therefore need to be upgraded together.
+The Store updates Windows by itself; when it moves to a new protocol version, every peer must follow. A 3.1.0 peer could not parse v3.2.0's ConversationsRequest. `GetMessagesFromBuffer` threw for that line, discarding the whole received batch, including an Authentication message in the same read. Mac build 70 skips only the bad line, but Windows and Android builds still drop the batch. Phone, tablet, Mac and Windows therefore need to be upgraded together.
 
 macOS has no upstream release asset. The local arm64 build merges the official desktop release tag (currently v3.2.0, merged in 93848a1; previously `bfea958`). Its additions are the Uno macOS host, AppKit window/status-item/login lifecycle, notifications, battery, system volume, SFTP URI browsing and macOS power commands. Fork device groups, control API and Bluetooth handoff are outside this adaptation.
 
@@ -72,7 +72,7 @@ Acceptance on 2026-10-04: a probe on ROG authenticated with its existing PFX aga
 
 Shared transport follow-up: NetCoreServer 8.0.7 (package source commit `cb58a43ba0bbce6182d9a5259388c75763d63db7`) returns from its private SslSession.ProcessReceive callback when a connection is no longer handshaked or its stream ID changed, before EndRead can observe the operation result. Reconnect logs show matching unobserved canceled SslStream reads. This is a source-supported explanation, not a verified shared-library fix. No global exception suppression or transport replacement was added.
 
-Desktop↔desktop links are asymmetric in the official core. The server side verifies a paired desktop and marks it connected, but it never sends Authentication back for paired devices. The connecting desktop therefore never marks its peer connected and does not send it clipboard data. Android peers act as servers and do send Authentication. This limitation predates v3.2.0 and is outside this adaptation.
+Desktop↔desktop links are asymmetric in the official core: a desktop server never replies with Authentication to a paired desktop, so the connecting desktop never marks it connected. Mac build 70 fixes this for every link with the Mac at one end; see `docs/design/desktop-link-auth.md`. Windows↔Windows links stay one-way.
 
 Closing the window hides it while networking remains active. Status-item clicks and application reopen display the existing window. Login startup uses the established `SefirahLoginLauncher` and `--login-startup` argument.
 
