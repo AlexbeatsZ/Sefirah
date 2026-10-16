@@ -129,13 +129,12 @@ public sealed partial class RemoteWatcher(
         // Brief pause to let client finish before reflecting it back
         //await Task.Delay(1000);
         relativePath = PathMapper.NormalizePath(relativePath);
-        logger.Debug($"Deleted {relativePath}");
         await taskWriter.WriteAsync(async () =>
         {
             using var locker = await fileLocker.Lock(relativePath);
             try
             {
-                placeholderService.Delete(relativePath);
+                await placeholderService.Delete(relativePath);
             }
             catch (Exception ex)
             {

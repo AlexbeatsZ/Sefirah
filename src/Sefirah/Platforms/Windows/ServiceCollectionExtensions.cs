@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCommonClassObjects(this IServiceCollection services) =>
         services
             .AddClassObject<SyncCommand>()
-            .AddClassObject<UploadCommand>();
+            .AddClassObject<DownloadCommand>();
 
     public static IServiceCollection AddLocalClassObjects(this IServiceCollection services) =>
         services
@@ -89,16 +89,17 @@ public static class ServiceCollectionExtensions
             .AddSingleton<SyncProviderContextAccessor>()
             .AddSingleton<ISyncProviderContextAccessor>((sp) => sp.GetRequiredService<SyncProviderContextAccessor>())
 
-            .AddSingleton((sp) =>
+            .AddSingleton<ShellCommandRouter>()
+            .AddScoped((sp) =>
                 Channel.CreateUnbounded<ShellCommand>(
                     new UnboundedChannelOptions
                     {
-                        SingleReader = false,
+                        SingleReader = true,
                     }
                 )
             )
-        .AddSingleton((sp) => sp.GetRequiredService<Channel<ShellCommand>>().Reader)
-        .AddSingleton((sp) => sp.GetRequiredService<Channel<ShellCommand>>().Writer)
+        .AddScoped((sp) => sp.GetRequiredService<Channel<ShellCommand>>().Reader)
+        .AddScoped((sp) => sp.GetRequiredService<Channel<ShellCommand>>().Writer)
         .AddScoped<ShellCommandQueue>()
 
             // Sync Provider services
@@ -136,7 +137,12 @@ public static class ServiceCollectionExtensions
                     contextAccessor.Context.Port,
                     contextAccessor.Context.Username,
                     contextAccessor.Context.Password
-                );
+                )
+                {
+                    // Unanswered requests would otherwise block the sync queue forever
+                    OperationTimeout = TimeSpan.FromSeconds(30),
+                    KeepAliveInterval = TimeSpan.FromSeconds(15),
+                };
                 try
                 {
                     client.Connect();

@@ -3,7 +3,6 @@ using Sefirah.Platforms.Windows.Helpers;
 using Sefirah.Platforms.Windows.Interop;
 using Sefirah.Platforms.Windows.Interop.Extensions;
 using Sefirah.Platforms.Windows.RemoteStorage.Abstractions;
-using Sefirah.Platforms.Windows.RemoteStorage.RemoteAbstractions;
 using Vanara.PInvoke;
 using static Vanara.PInvoke.CldApi;
 using FileAttributes = System.IO.FileAttributes;
@@ -16,7 +15,6 @@ public partial class ClientWatcher : IDisposable
     private readonly ISyncProviderContextAccessor _contextAccessor;
     private readonly ChannelWriter<Func<Task>> _taskWriter;
     private readonly FileLocker _fileLocker;
-    private readonly IRemoteReadWriteService _remoteService;
     private readonly PlaceholdersService _placeholdersService;
     private readonly ILogger _logger;
     private readonly FileSystemWatcher _watcher;
@@ -27,7 +25,6 @@ public partial class ClientWatcher : IDisposable
         ISyncProviderContextAccessor contextAccessor,
         ChannelWriter<Func<Task>> taskWriter,
         FileLocker fileLocker,
-        IRemoteReadWriteService remoteService,
         PlaceholdersService placeholdersService,
         ILogger logger
     )
@@ -35,7 +32,6 @@ public partial class ClientWatcher : IDisposable
         _contextAccessor = contextAccessor;
         _taskWriter = taskWriter;
         _fileLocker = fileLocker;
-        _remoteService = remoteService;
         _placeholdersService = placeholdersService;
         _logger = logger;
         _watcher = CreateWatcher();
@@ -80,8 +76,13 @@ public partial class ClientWatcher : IDisposable
                         && !fileInfo.Attributes.HasFlag(FileAttributes.Directory)
                         && !state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK);
 
-                    // Skip already-synced files (hydration also raises Changed), but let dehydrate requests through.
-                    if (state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC) && !isDehydrationRequested)
+                    // A pinned folder, or a pinned online-only file, is an "Always keep on this device" request.
+                    var isHydrationRequested = fileInfo.Attributes.IsPinned() 
+                        && (fileInfo.Attributes.HasFlag(FileAttributes.Directory) 
+                        || fileInfo.Attributes.HasFlag(FileAttributes.Offline));
+
+                    // Skip already-synced files (hydration also raises Changed), but let dehydrate and pin requests through.
+                    if (!CloudFilter.HasLocalChanges(state) && !isDehydrationRequested && !isHydrationRequested)
                     {
                         return;
                     }
@@ -89,47 +90,19 @@ public partial class ClientWatcher : IDisposable
                     var relativePath = PathMapper.GetRelativePath(e.FullPath, RootDirectory);
                     using var locker = await _fileLocker.Lock(relativePath);
 
-                    if (fileInfo.Attributes.IsPinned() && fileInfo.Attributes.HasFlag(FileAttributes.Offline))
+                    if (isHydrationRequested)
                     {
-                        if (fileInfo.Attributes.HasFlag(FileAttributes.Directory))
+                        try
                         {
-                            try
-                            {
-                                _placeholdersService.CreateBulk(relativePath);
-                                var childItems = Directory.EnumerateFiles(e.FullPath, "*", SearchOption.AllDirectories)
-                                    .Where((x) => !FileHelper.IsSystemFile(x))
-                                    .ToArray();
-                                foreach (var childItem in childItems)
-                                {
-                                    try
-                                    {
-                                        CloudFilter.HydratePlaceholder(childItem);
-                                    }
-                                    catch (HFileException)
-                                    {
-                                        _logger.Warn($"Unable to hydrate placeholder for {childItem} - connection may be lost");
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        _logger.Error($"Hydrate file failed: {childItem}", ex);
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.Error($"Error processing directory {e.FullPath}", ex);
-                            }
+                            _placeholdersService.Hydrate(relativePath);
                         }
-                        else
+                        catch (HFileException)
                         {
-                            try
-                            {
-                                CloudFilter.HydratePlaceholder(e.FullPath);
-                            }
-                            catch (HFileException)
-                            {
-                                _logger.Warn($"Unable to hydrate placeholder for {e.FullPath} - connection may be lost");
-                            }
+                            _logger.Warn($"Unable to hydrate placeholder for {e.FullPath} - connection may be lost");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error($"Hydrate failed: {e.FullPath}", ex);
                         }
                     }
                     else if (isDehydrationRequested)
@@ -152,8 +125,7 @@ public partial class ClientWatcher : IDisposable
                     }
                     else
                     {
-                        await _remoteService.UpdateFile(fileInfo, relativePath);
-                        EnsurePlaceholderSync(e.FullPath);
+                        await _placeholdersService.UpdateFile(relativePath);
                     }
 
                 });
@@ -169,8 +141,7 @@ public partial class ClientWatcher : IDisposable
             await _taskWriter.WriteAsync(async () => {
                 try
                 {
-                    var state = CloudFilter.GetPlaceholderState(e.FullPath);
-                    if (state.HasFlag(CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC))
+                    if (!CloudFilter.HasLocalChanges(e.FullPath))
                     {
                         return;
                     }
@@ -182,53 +153,69 @@ public partial class ClientWatcher : IDisposable
                 }
 
                 var relativePath = PathMapper.GetRelativePath(e.FullPath, RootDirectory);
-                using var locker = await _fileLocker.Lock(relativePath);
-
-                if (File.GetAttributes(e.FullPath).HasFlag(FileAttributes.Directory))
+                try
                 {
-                    var directoryInfo = new DirectoryInfo(e.FullPath);
-
-                    try
+                    if (File.GetAttributes(e.FullPath).HasFlag(FileAttributes.Directory))
                     {
-                        await _remoteService.CreateDirectory(directoryInfo, relativePath);
+                        await _placeholdersService.SyncPendingChanges(relativePath);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.Error($"Create directory failed: {relativePath}", ex);
-                    }
-
-                    var childItems = Directory.EnumerateFiles(e.FullPath, "*", SearchOption.AllDirectories)
-                        .Where((x) => !FileHelper.IsSystemFile(x))
-                        .ToArray();
-                    foreach (var childItem in childItems)
-                    {
-                        try
-                        {
-                            var fileInfo = new FileInfo(childItem);
-                            var childRelativePath = PathMapper.GetRelativePath(childItem, RootDirectory);
-                            await _remoteService.CreateFile(fileInfo, childRelativePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.Error($"Create file failed: {childItem}", ex);
-                            continue;
-                        }
-                        EnsurePlaceholderSync(childItem);
+                        using var locker = await _fileLocker.Lock(relativePath);
+                        await _placeholdersService.UpdateFile(relativePath);
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    var fileInfo = new FileInfo(e.FullPath);
-                    try
+                    _logger.Error($"Create failed: {e.FullPath}", ex);
+                }
+            });
+        };
+
+        // Placeholders were already renamed on the remote in SyncRootConnector.OnRename; Windows clears their in-sync state
+        watcher.Renamed += async (sender, e) => {
+            await _taskWriter.WriteAsync(async () => {
+                if (FileHelper.IsSystemFile(e.FullPath))
+                {
+                    return;
+                }
+
+                var relativePath = PathMapper.GetRelativePath(e.FullPath, RootDirectory);
+                try
+                {
+                    // Null for new items, which get their identity when converted below
+                    if (CloudFilter.GetPlaceholderIdentity(e.FullPath) is not null)
                     {
-                        await _remoteService.CreateFile(fileInfo, relativePath);
+                        CloudFilter.SetPlaceholderIdentity(e.FullPath, relativePath);
                     }
-                    catch (Exception ex)
+
+                    var attributes = File.GetAttributes(e.FullPath);
+                    // Online-only: no local content to differ from the remote
+                    if (attributes.HasFlag(FileAttributes.Offline))
                     {
-                        _logger.Error($"Create file failed: {e.FullPath}", ex);
-                        return;
+                        CloudFilter.SetInSyncState(e.FullPath);
+                        // Explorer keeps showing the old status icon otherwise
+                        ShellNotify.NotifyUpdate(e.FullPath);
                     }
-                    EnsurePlaceholderSync(e.FullPath);
+                    // Created on the remote if it isn't there yet, then marked in sync
+                    else if (attributes.HasFlag(FileAttributes.Directory))
+                    {
+                        await _placeholdersService.SyncPendingChanges(relativePath);
+                    }
+                    // Uploaded if it differs from or is missing on the remote, then marked in sync
+                    else
+                    {
+                        using var locker = await _fileLocker.Lock(relativePath);
+                        await _placeholdersService.UpdateFile(relativePath);
+                    }
+                }
+                catch (Exception) when (!Path.Exists(e.FullPath))
+                {
+                    // Gone already, e.g. renamed again
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Rename failed: {e.FullPath}", ex);
                 }
             });
         };
@@ -239,24 +226,6 @@ public partial class ClientWatcher : IDisposable
         };
 
         return watcher;
-    }
-
-    private void EnsurePlaceholderSync(string fullPath)
-    {
-        try
-        {
-            if (!CloudFilter.IsPlaceholder(fullPath))
-            {
-                CloudFilter.ConvertToPlaceholder(fullPath);
-            }
-            CloudFilter.SetInSyncState(fullPath);
-            
-            ShellNotify.NotifyUpdate(fullPath);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to set in-sync state for {fullPath}", ex);
-        }
     }
 
     public void Start()

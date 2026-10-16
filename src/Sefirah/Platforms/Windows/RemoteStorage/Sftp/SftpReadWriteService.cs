@@ -24,11 +24,35 @@ public class SftpReadWriteService(
         }
 
         logger.Debug($"Create File {relativeFile}");
-        PathMapper.EnsureSubDirectoriesExist(serverFile);
+        EnsureRemoteParentExists(serverFile);
 
-        using (var sourceStream = await FileHelper.WaitUntilUnlocked(sourceFileInfo.OpenRead, logger))
+        await Upload(sourceFileInfo, serverFile);
+    }
+
+    public Task UpdateFile(FileInfo sourceFileInfo, string relativeFile) =>
+        Upload(sourceFileInfo, GetSftpPath(relativeFile));
+
+    /// <summary>Uploads to a temporary file, then renames it over <paramref name="serverFile"/>.</summary>
+    private async Task Upload(FileInfo sourceFileInfo, string serverFile)
+    {
+        var separatorIndex = serverFile.LastIndexOf('/');
+        var tempFile = $"{serverFile[..(separatorIndex + 1)]}.{serverFile[(separatorIndex + 1)..]}{SftpConstants.PartialFileSuffix}";
+        try
         {
-            await Task.Factory.FromAsync(client.BeginUploadFile(sourceStream, serverFile), client.EndUploadFile);
+            using (var sourceStream = await FileHelper.WaitUntilUnlocked(sourceFileInfo.OpenRead, logger))
+            {
+                await Task.Factory.FromAsync(client.BeginUploadFile(sourceStream, tempFile), client.EndUploadFile);
+            }
+            client.RenameFile(tempFile, serverFile, isPosix: true);
+        }
+        catch
+        {
+            try
+            {
+                client.DeleteFile(tempFile);
+            }
+            catch (Exception) { }
+            throw;
         }
 
         var sftpFile = client.Get(serverFile);
@@ -37,38 +61,21 @@ public class SftpReadWriteService(
         sftpFile.UpdateStatus();
     }
 
-    public async Task UpdateFile(FileInfo sourceFileInfo, string relativeFile)
+    public void MoveFile(string oldRelativeFile, string newRelativeFile) =>
+        Move(GetSftpPath(oldRelativeFile), GetSftpPath(newRelativeFile));
+
+    private void Move(string oldServerPath, string newServerPath)
     {
-        var serverFile = GetSftpPath(relativeFile);
-        // Update only - CreateFile to create!
-        if (!Exists(relativeFile))
+        EnsureRemoteParentExists(newServerPath);
+        // The device storage ignores case, so renaming to another case of the same name does nothing
+        if (string.Equals(oldServerPath, newServerPath, StringComparison.OrdinalIgnoreCase))
         {
+            var tempPath = oldServerPath + SftpConstants.PartialFileSuffix;
+            client.RenameFile(oldServerPath, tempPath);
+            client.RenameFile(tempPath, newServerPath);
             return;
         }
-
-        var sftpFile = client.Get(serverFile);
-        if (sourceFileInfo.LastWriteTimeUtc < sftpFile.LastWriteTimeUtc)
-        {
-            return;
-        }
-
-        using (var sourceStream = await FileHelper.WaitUntilUnlocked(sourceFileInfo.OpenRead, logger))
-        {
-            await Task.Factory.FromAsync(client.BeginUploadFile(sourceStream, serverFile), client.EndUploadFile);
-        }
-
-        sftpFile.LastWriteTimeUtc = sourceFileInfo.LastWriteTimeUtc;
-        sftpFile.LastAccessTimeUtc = sourceFileInfo.LastAccessTimeUtc;
-        sftpFile.UpdateStatus();
-    }
-
-    public void MoveFile(string oldRelativeFile, string newRelativeFile)
-    {
-        var oldServerFile = GetSftpPath(oldRelativeFile);
-        var newServerFile = GetSftpPath(newRelativeFile);
-
-        var sftpFile = client.Get(oldServerFile);
-        sftpFile.MoveTo(newServerFile);
+        client.RenameFile(oldServerPath, newServerPath);
     }
 
     public void DeleteFile(string relativeFile)
@@ -76,7 +83,6 @@ public class SftpReadWriteService(
         var serverFile = GetSftpPath(relativeFile);
         logger.Debug($"Delete File {serverFile}");
         client.DeleteFile(serverFile);
-        DeleteDirectoryIfEmpty(serverFile);
     }
 
     public Task CreateDirectory(DirectoryInfo sourceDirectoryInfo, string relativeDirectory)
@@ -107,8 +113,7 @@ public class SftpReadWriteService(
         var oldServerDirectory = GetSftpPath(oldRelativeDirectory);
         var newServerDirectory = GetSftpPath(newRelativeDirectory);
         logger.Debug($"Move Directory {oldServerDirectory} -> {newServerDirectory}");
-        var sftpFile = client.Get(oldServerDirectory);
-        sftpFile.MoveTo(newServerDirectory);
+        Move(oldServerDirectory, newServerDirectory);
     }
 
     public void DeleteDirectory(string relativeDirectory)
@@ -134,28 +139,22 @@ public class SftpReadWriteService(
         }
 
         client.DeleteDirectory(serverDirectory);
-
-        DeleteDirectoryIfEmpty(serverDirectory);
     }
 
-    private void DeleteDirectoryIfEmpty(string serverPath)
+    /// <summary>Creates any missing parent directories of <paramref name="serverPath"/> on the remote.</summary>
+    private void EnsureRemoteParentExists(string serverPath)
     {
-        var serverDirectory = Path.GetDirectoryName(serverPath)!.Replace(@"\", "/");
-        var root = GetSftpPath("");
-        if (serverDirectory == GetSftpPath(""))
+        var separatorIndex = serverPath.LastIndexOf('/');
+        if (separatorIndex <= 0)
         {
             return;
         }
-        if (!client.Exists(serverDirectory))
+        var parent = serverPath[..separatorIndex];
+        if (client.Exists(parent))
         {
             return;
         }
-        var hasEntries = client.ListDirectory(serverDirectory)
-            .Where(x => !_relativeDirectoryNames.Contains(x.Name))
-            .Any();
-        if (!hasEntries)
-        {
-            DeleteDirectory(PathMapper.GetRelativePath(serverDirectory, _context.Directory));
-        }
+        EnsureRemoteParentExists(parent);
+        client.CreateDirectory(parent);
     }
 }

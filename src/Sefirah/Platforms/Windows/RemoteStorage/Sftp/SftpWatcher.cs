@@ -26,7 +26,8 @@ public sealed partial class SftpWatcher(
     public event RemoteChangeHandler? Changed;
     public event RemoteRenameHandler? Renamed;
     public event RemoteDeleteHandler? Deleted;
-    
+    public event RemoteReconnectHandler? Reconnected;
+
     public async void Start(CancellationToken stoppingToken = default)
     {
         ObjectDisposedException.ThrowIf(_cancellationTokenSource.IsCancellationRequested, this);
@@ -93,7 +94,16 @@ public sealed partial class SftpWatcher(
                 }
                 catch (SshOperationTimeoutException ex)
                 {
-                    logger.Warn("SFTP operation timed out (connection dropped mid-operation)", ex);
+                    logger.Warn("SFTP operation timed out, reconnecting", ex);
+                    // Reconnected on the next loop, which also syncs changes missed by timed out tasks
+                    try
+                    {
+                        client.Disconnect();
+                    }
+                    catch (Exception disconnectEx)
+                    {
+                        logger.Error("Error disconnecting SFTP client", disconnectEx);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -101,6 +111,14 @@ public sealed partial class SftpWatcher(
                     await Task.Delay(TimeSpan.FromSeconds(5), linkedTokenSource.Token);
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopped while waiting to retry
+        }
+        catch (Exception ex)
+        {
+            logger.Error("SFTP watcher stopped unexpectedly", ex);
         }
         finally
         {
@@ -131,7 +149,7 @@ public sealed partial class SftpWatcher(
 
         // Get files from current directory
         var files = sftpFiles
-            .Where(sftpFile => sftpFile.IsRegularFile)
+            .Where(sftpFile => sftpFile.IsRegularFile && !sftpFile.Name.EndsWith(SftpConstants.PartialFileSuffix))
             .ToDictionary(
                 file => PathMapper.GetRelativePath(file.FullName, _context.Directory),
                 file => file.LastWriteTimeUtc
@@ -139,14 +157,27 @@ public sealed partial class SftpWatcher(
 
         // Recursively get files from hydrated subdirectories
         var subFiles = directories.Keys
-            .Where(IsHydrated)
-            .SelectMany(FindFiles)
+            .SelectMany(FindFilesOrKnown)
             .ToDictionary(pair => pair.Key, pair => pair.Value);
 
         return directories
             .Concat(files)
             .Concat(subFiles)
             .ToDictionary();
+    }
+
+    /// <summary>Returns the previous entries when the folder can't be read.</summary>
+    private IEnumerable<KeyValuePair<string, DateTime>> FindFilesOrKnown(string relativeDirectory)
+    {
+        try
+        {
+            return IsHydrated(relativeDirectory) ? FindFiles(relativeDirectory) : [];
+        }
+        catch (Exception ex) when (ex is not (SshConnectionException or SshOperationTimeoutException))
+        {
+            logger.Warn($"Unable to read {relativeDirectory}, keeping its previous entries", ex);
+            return [.. _knownFiles.Where(pair => pair.Key.StartsWith(relativeDirectory + "/"))];
+        }
     }
 
     private async Task TryReconnectAsync(CancellationToken cancellationToken)
@@ -173,6 +204,7 @@ public sealed partial class SftpWatcher(
                 {
                     client.Connect();
                     logger.Info("Successfully reconnected to SFTP server");
+                    Reconnected?.Invoke();
                 }
                 catch (Exception ex)
                 {
@@ -196,17 +228,9 @@ public sealed partial class SftpWatcher(
 
     private bool IsHydrated(string relativePath)
     {
-        try
-        {
-            var clientPath = Path.Join(_syncContext.RootDirectory, relativePath);
-            return Path.Exists(clientPath) &&
-                   !File.GetAttributes(clientPath).HasFlag(FileAttributes.Offline);
-        }
-        catch (Exception ex)
-        {
-            logger.Error($"Error checking hydration state for {relativePath}", ex);
-            return false;
-        }
+        var clientPath = Path.Join(_syncContext.RootDirectory, relativePath);
+        return Path.Exists(clientPath) &&
+               !File.GetAttributes(clientPath).HasFlag(FileAttributes.Offline);
     }
 
     public void Dispose()

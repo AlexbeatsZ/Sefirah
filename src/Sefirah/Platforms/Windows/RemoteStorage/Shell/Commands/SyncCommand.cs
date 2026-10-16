@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
-using System.Threading.Channels;
 using Sefirah.Platforms.Windows.RemoteStorage.Abstractions;
+using Sefirah.Platforms.Windows.RemoteStorage.Worker;
 using Vanara.InteropServices;
 using Vanara.PInvoke;
 using static Vanara.PInvoke.Ole32;
@@ -13,12 +13,12 @@ namespace Sefirah.Platforms.Windows.RemoteStorage.Shell.Commands;
 
 [ComVisible(true), Guid("942952b6-3bdc-4e50-8fe2-8d2d869ca70f")]
 public class SyncCommand(
-    ChannelWriter<ShellCommand> commandWriter,
+    ShellCommandRouter router,
     ILogger logger) : IExplorerCommand, IExplorerCommandState, IObjectWithSite
 {
     public HRESULT GetTitle(IShellItemArray psiItemArray, out string? ppszName)
     {
-        ppszName = "Sync From Cloud";
+        ppszName = "CloudFilesContextMenu.SyncWithDevice".GetLocalizedResource();
         return HRESULT.S_OK;
     }
 
@@ -42,7 +42,7 @@ public class SyncCommand(
 
     public HRESULT GetState(IShellItemArray psiItemArray, bool fOkToBeSlow, out EXPCMDSTATE pCmdState)
     {
-        pCmdState = EXPCMDSTATE.ECS_ENABLED;
+        pCmdState = (psiItemArray?.GetCount() ?? 0) > 0 ? EXPCMDSTATE.ECS_ENABLED : EXPCMDSTATE.ECS_HIDDEN;
         return HRESULT.S_OK;
     }
 
@@ -66,15 +66,11 @@ public class SyncCommand(
                 var rawFullPath = pShellItem.Item.GetDisplayName(SIGDN.SIGDN_FILESYSPATH);
                 logger.Debug($"Sync Command received for file {rawFullPath}");
 
-                commandWriter.TryWrite(new ShellCommand
+                router.TryWrite(new ShellCommand
                 {
-                    Kind = ShellCommandKind.Do,
+                    Kind = ShellCommandKind.Sync,
                     FullPath = rawFullPath,
                 });
-
-                //var relativePath = client.GetRelativePath(rawFullPath);
-
-                // TODO: placeholder service createorupdate - but how? 
             }
         }
         catch (Exception ex)

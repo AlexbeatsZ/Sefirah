@@ -67,6 +67,10 @@ public class MessageHandler(
                     await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.DndEnabled = dndStatus.IsEnabled);
                     break;
 
+                case BluetoothState bluetoothState:
+                    await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.BluetoothEnabled = bluetoothState.IsEnabled);
+                    break;
+
                 case AudioStreamState audioStream:
                     await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
                         device.UpdateStreamLevel(audioStream.StreamType, audioStream.Level));
@@ -76,8 +80,20 @@ public class MessageHandler(
                     await clipboardFeature.SetContentAsync(clipboard, device);
                     break;
 
-                case ConversationInfo textConversation:
-                    await smsFeature.HandleTextMessage(device.Id, textConversation);
+                case ConversationInfo conversationInfo:
+                    await smsFeature.HandleConversationInfo(device.Id, conversationInfo);
+                    break;
+
+                case MessageList messageList:
+                    await smsFeature.HandleMessageList(device.Id, messageList);
+                    break;
+
+                case MessageIndex messageIndex:
+                    await smsFeature.HandleMessageIndex(device.Id, messageIndex);
+                    break;
+
+                case RemoveConversation removeConversation:
+                    await smsFeature.HandleRemoveConversation(device.Id, removeConversation);
                     break;
 
                 case ContactInfo contactMessage:
@@ -92,8 +108,28 @@ public class MessageHandler(
                     await sftpFeature.Mount(device, sftpServerInfo);
                     break;
 
-                case FileTransferInfo fileTransfer:
-                    await fileTransferService.ReceiveFiles(fileTransfer, device);
+                case ShareTransfer share:
+                    var sharedFile = await fileTransferService.Receive(share.Transfer, device, silent: false);
+                    if (sharedFile is not null && device.DeviceSettings.ClipboardFiles)
+                        await clipboardFeature.SetContentAsync(sharedFile, device);
+                    break;
+
+                case ClipboardTransfer clipboardTransfer:
+                    var clipboardFile = await fileTransferService.Receive(clipboardTransfer.Transfer, device, silent: true);
+                    if (clipboardFile is not null)
+                        await clipboardFeature.SetContentAsync(clipboardFile, device);
+                    break;
+
+                case SmsAttachmentTransfer smsAttachmentTransfer:
+                    StorageFile? attachmentFile = null;
+                    try
+                    {
+                        attachmentFile = await fileTransferService.Receive(smsAttachmentTransfer.Transfer, device, silent: true);
+                    }
+                    finally
+                    {
+                        await smsFeature.HandleAttachmentFile(device.Id, smsAttachmentTransfer.PartId, attachmentFile);
+                    }
                     break;
 
                 case DeviceInfo deviceInfo:
