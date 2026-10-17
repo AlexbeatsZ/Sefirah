@@ -32,6 +32,9 @@ public class NetworkService(
     private readonly ConcurrentDictionary<string, CancellationTokenSource> connectionCancellationTokens = [];
     // Pinned client connections to paired devices that have not yet confirmed us
     private readonly ConcurrentDictionary<Guid, PairedDevice> awaitingServerAuthentication = [];
+    // Last session each paired client was sent an Authentication reply on
+    private readonly Dictionary<string, (Guid SessionId, long Ticks)> authenticationReplies = [];
+    private static readonly TimeSpan DuplicateConnectionWindow = TimeSpan.FromSeconds(3);
 
     private sealed class DeviceAuth
     {
@@ -419,7 +422,7 @@ public class NetworkService(
         // Sent before ConnectionStatusChanged so it precedes DeviceInfo on the wire.
         var authReply = await CreateAuthenticationMessageAsync();
         cancellationToken.ThrowIfCancellationRequested();
-        SendMessage(session, authReply);
+        ReplyAuthentication(session, pairedDevice, authReply);
 
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
@@ -442,6 +445,35 @@ public class NetworkService(
 
         if (pairedDevice.Client is not null)
             DisconnectClient(pairedDevice.Client);
+    }
+
+    /// <summary>
+    /// A desktop client briefly shows Disconnected after its handshake, so a discovery burst can make it
+    /// connect twice before the first reply arrives. Clients up to 3.2.0 that accept one reply and then get
+    /// another on their newer connection close that connection while staying Connected. Answer only the
+    /// newest session of a burst, and only once: without a second reply they keep their newest connection.
+    /// </summary>
+    private void ReplyAuthentication(ServerSession session, PairedDevice pairedDevice, Authentication authReply)
+    {
+        lock (authenticationReplies)
+        {
+            if (pairedDevice.Session != session)
+            {
+                logger.Debug($"Not replying to superseded session {session.Id} from {pairedDevice.Name}");
+                return;
+            }
+
+            if (authenticationReplies.TryGetValue(pairedDevice.Id, out var lastReply)
+                && lastReply.SessionId != session.Id
+                && Environment.TickCount64 - lastReply.Ticks < DuplicateConnectionWindow.TotalMilliseconds)
+            {
+                logger.Info($"Not replying to duplicate connection from {pairedDevice.Name}; an earlier one was just answered");
+                return;
+            }
+
+            SendMessage(session, authReply);
+            authenticationReplies[pairedDevice.Id] = (session.Id, Environment.TickCount64);
+        }
     }
 
     private async Task AddDiscoveredDevice(ServerSession session, Authentication authMessage, string address, byte[] certificate)
