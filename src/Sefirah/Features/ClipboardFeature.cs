@@ -19,7 +19,7 @@ public class ClipboardFeature(
     private bool isMonitoring = false;
     private const int DirectTransferThreshold = 2 * 1024 * 1024; // 2MB threshold
 
-    private static readonly Dictionary<string, string> SupportedImageFileTypes = new()
+    private static readonly Dictionary<string, string> SupportedImageFileTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         ["jpeg"] = "image/jpeg",
         ["jpg"] = "image/jpeg",
@@ -31,10 +31,14 @@ public class ClipboardFeature(
         ["tif"] = "image/tiff",
         ["heic"] = "image/heic",
         ["heif"] = "image/heic",
-        [".apng"] = "image/apng"
+        ["apng"] = "image/apng"
     };
     
     private bool isInternalUpdate; // To track if the clipboard change came from the remote device
+#if !WINDOWS
+    // macOS reports pasteboard changes by polling, so they arrive after isInternalUpdate is reset
+    private long lastInternalChangeCount = -1;
+#endif
 
     public Task InitializeAsync()
     {
@@ -74,6 +78,9 @@ public class ClipboardFeature(
     private async void OnClipboardContentChanged(object? sender, object? e)
     {
         if (isInternalUpdate) return;
+#if !WINDOWS
+        if (OperatingSystem.IsMacOS() && Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.ChangeCount == lastInternalChangeCount) return;
+#endif
 
         await dispatcher.EnqueueAsync(async () =>
         {
@@ -116,44 +123,34 @@ public class ClipboardFeature(
     private async Task SendClipboardContentAsync(List<PairedDevice> devices)
     {
         var dataPackageView = Clipboard.GetContent();
+        var devicesWithImageSync = devices
+            .Where(d => d.DeviceSettings.ClipboardIncludeImages)
+            .ToList();
+
+        // Finder also puts the file name on the clipboard as text, so look for a copied image file first
+        if (devicesWithImageSync.Count > 0 && await GetClipboardFileAsync(dataPackageView) is StorageFile file
+            && SupportedImageFileTypes.TryGetValue(file.FileType.TrimStart('.'), out var detectedMimeType))
+        {
+            var fileExtension = file.FileType[1..];
+            // Content type from StorageFile can be unreliable
+            var mimeType = string.IsNullOrEmpty(file.ContentType) ? detectedMimeType : file.ContentType;
+
+            logger.Info($"fileName: {file.Name}, fileExtension: {fileExtension}, Mime type: {mimeType}");
+
+            if ((long)(await file.GetBasicPropertiesAsync()).Size > DirectTransferThreshold)
+                await HandleLargeImageTransfer(file, fileExtension, mimeType, devicesWithImageSync);
+            else
+                await HandleSmallImageTransfer(await file.OpenStreamForReadAsync(), mimeType, devicesWithImageSync);
+            return;
+        }
+
         if (dataPackageView.Contains(StandardDataFormats.Text))
         {
             await TryHandleTextContent(dataPackageView, devices);
             return;
         }
 
-        var devicesWithImageSync = devices
-            .Where(d => d.DeviceSettings.ClipboardIncludeImages)
-            .ToList();
-
         if (devicesWithImageSync.Count == 0) return;
-
-        if (dataPackageView.Contains(StandardDataFormats.StorageItems))
-        {
-            var storageItems = await dataPackageView.GetStorageItemsAsync();
-            var file = storageItems.OfType<StorageFile>().FirstOrDefault();
-            if (file is IStorageFile)
-            {
-                var mimeType = file.ContentType;
-                var fileExtension = file.FileType[1..];
-
-                // Validate that this is a supported image type and get MIME type
-                if (!SupportedImageFileTypes.TryGetValue(fileExtension, out var detectedMimeType))
-                    return;
-
-                // Content type from StorageFile can be unreliable
-                if (string.IsNullOrEmpty(mimeType))
-                    mimeType = detectedMimeType;
-
-                logger.Info($"fileName: {file.Name}, fileExtension: {fileExtension}, Mime type: {mimeType}");
-
-                if ((long)(await file.GetBasicPropertiesAsync()).Size > DirectTransferThreshold)
-                    await HandleLargeImageTransfer(file, fileExtension, mimeType, devicesWithImageSync);
-                else
-                    await HandleSmallImageTransfer(await file.OpenStreamForReadAsync(), mimeType, devicesWithImageSync);
-            }
-            return;
-        }
 
         if (dataPackageView.Contains(StandardDataFormats.Bitmap))
         {
@@ -167,13 +164,47 @@ public class ClipboardFeature(
             encoder.SetSoftwareBitmap(softwareBitmap);
             await encoder.FlushAsync();
             stream.Position = 0;
+            var mimeType = "image/png";
 #else
-            var stream = bitmap.AsStream();
+            var stream = new MemoryStream();
+            await bitmap.AsStream().CopyToAsync(stream);
+            // Uno doesn't expose the stream's content type, so sniff the image format
+            var mimeType = GetImageMimeType(stream.GetBuffer().AsSpan(0, (int)stream.Length));
+
+            // Android can't decode TIFF, which some macOS apps offer as their only image format
+            if (OperatingSystem.IsMacOS() && mimeType == "image/tiff")
+            {
+                if (Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.ConvertToPng(stream.ToArray()) is not byte[] png) return;
+                stream = new MemoryStream(png);
+                mimeType = "image/png";
+            }
 #endif
-            await HandleSmallImageTransfer(stream, "image/png", devicesWithImageSync);
+            await HandleSmallImageTransfer(stream, mimeType, devicesWithImageSync);
         }
     }
-    
+
+    private static async Task<StorageFile?> GetClipboardFileAsync(DataPackageView dataPackageView)
+    {
+        if (dataPackageView.Contains(StandardDataFormats.StorageItems))
+            return (await dataPackageView.GetStorageItemsAsync()).OfType<StorageFile>().FirstOrDefault();
+
+#if !WINDOWS
+        if (OperatingSystem.IsMacOS() && Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.GetCopiedFilePath() is string path && File.Exists(path))
+            return await StorageFile.GetFileFromPathAsync(path);
+#endif
+        return null;
+    }
+
+#if !WINDOWS
+    private static string GetImageMimeType(ReadOnlySpan<byte> data) => data switch
+    {
+        [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
+        [(byte)'I', (byte)'I', 0x2A, 0x00, ..] or [(byte)'M', (byte)'M', 0x00, 0x2A, ..] => "image/tiff",
+        [(byte)'G', (byte)'I', (byte)'F', ..] => "image/gif",
+        _ => "image/png"
+    };
+#endif
+
 
     private static async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
     {
@@ -239,6 +270,14 @@ public class ClipboardFeature(
                 switch (content)
                 {
                     case StorageFile file:
+#if !WINDOWS
+                        // Uno can't put files on the macOS pasteboard
+                        if (OperatingSystem.IsMacOS())
+                        {
+                            SetMacClipboardFile(file);
+                            return;
+                        }
+#endif
                         // Set package family name for proper file handling
                         dataPackage.Properties.PackageFamilyName = Package.Current.Id.FamilyName;
                         // Pass false as second parameter to indicate the app isn't taking ownership of the files
@@ -285,6 +324,22 @@ public class ClipboardFeature(
             }
         });
     }
+
+#if !WINDOWS
+    private void SetMacClipboardFile(StorageFile file)
+    {
+        var isImage = SupportedImageFileTypes.ContainsKey(file.FileType.TrimStart('.'));
+        var changeCount = isImage
+            ? Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.WriteImage(File.ReadAllBytes(file.Path))
+            : -1;
+        // Fall back to the file itself when the image can't be decoded
+        if (changeCount < 0)
+            changeCount = Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.WriteFile(file.Path);
+
+        lastInternalChangeCount = changeCount;
+        logger.Info($"Clipboard content set. Type: {(isImage ? "image" : "file")} {file.Name}");
+    }
+#endif
 
     private static async Task<StorageFile?> CreateClipboardImageFileAsync(string base64Content, string mimeType)
     {
