@@ -39,7 +39,7 @@ Item 4 contains the Store-build double-connect hazard. One rare ordering remains
 
 ## Upstream proposal
 
-Ready for review: https://github.com/shrimqy/Sefirah/pull/303 (branch `fix/desktop-auth-reply`, one commit on v3.2.0) with items 1–4. Item 5 duplicates upstream PR #281 and is left out. #303 merges cleanly with #281 and #280. Android needs no change.
+On 2026-10-17 the maintainer accepted the diagnosis and the server reply but asked for no compatibility code for older versions. https://github.com/shrimqy/Sefirah/pull/303 (branch `fix/desktop-auth-reply`, one commit 42e2ad6 on v3.2.0, +9 lines) now contains only item 1's reply and item 3's early-return guard. The guard is needed even when both ends are patched, because a double-connecting client gets one reply per connection. Items 2 and 4 (the ≤3.2.0 compatibility code) and item 5 (#281) stay in the fork only, as long as the Windows peers run Store 3.2.0. Once an upstream release with #303 is on every peer, drop items 2 and 4 from the fork and follow upstream.
 
 ## Verification
 
