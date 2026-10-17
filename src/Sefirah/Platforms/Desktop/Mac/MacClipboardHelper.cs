@@ -4,7 +4,8 @@ namespace Sefirah.Platforms.Desktop.Mac;
 
 /// <summary>
 /// Reads and writes the parts of the general NSPasteboard that Uno's macOS clipboard does not cover:
-/// copied file URLs, files to paste in Finder, and image formats Android cannot decode.
+/// copied file URLs, files to paste in Finder, image formats Android cannot decode, and the change
+/// count of each write (Uno writes asynchronously and reports changes by polling).
 /// </summary>
 public static class MacClipboardHelper
 {
@@ -96,6 +97,26 @@ public static class MacClipboardHelper
             var result = new byte[length];
             Marshal.Copy(Send(png, Sel("bytes")), result, 0, length);
             return result;
+        }
+        finally
+        {
+            objc_autoreleasePoolPop(pool);
+        }
+    }
+
+    /// <summary>
+    /// Puts plain text on the pasteboard.
+    /// </summary>
+    /// <returns>The pasteboard change count after the write.</returns>
+    public static long WriteText(string text)
+    {
+        var pool = objc_autoreleasePoolPush();
+        try
+        {
+            var pasteboard = GeneralPasteboard;
+            Send(pasteboard, Sel("clearContents"));
+            SendBool(pasteboard, Sel("setString:forType:"), NSString(text), NSString("public.utf8-plain-text"));
+            return Send(pasteboard, Sel("changeCount"));
         }
         finally
         {

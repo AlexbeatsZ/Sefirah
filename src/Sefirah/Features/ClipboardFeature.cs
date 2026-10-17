@@ -309,6 +309,12 @@ public class ClipboardFeature(
                         throw new ArgumentException($"Unsupported content type: {content.GetType()}");
                 }
 
+#if !WINDOWS
+                // Uno writes the macOS pasteboard asynchronously, so write it here to know its change count
+                if (OperatingSystem.IsMacOS() && content is string text)
+                    lastInternalChangeCount = Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.WriteText(text);
+                else
+#endif
                 Clipboard.SetContent(dataPackage);
                 logger.Info($"Clipboard content set. Type: {content.GetType().Name}");
             }
