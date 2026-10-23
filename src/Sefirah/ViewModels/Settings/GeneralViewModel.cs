@@ -17,6 +17,7 @@ public sealed partial class GeneralViewModel : BaseViewModel
     #region Properties
     public bool SupportsLoginStartup => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
     public bool IsLinux => OperatingSystem.IsLinux();
+    public bool SupportsRemoteStorageLocation => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
     public string StartupHeader => (OperatingSystem.IsMacOS() ? "MacLoginStartup" : "StartupOption").GetLocalizedResource();
     public string StartupDescription => (OperatingSystem.IsMacOS() ? "MacLoginStartupDescription" : "StartupOptionDescription").GetLocalizedResource();
 
@@ -199,11 +200,11 @@ public sealed partial class GeneralViewModel : BaseViewModel
         get => UserSettingsService.GeneralSettingsService.RemoteStoragePath;
         set
         {
-            // TODO : Delete the previous remote storage folder or move all the placeholders to the new location
             if (value != UserSettingsService.GeneralSettingsService.RemoteStoragePath)
             {
                 UserSettingsService.GeneralSettingsService.RemoteStoragePath = value;
                 OnPropertyChanged();
+                if (OperatingSystem.IsMacOS()) _ = SftpFeature.RefreshStorageLocationAsync();
             }
         }
     }

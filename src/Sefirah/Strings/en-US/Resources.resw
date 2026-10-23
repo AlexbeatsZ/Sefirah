@@ -812,6 +812,12 @@ input text %pwd%</value>
   <data name="StorageAccess" xml:space="preserve">
     <value>Show device in File Explorer</value>
   </data>
+  <data name="MacStorageAccess" xml:space="preserve">
+    <value>Show device in Finder</value>
+  </data>
+  <data name="MacStorageAccessDescription" xml:space="preserve">
+    <value>Mount shared phone storage in Finder while connected. Browse files opens the mounted storage.</value>
+  </data>
   <data name="StorageAccessDescription" xml:space="preserve">
     <value>Enables or disables storage access for this device in the File Explorer</value>
   </data>

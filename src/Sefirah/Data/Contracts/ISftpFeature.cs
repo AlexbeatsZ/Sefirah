@@ -5,7 +5,7 @@ namespace Sefirah.Data.Contracts;
 public interface ISftpFeature : IFeature
 {
     /// <summary>
-    /// Starts device storage access for the platform (Linux GVfs/sshfs mount, or Windows sync-root registration).
+    /// Starts device storage access (macOS network volume, Linux GVfs/sshfs, or Windows sync root).
     /// </summary>
     Task Mount(PairedDevice device, SftpServerInfo info);
 
@@ -19,7 +19,17 @@ public interface ISftpFeature : IFeature
     /// </summary>
     Task BrowseUriAsync(PairedDevice device);
 
+    /// <summary>Reconciles an in-session storage access setting change.</summary>
+    Task SetStorageAccessAsync(PairedDevice device)
+    {
+        if (!device.DeviceSettings.StorageAccess) Remove(device.Id);
+        return Task.CompletedTask;
+    }
+
     void Remove(string deviceId);
+
+    /// <summary>Moves active native volumes after changing their base directory.</summary>
+    Task RefreshStorageLocationAsync() => Task.CompletedTask;
 
     Task RemoveAll();
 }

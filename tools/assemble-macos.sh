@@ -20,6 +20,16 @@ cp "$work/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 test -x "$work/scrcpy/scrcpy"
 cp -R "$work/scrcpy" "$app/Contents/Resources/scrcpy"
 chmod +x "$app/Contents/Resources/scrcpy/scrcpy" "$app/Contents/Resources/scrcpy/adb"
+# App-local SFTP/WebDAV bridge, mounted by the built-in macOS WebDAV filesystem.
+test -x "$work/rclone/rclone"
+cp -R "$work/rclone" "$app/Contents/Resources/rclone"
+clang -O2 -Wall -Wextra -Werror -arch arm64 "$work/mac-storage-worker.c" -o "$app/Contents/Resources/rclone/SefirahStorageWorker"
+GOCACHE="$work/go-cache" GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o "$app/Contents/Resources/rclone/SefirahStorageProxy" "$work/mac-storage-proxy.go"
+go_root=$(go env GOROOT)
+go_license="$go_root/LICENSE"
+if test ! -f "$go_license"; then go_license="$go_root/../LICENSE"; fi
+cp "$go_license" "$app/Contents/Resources/rclone/SefirahStorageProxy-Go-LICENSE.txt"
+chmod +x "$app/Contents/Resources/rclone/rclone"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,7 +39,7 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>Sefirah</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>3.2.0</string>
-<key>CFBundleVersion</key><string>72</string>
+<key>CFBundleVersion</key><string>74</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>
@@ -38,7 +48,7 @@ PLIST
 chmod +x "$runtime/Sefirah.Desktop"
 while IFS= read -r -d '' binary; do
     if file -b "$binary" | grep -q 'Mach-O'; then codesign --force --sign "$identity" "$binary"; fi
-done < <(find "$runtime" "$app/Contents/Resources/scrcpy" -type f -print0)
+done < <(find "$runtime" "$app/Contents/Resources/scrcpy" "$app/Contents/Resources/rclone" -type f -print0)
 codesign --force --sign "$identity" "$app/Contents/MacOS/Sefirah.Desktop"
 codesign --force --sign "$identity" "$app/Contents/Library/LaunchServices/SefirahLoginLauncher"
 codesign --force --sign "$identity" "$app"

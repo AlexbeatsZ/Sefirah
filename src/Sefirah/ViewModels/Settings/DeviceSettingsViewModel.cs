@@ -654,6 +654,9 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
 
     #region Storage Access Settings
 
+    public string StorageAccessHeader => (OperatingSystem.IsMacOS() ? "MacStorageAccess" : "StorageAccess").GetLocalizedResource();
+    public string StorageAccessDescription => (OperatingSystem.IsMacOS() ? "MacStorageAccessDescription" : "StorageAccessDescription").GetLocalizedResource();
+
     public bool StorageAccess
     {
         get => DeviceSettings.StorageAccess;
@@ -664,11 +667,7 @@ public sealed partial class DeviceSettingsViewModel : BaseViewModel
                 DeviceSettings.StorageAccess = value;
                 OnPropertyChanged();
                 
-                // If storage access is disabled, remove the sync root
-                if (!value)
-                {
-                    sftpFeature.Remove(Device.Id);
-                }
+                _ = sftpFeature.SetStorageAccessAsync(Device);
             }
         }
     }

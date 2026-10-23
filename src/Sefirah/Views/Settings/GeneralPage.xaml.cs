@@ -57,6 +57,12 @@ public sealed partial class GeneralPage : Page
 
     public async void SelectRemoteLocation_Click(object sender, RoutedEventArgs e)
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            if (await PickerHelper.PickFolderAsync() is StorageFolder selected)
+                ViewModel.RemoteStoragePath = selected.Path;
+            return;
+        }
         var dialog = new ContentDialog
         {
             Title = "Warning: Remote Storage Location",

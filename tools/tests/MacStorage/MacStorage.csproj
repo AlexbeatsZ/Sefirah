@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../src/Sefirah/Platforms/Desktop/Mac/MacStorageMount.cs" Link="MacStorageMount.cs" />
+    <Compile Include="../../../src/Sefirah/Platforms/Desktop/Mac/MacStorageProxy.cs" Link="MacStorageProxy.cs" />
+    <Compile Include="../../../src/Sefirah/Platforms/Desktop/Mac/MacSftpFeature.cs" Link="MacSftpFeature.cs" />
+    <Compile Include="../../../src/Sefirah/Data/Contracts/ISftpFeature.cs" Link="ISftpFeature.cs" />
+    <Compile Include="../../../src/Sefirah/Utils/SftpUriHelper.cs" Link="SftpUriHelper.cs" />
+  </ItemGroup>
+</Project>

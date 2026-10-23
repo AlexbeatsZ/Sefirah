@@ -126,8 +126,8 @@
                 </wuc:SettingsCard>
             </not_win:StackPanel>
 
-            <!--  Windows remote storage location  -->
-            <win:StackPanel Spacing="4">
+            <!--  Native remote storage location  -->
+            <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.SupportsRemoteStorageLocation}">
                 <wuc:SettingsCard Description="{x:Bind ViewModel.RemoteStoragePath, Mode=OneWay}" Header="{helpers:ResourceString Name=RemoteStorageLocation}">
                     <wuc:SettingsCard.HeaderIcon>
                         <SymbolIcon Symbol="SyncFolder" />
@@ -143,7 +143,7 @@
                     </wuc:SettingsCard.HeaderIcon>
                     <Button Command="{x:Bind ViewModel.RemoveAllStorageMountsCommand}" Content="{helpers:ResourceString Name=Remove}" />
                 </wuc:SettingsCard>
-            </win:StackPanel>
+            </StackPanel>
 
             <!--  Local Device Name  -->
             <wuc:SettingsCard Header="{helpers:ResourceString Name=DeviceName}">

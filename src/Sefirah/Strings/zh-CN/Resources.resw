@@ -812,6 +812,12 @@ input text %pwd%</value>
   <data name="StorageAccess" xml:space="preserve">
     <value>Show device in File Explorer</value>
   </data>
+  <data name="MacStorageAccess" xml:space="preserve">
+    <value>在 Finder 中显示设备</value>
+  </data>
+  <data name="MacStorageAccessDescription" xml:space="preserve">
+    <value>连接时将手机共享存储挂载到 Finder，点击“浏览文件”即可打开。</value>
+  </data>
   <data name="StorageAccessDescription" xml:space="preserve">
     <value>Enables or disables storage access for this device in the File Explorer</value>
   </data>
