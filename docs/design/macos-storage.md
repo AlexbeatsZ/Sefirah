@@ -122,10 +122,17 @@ Build 74 is installed with the original signing identity, local ID, PFX, four pe
 certificates and saved general/device settings preserved. Redmi K70 authenticated
 and mounted its actual `/storage/emulated/0` at `~/RemoteDevices/Redmi K70`.
 The 43 fixture checks also cover friendly Windows-style paths, immediate location
-changes, equal device names and occupied local directories. Actual Android writes
-are still under verification: the latest attempt failed while its SFTP port
-accepted TCP but did not return an SSH banner. Listing a previously cached
-directory is insufficient to claim write or device network-loss acceptance.
+changes, equal device names and occupied local directories. Real Redmi K70 acceptance passed on 2026-10-23 while the phone was unlocked
+and Sefirah was open: native folder creation, UTF-8 filenames, write/overwrite,
+Android-created files read back through the mount, rename, deletion and a
+3 MiB + 17 byte binary compared byte-for-byte against independent ADB reads.
+The installed app's Browse files action opened the actual phone volume in Finder.
+Actual Finder folder creation and Chinese rename were separately confirmed
+on Android. All acceptance-only Download data was removed, and earlier failed
+attempts were confirmed absent. Phone-side new files can need a directory
+listing refresh because rclone and webdavfs cache directory entries. The prior
+no-banner SSH failure cleared when the phone became responsive; this does not
+establish locked/background or real device network-loss acceptance.
 Automated fixtures may leave Finder volume icons cached after kernel unmount;
 verify both the real mount table and Finder, and refresh Finder only with authority.
 
