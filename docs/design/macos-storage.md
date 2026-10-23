@@ -133,6 +133,18 @@ attempts were confirmed absent. Phone-side new files can need a directory
 listing refresh because rclone and webdavfs cache directory entries. The prior
 no-banner SSH failure cleared when the phone became responsive; this does not
 establish locked/background or real device network-loss acceptance.
+
+Xiaomi Pad 6 Pro real-device acceptance also passed on 2026-10-23. Its existing
+paired Mac connection and Android all-files permission were already available,
+but the per-Mac storage-access switch was off. After the user enabled it, build
+74 automatically mounted `/storage/emulated/0` at
+`~/RemoteDevices/Xiaomi Pad 6 Pro` without an application restart or new pairing.
+Native folder creation, UTF-8 write/overwrite/read/rename, Android-created file
+read-back and deletion passed. A 1 MiB + 17 byte binary matched byte-for-byte
+through both ADB and the native mount. The installed Browse files action opened
+the actual tablet volume in Finder. All acceptance-only Download data was removed;
+locked/background and real tablet network-loss behavior remain unverified.
+
 Automated fixtures may leave Finder volume icons cached after kernel unmount;
 verify both the real mount table and Finder, and refresh Finder only with authority.
 
