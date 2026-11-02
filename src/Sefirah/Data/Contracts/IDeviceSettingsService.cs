@@ -8,6 +8,8 @@ public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyC
     /// Gets the device ID this settings service is managing
     /// </summary>
     string DeviceId { get; }
+    string PresentationJson { get; set; }
+    bool ShareWallpaperPreview { get; set; }
 
     bool AllowRemoteBluetoothControl { get; set; }
 

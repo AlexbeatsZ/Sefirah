@@ -97,6 +97,8 @@ public class UdpBroadcast : SocketMessage
 public class DeviceInfo : SocketMessage
 {
     public DeviceControls? Controls { get; set; }
+    public DevicePresentation? Presentation { get; set; }
+    public string? RequestedWallpaperId { get; set; }
     public required string DeviceName { get; set; }
 
     public string? Avatar { get; set; } = null;

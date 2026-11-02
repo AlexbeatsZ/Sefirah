@@ -10,6 +10,8 @@ internal sealed partial class DeviceSettingsService(string deviceId) : BaseDevic
         get => Get(false);
         set => Set(value);
     }
+    public string PresentationJson { get => Get(string.Empty); set => Set(value); }
+    public bool ShareWallpaperPreview { get => Get(false); set => Set(value); }
 
     public bool ClipboardReceive
     {

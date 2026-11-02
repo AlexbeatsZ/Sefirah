@@ -189,6 +189,8 @@ public class MessageHandler(
                         if (controls.BluetoothEnabled.HasValue) device.BluetoothEnabled = controls.BluetoothEnabled.Value;
                         device.Controls = controls;
                     });
+                    if (deviceInfo.RequestedWallpaperId is { Length: 64 } requestedId && device.Presentation?.Version == 1)
+                        await Ioc.Default.GetRequiredService<DevicePresentationService>().PublishAsync(device, requestedId);
                     await deviceManager.UpdateDeviceInfo(device, deviceInfo);
                     break;
 

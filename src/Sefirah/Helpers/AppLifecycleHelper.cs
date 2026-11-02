@@ -135,6 +135,7 @@ public static class AppLifecycleHelper
                 .AddFeature<ICallFeature, CallFeature>()
 
                 .AddSingleton<Sefirah.Services.DeviceControlService>()
+                .AddSingleton<Sefirah.Services.DevicePresentationService>()
                 .AddSingleton<IMessageHandler, MessageHandler>()
                 .AddSingleton<Lazy<IMessageHandler>>(sp => new Lazy<IMessageHandler>(() => sp.GetRequiredService<IMessageHandler>()))
                 .AddSingleton<IAdbService, AdbService>()
