@@ -64,7 +64,7 @@ public sealed class LocalManagementService(IDeviceManager devices, ISessionManag
                 var local = await devices.GetLocalDeviceAsync();
                 return new JsonObject
                 {
-                    ["apiVersion"] = 1, ["version"] = "3.2.0.1",
+                    ["apiVersion"] = 1, ["version"] = typeof(LocalManagementService).Assembly.GetName().Version?.ToString() ?? "unknown",
                     ["deviceId"] = local.DeviceId, ["deviceName"] = local.DeviceName,
                     ["port"] = NetworkService.ServerPort,
                     ["paired"] = new JsonArray(devices.PairedDevices.Select(d => (JsonNode)new JsonObject

@@ -625,22 +625,22 @@ input keyevent 66</value>
     <value>Power</value>
   </data>
   <data name="Sleep" xml:space="preserve">
-    <value>Sleep</value>
+    <value>睡眠</value>
   </data>
   <data name="Hibernate" xml:space="preserve">
-    <value>Hibernate</value>
+    <value>休眠</value>
   </data>
   <data name="Restart" xml:space="preserve">
-    <value>Restart</value>
+    <value>重启</value>
   </data>
   <data name="Shutdown" xml:space="preserve">
-    <value>Shutdown</value>
+    <value>关机</value>
   </data>
   <data name="Lock" xml:space="preserve">
-    <value>Lock</value>
+    <value>锁屏</value>
   </data>
   <data name="LogOff" xml:space="preserve">
-    <value>Log off</value>
+    <value>注销</value>
   </data>
   <data name="Link" xml:space="preserve">
     <value>Link</value>

@@ -87,7 +87,7 @@ public class ActionFeature(
     private static async Task<ActionInfo> ToActionInfoAsync(ActionItem item) => new()
     {
         ActionId = item.Id,
-        ActionName = item.Name,
+        ActionName = Sefirah.Actions.Power.PowerAction.GetDisplayName(item),
         Icon = await ResolveIcon(item),
         AskForConfirmation = item.AskForConfirmation
     };

@@ -135,15 +135,23 @@
                     Visibility="{x:Bind ViewModel.PairedDevices.Count, Mode=OneWay, Converter={StaticResource GreaterThanOneToVisibilityConverter}}" />
 
                 <TextBlock Text="{x:Bind ViewModel.Device.ControlNotice, Mode=OneWay}"
+                           Visibility="{x:Bind ViewModel.Device.ControlNotice, Mode=OneWay, Converter={StaticResource EmptyObjectToVisibilityConverter}}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap" FontSize="12" />
                 <StackPanel Orientation="Horizontal" Spacing="4">
-                    <ToggleButton IsChecked="{x:Bind ViewModel.Device.SoundToggleChecked, Mode=OneWay}"
-                                  IsEnabled="{x:Bind ViewModel.Device.CanToggleSound, Mode=OneWay}"
-                                  Click="RingerToggle_Click" Padding="6"
-                                  AutomationProperties.Name="{x:Bind ViewModel.Device.SoundControlLabel, Mode=OneWay}"
-                                  ToolTipService.ToolTip="{x:Bind ViewModel.Device.SoundControlLabel, Mode=OneWay}">
-                        <FontIcon Glyph="{x:Bind ViewModel.Device.SoundControlGlyph, Mode=OneWay}" />
-                    </ToggleButton>
+                    <Button
+                        Padding="4"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="RingerToggle_Click"
+                        IsEnabled="{x:Bind ViewModel.Device.CanToggleSound, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.Device.HasRingerMode, Converter={StaticResource InverseBooleanToVisibilityConverter}, Mode=OneWay}"
+                        AutomationProperties.Name="{x:Bind ViewModel.Device.SoundControlLabel, Mode=OneWay}"
+                        ToolTipService.ToolTip="{x:Bind ViewModel.Device.SoundControlLabel, Mode=OneWay}">
+                        <FontIcon
+                            Glyph="{x:Bind ViewModel.Device.SoundControlGlyph, Mode=OneWay}"
+                            Opacity="{x:Bind ViewModel.Device.IsConnected, Mode=OneWay, Converter={StaticResource BoolToConnectedOpacityConverter}}" />
+                    </Button>
                     <Button
                         x:Name="AudioButton"
                         Visibility="{x:Bind ViewModel.Device.HasRingerMode, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
@@ -221,12 +229,18 @@
                             </Flyout>
                         </Button.Flyout>
                     </Button>
-                    <Button Click="BluetoothToggle_Click" Padding="6"
-                            IsEnabled="{x:Bind ViewModel.Device.CanChangeBluetooth, Mode=OneWay}"
-                            AutomationProperties.Name="{x:Bind ViewModel.Device.BluetoothHint, Mode=OneWay}"
-                            ToolTipService.ToolTip="{x:Bind ViewModel.Device.BluetoothHint, Mode=OneWay}">
-                        <FontIcon Glyph="&#xE702;"
-                                  Foreground="{x:Bind ViewModel.Device.BluetoothEnabled, Mode=OneWay, Converter={StaticResource BoolToForegroundConverter}}" />
+                    <Button
+                        Padding="4"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="BluetoothToggle_Click"
+                        IsEnabled="{x:Bind ViewModel.Device.CanChangeBluetooth, Mode=OneWay}"
+                        AutomationProperties.Name="{x:Bind ViewModel.Device.BluetoothHint, Mode=OneWay}"
+                        ToolTipService.ToolTip="{x:Bind ViewModel.Device.BluetoothHint, Mode=OneWay}">
+                        <FontIcon
+                            Glyph="&#xE702;"
+                            Foreground="{x:Bind ViewModel.Device.BluetoothEnabled, Mode=OneWay, Converter={StaticResource BoolToForegroundConverter}}"
+                            Opacity="{x:Bind ViewModel.Device.IsConnected, Mode=OneWay, Converter={StaticResource BoolToConnectedOpacityConverter}}" />
                     </Button>
                     <StackPanel
                         VerticalAlignment="Center"

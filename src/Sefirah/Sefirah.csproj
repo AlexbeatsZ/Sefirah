@@ -10,7 +10,7 @@
         <!-- App Identifier -->
         <ApplicationId>com.sefirah.castle</ApplicationId>
         <!-- Versions -->
-        <ApplicationDisplayVersion>3.2.0.1</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>3.2.0.2</ApplicationDisplayVersion>
         <ApplicationVersion>12</ApplicationVersion>
         <!-- Package Publisher -->
         <ApplicationPublisher>AlexbeatsZ</ApplicationPublisher>

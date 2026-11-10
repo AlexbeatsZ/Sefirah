@@ -118,12 +118,7 @@ public sealed partial class DeviceControlCenter : UserControl
     private void PhoneFrame_PointerExited(object sender, PointerRoutedEventArgs e)
         => AnimateOverlay(false);
 
-    private void RingerToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.Device is not { } peer) return;
-        ViewModel.ToggleSound();
-        if (sender is ToggleButton toggle) toggle.IsChecked = peer.SoundToggleChecked;
-    }
+    private void RingerToggle_Click(object sender, RoutedEventArgs e) => ViewModel.ToggleSound();
 
     private void BluetoothToggle_Click(object sender, RoutedEventArgs e) => ViewModel.ToggleBluetooth();
 
