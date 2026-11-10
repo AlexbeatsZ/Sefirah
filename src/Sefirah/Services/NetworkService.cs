@@ -103,9 +103,7 @@ public class NetworkService(
     {
         try
         {
-            var localDevice = await deviceManager.GetLocalDeviceAsync();
-            var avatar = await UserInformation.GetCurrentUserAvatarAsync();
-            device.SendMessage(new DeviceInfo { DeviceName = localDevice.DeviceName, Avatar = avatar });
+            await Ioc.Default.GetRequiredService<DevicePresentationService>().PublishAsync(device);
         }
         catch (Exception ex)
         {
@@ -500,11 +498,27 @@ public class NetworkService(
         SendAuthenticationMessage(m => SendMessage(session, m));
     }
 
+    private readonly ConcurrentDictionary<string, (DiscoveredDevice Device, TaskCompletionSource<bool> Completion)> managementPairings = new();
+
+    public (string DeviceId, string VerificationCode)[] PendingManagementPairings =>
+        managementPairings.Values.Select(p => (p.Device.Id, p.Device.VerificationKey)).ToArray();
+
+    public bool ResolveManagementPairing(string id, string code, bool accept)
+    {
+        return managementPairings.TryGetValue(id, out var pending)
+            && DiscoveredDevices.Contains(pending.Device)
+            && pending.Device.VerificationKey == code
+            && pending.Completion.TrySetResult(accept);
+    }
+
     private async void HandlePairRequest(DiscoveredDevice device)
     {
         logger.Info($"Received pairing request from {device.Name}");
 
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!managementPairings.TryAdd(device.Id, (device, tcs))) return;
+        using var expiry = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        using var timeoutRegistration = expiry.Token.Register(() => tcs.TrySetResult(false));
         await App.MainWindow.DispatcherQueue.EnqueueAsync(async () =>
         {
             try
@@ -515,17 +529,22 @@ public class NetworkService(
                     XamlRoot = App.MainWindow.Content!.XamlRoot
                 };
 
-                var result = await dialog.ShowAsync();
-                tcs.SetResult(result is ContentDialogResult.Primary);
+                if (tcs.Task.IsCompleted) return;
+                var showing = dialog.ShowAsync().AsTask();
+                if (await Task.WhenAny(showing, tcs.Task) == showing)
+                    tcs.TrySetResult(await showing is ContentDialogResult.Primary);
+                else dialog.Hide();
             }
             catch (Exception ex)
             {
                 logger.Error($"Error showing connection request dialog", ex);
-                tcs.SetResult(false);
+                tcs.TrySetResult(false);
             }
         });
 
         var accepted = await tcs.Task;
+        managementPairings.TryRemove(device.Id, out _);
+        if (!DiscoveredDevices.Contains(device)) return;
 
         device.SendMessage(new PairMessage { Pair = accepted });
         if (accepted)

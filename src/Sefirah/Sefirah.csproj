@@ -10,10 +10,10 @@
         <!-- App Identifier -->
         <ApplicationId>com.sefirah.castle</ApplicationId>
         <!-- Versions -->
-        <ApplicationDisplayVersion>3.2.0</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>3.2.0.1</ApplicationDisplayVersion>
         <ApplicationVersion>12</ApplicationVersion>
         <!-- Package Publisher -->
-        <ApplicationPublisher>shrimqy</ApplicationPublisher>
+        <ApplicationPublisher>AlexbeatsZ</ApplicationPublisher>
         <!-- Package Description -->
         <Description>Sefirah powered by Uno Platform.</Description>
         <!--

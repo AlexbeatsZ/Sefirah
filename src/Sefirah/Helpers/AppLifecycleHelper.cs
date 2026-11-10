@@ -51,6 +51,7 @@ public static class AppLifecycleHelper
 
         await networkService.StartServerAsync();
         await discoveryService.StartDiscoveryAsync();
+        Ioc.Default.GetRequiredService<LocalManagementService>().Start();
 
         _ = Task.WhenAll(
             adbService.StartAsync(),
@@ -126,6 +127,7 @@ public static class AppLifecycleHelper
                 .AddSingleton<IMdnsService, MdnsService>()
                 .AddSingleton<IDiscoveryService, DiscoveryService>()
                 .AddSingleton<INetworkService, NetworkService>()
+                .AddSingleton<LocalManagementService>()
 
                 .AddFeature<INotificationFeature, NotificationFeature>()
                 .AddFeature<IBatteryAlertFeature, BatteryAlertFeature>()
@@ -137,6 +139,8 @@ public static class AppLifecycleHelper
                 .AddFeature<ISmsFeature, SmsFeature>()
                 .AddFeature<ICallFeature, CallFeature>()
 
+                .AddSingleton<Sefirah.Services.DeviceControlService>()
+                .AddSingleton<Sefirah.Services.DevicePresentationService>()
                 .AddSingleton<IMessageHandler, MessageHandler>()
                 .AddSingleton<Lazy<IMessageHandler>>(sp => new Lazy<IMessageHandler>(() => sp.GetRequiredService<IMessageHandler>()))
                 .AddSingleton<IAdbService, AdbService>()

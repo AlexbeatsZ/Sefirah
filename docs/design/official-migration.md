@@ -1,5 +1,9 @@
 # Official source migration and macOS adaptation
 
+## Current personal fork policy, 2026-11-10
+
+The user explicitly switched to the personal fork and authorized replacement on reachable devices. Mac runs 3.2.0.1 build 75 with its existing identity. OMEN and ROG run the personal AlexbeatsZ.Sefirah package after verified LocalState migration; the old Store installations were removed. K70 runs the private-key-signed Android fork with root clipboard, a new identity and renewed pairings. The offline tablet remains on its prior installation. The historical official-signature instructions below describe the previous deployment policy. Current release and management reference: ../fork-management.md. Keep manual coordinated updates and preserve all current signing keys.
+
 ## Scope and baseline
 
 Windows runs the upstream Microsoft Store-signed package (`shrimqy.Seki-PhoneLink`, Store ID 9PJV6D1JPG0H). Since 2026-10-16, Android (Redmi K70 and Xiaomi Pad 6 Pro) runs the upstream release APK with its official signature (certificate digest a1d6712b in dumpsys). To upgrade, `adb install -r` the release APK from shrimqy/Sefirah-Android directly; do not re-sign it.
