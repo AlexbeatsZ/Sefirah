@@ -30,6 +30,20 @@ public sealed partial class MainPage : Page
         ViewModel = Ioc.Default.GetRequiredService<MainPageViewModel>();
         DevicesViewModel = Ioc.Default.GetRequiredService<DevicesViewModel>();
         Loaded += MainPage_Loaded;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+    }
+
+    // Calls, messages and apps only exist for phones; leave them when a computer becomes active.
+    private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainPageViewModel.IsMobileDevice) || ViewModel.IsMobileDevice)
+            return;
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!ViewModel.IsMobileDevice && ContentFrame.Content is CallsPage or MessagesPage or AppsPage)
+                NavigateToPage("Settings");
+        });
     }
 
     private void MainPage_Loaded(object sender, RoutedEventArgs e)
@@ -130,7 +144,7 @@ public sealed partial class MainPage : Page
     private void MainNavigationView_Loaded(object sender, RoutedEventArgs e)
     {
         var savedPage = ApplicationData.Current.LocalSettings.Values[Constants.LocalSettings.MainNavigationSelection] as string;
-        var page = ViewModel.Device is not null && savedPage is not null && Pages.ContainsKey(savedPage)
+        var page = ViewModel.IsMobileDevice && savedPage is not null && Pages.ContainsKey(savedPage)
             ? savedPage
             : "Settings";
 

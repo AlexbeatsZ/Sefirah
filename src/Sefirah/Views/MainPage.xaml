@@ -348,7 +348,7 @@
                             x:Name="CallsNavigationItem"
                             Content="{helpers:ResourceString Name=Calls}"
                             Tag="Calls"
-                            Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}">
+                            Visibility="{x:Bind ViewModel.IsMobileDevice, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE717;" />
                             </NavigationViewItem.Icon>
@@ -357,7 +357,7 @@
                             x:Name="MessagesNavigationItem"
                             Content="{helpers:ResourceString Name=Messages}"
                             Tag="Messages"
-                            Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}">
+                            Visibility="{x:Bind ViewModel.IsMobileDevice, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE8BD;" />
                             </NavigationViewItem.Icon>
@@ -366,7 +366,7 @@
                             x:Name="AppsNavigationItem"
                             Content="{helpers:ResourceString Name=Apps}"
                             Tag="Apps"
-                            Visibility="{x:Bind ViewModel.Device, Converter={StaticResource EmptyObjectToVisibilityConverter}, Mode=OneWay}">
+                            Visibility="{x:Bind ViewModel.IsMobileDevice, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xED35;" />
                             </NavigationViewItem.Icon>

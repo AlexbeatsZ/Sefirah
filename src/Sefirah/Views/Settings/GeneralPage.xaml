@@ -64,15 +64,52 @@
                 </wuc:SettingsCard>
             </win:StackPanel>
 
-            <wuc:SettingsExpander Header="{helpers:ResourceString Name=DevicePresentationTitle}" Description="{helpers:ResourceString Name=DevicePresentationDescription}">
+            <!--  Device presentation  -->
+            <wuc:SettingsExpander Description="{helpers:ResourceString Name=DevicePresentationDescription}" Header="{helpers:ResourceString Name=DevicePresentationTitle}">
+                <wuc:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE7F4;" />
+                </wuc:SettingsExpander.HeaderIcon>
                 <wuc:SettingsExpander.Items>
-                    <controls:DevicePreview Width="120" Height="90" Presentation="{x:Bind ViewModel.LocalPresentation, Mode=OneWay}" PreviewImage="{x:Bind ViewModel.LocalPreviewImage, Mode=OneWay}" />
-                    <ComboBox Header="{helpers:ResourceString Name=DevicePresentationKind}" ItemsSource="{x:Bind ViewModel.PresentationKinds}" SelectedItem="{x:Bind ViewModel.PresentationKind, Mode=TwoWay}" />
-                    <ComboBox Header="{helpers:ResourceString Name=DevicePresentationOrientation}" ItemsSource="{x:Bind ViewModel.PresentationOrientations}" SelectedItem="{x:Bind ViewModel.PresentationOrientation, Mode=TwoWay}" />
-                    <ComboBox Header="{helpers:ResourceString Name=DevicePresentationRatio}" ItemsSource="{x:Bind ViewModel.PresentationRatios}" SelectedItem="{x:Bind ViewModel.PresentationRatio, Mode=TwoWay}" />
-                    <ToggleSwitch Header="{helpers:ResourceString Name=ShareWallpaperPreview}" IsOn="{x:Bind ViewModel.ShareWallpaperPreview, Mode=TwoWay}" />
-                    <Button Content="{helpers:ResourceString Name=ChoosePresentationImage}" Command="{x:Bind ViewModel.SelectPresentationImageCommand}" />
-                    <Button Content="{helpers:ResourceString Name=UseSystemWallpaper}" Command="{x:Bind ViewModel.UseSystemWallpaperCommand}" />
+                    <wuc:SettingsCard Header="{helpers:ResourceString Name=DevicePresentationKind}">
+                        <ComboBox
+                            MinWidth="160"
+                            ItemsSource="{x:Bind ViewModel.PresentationKinds}"
+                            SelectedItem="{x:Bind ViewModel.PresentationKind, Mode=TwoWay}" />
+                    </wuc:SettingsCard>
+                    <wuc:SettingsCard Header="{helpers:ResourceString Name=DevicePresentationOrientation}">
+                        <ComboBox
+                            MinWidth="160"
+                            ItemsSource="{x:Bind ViewModel.PresentationOrientations}"
+                            SelectedItem="{x:Bind ViewModel.PresentationOrientation, Mode=TwoWay}" />
+                    </wuc:SettingsCard>
+                    <wuc:SettingsCard Header="{helpers:ResourceString Name=DevicePresentationRatio}">
+                        <ComboBox
+                            MinWidth="160"
+                            ItemsSource="{x:Bind ViewModel.PresentationRatios}"
+                            SelectedItem="{x:Bind ViewModel.PresentationRatio, Mode=TwoWay}" />
+                    </wuc:SettingsCard>
+                    <wuc:SettingsCard Header="{helpers:ResourceString Name=DevicePresentationImage}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <controls:DevicePreview
+                                Width="80"
+                                Height="60"
+                                Presentation="{x:Bind ViewModel.LocalPresentation, Mode=OneWay}"
+                                PreviewImage="{x:Bind ViewModel.LocalPreviewImage, Mode=OneWay}" />
+                            <StackPanel VerticalAlignment="Center" Spacing="6">
+                                <Button
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.SelectPresentationImageCommand}"
+                                    Content="{helpers:ResourceString Name=ChoosePresentationImage}" />
+                                <Button
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.UseSystemWallpaperCommand}"
+                                    Content="{helpers:ResourceString Name=UseSystemWallpaper}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </wuc:SettingsCard>
+                    <wuc:SettingsCard Header="{helpers:ResourceString Name=ShareWallpaperPreview}">
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.ShareWallpaperPreview, Mode=TwoWay}" />
+                    </wuc:SettingsCard>
                 </wuc:SettingsExpander.Items>
             </wuc:SettingsExpander>
 

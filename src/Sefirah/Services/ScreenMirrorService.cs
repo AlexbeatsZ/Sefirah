@@ -47,6 +47,9 @@ public class ScreenMirrorService(
 
     public async Task<bool> StartScrcpy(PairedDevice device, ApplicationItem? app = null)
     {
+        // Screen mirroring is ADB-based and only applies to Android peers.
+        if (device.IsComputer) return false;
+
         Process? process = null;
         CancellationTokenSource? processCts = null;
 

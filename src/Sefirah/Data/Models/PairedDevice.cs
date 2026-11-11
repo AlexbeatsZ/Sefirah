@@ -80,6 +80,14 @@ public partial class PairedDevice : BaseRemoteDevice
         set => SetProperty(ref presentation, value);
     }
 
+    /// <summary>
+    /// Desktop peers use GUID device IDs; Android uses its 16-hex Android ID. Presentation kind
+    /// is only a user-chosen look, so it never decides features. Phone-only features such as
+    /// ADB, screen mirroring, calls, messages and apps are hidden for computers.
+    /// </summary>
+    public bool IsComputer => Guid.TryParse(Id, out _);
+    public bool IsMobile => !IsComputer;
+
     private ImageSource? wallpaper;
     public ImageSource? Wallpaper
     {
@@ -297,7 +305,7 @@ public partial class PairedDevice : BaseRemoteDevice
 
     public bool IsMatchingAdbDevice(AdbDevice adbDevice)
     {
-        if (adbDevice is null || !adbDevice.IsOnline) return false;
+        if (IsComputer || adbDevice is null || !adbDevice.IsOnline) return false;
 
         // 1. Match by AndroidId
         if (!string.IsNullOrEmpty(adbDevice.AndroidId))

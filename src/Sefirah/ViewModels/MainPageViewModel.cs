@@ -33,6 +33,12 @@ public sealed partial class MainPageViewModel : BaseViewModel
         }
     }
 
+    /// <summary>
+    /// True when the active device is a phone or tablet; computers have no calls, messages,
+    /// apps, ADB, screen mirroring, storage browsing, DND or find-my-device.
+    /// </summary>
+    public bool IsMobileDevice => Device?.IsMobile == true;
+
     [ObservableProperty]
     public partial bool LoadingScrcpy { get; set; } = false;
 
@@ -321,7 +327,11 @@ public sealed partial class MainPageViewModel : BaseViewModel
 
     public MainPageViewModel()
     {
-        DeviceManager.ActiveDeviceChanged += (_, _) => OnPropertyChanged(nameof(Device));
+        DeviceManager.ActiveDeviceChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Device));
+            OnPropertyChanged(nameof(IsMobileDevice));
+        };
 
         IsUpdateAvailable = UpdateService.IsUpdateAvailable;
         IsUpdating = UpdateService.IsUpdating;

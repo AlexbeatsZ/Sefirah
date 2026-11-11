@@ -35,6 +35,65 @@ public class ClipboardFeature(
     };
     
     private bool isInternalUpdate; // To track if the clipboard change came from the remote device
+#if WINDOWS
+    // WinUI's Clipboard.ContentChanged is not raised reliably while the app is in the background
+    // (observed: OS clipboard updates every time, the event only on some of them), so local copies
+    // were silently not synced. Listen for WM_CLIPBOARDUPDATE on the main window instead and use
+    // the clipboard sequence number to skip our own writes and duplicate notifications.
+    private const uint WM_CLIPBOARDUPDATE = 0x031D;
+    private delegate nint SubclassProc(nint hWnd, uint msg, nint wParam, nint lParam, nuint id, nuint refData);
+    [System.Runtime.InteropServices.DllImport("comctl32.dll")]
+    private static extern bool SetWindowSubclass(nint hWnd, SubclassProc proc, nuint id, nuint refData);
+    [System.Runtime.InteropServices.DllImport("comctl32.dll")]
+    private static extern nint DefSubclassProc(nint hWnd, uint msg, nint wParam, nint lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool AddClipboardFormatListener(nint hWnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RemoveClipboardFormatListener(nint hWnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetClipboardSequenceNumber();
+    private SubclassProc? clipboardSubclass; // kept alive for the native callback
+    private uint lastInternalSequence;
+    private uint lastHandledSequence;
+
+    private nint ClipboardSubclassProc(nint hWnd, uint msg, nint wParam, nint lParam, nuint id, nuint refData)
+    {
+        if (msg == WM_CLIPBOARDUPDATE)
+            OnClipboardUpdateMessage();
+        return DefSubclassProc(hWnd, msg, wParam, lParam);
+    }
+
+    // OLE clipboard writers (WinForms, Office, Explorer) raise two updates with the same sequence
+    // number and may still be rendering on the first one. Read once, shortly after the last update.
+    private bool clipboardReadPending;
+    private async void OnClipboardUpdateMessage()
+    {
+        if (clipboardReadPending) return;
+        clipboardReadPending = true;
+        try
+        {
+            await Task.Delay(150);
+        }
+        finally
+        {
+            clipboardReadPending = false;
+        }
+        OnClipboardContentChanged(null, null);
+    }
+
+    private void StartClipboardListener()
+    {
+        if (clipboardSubclass is null)
+        {
+            clipboardSubclass = ClipboardSubclassProc;
+            SetWindowSubclass(App.WindowHandle, clipboardSubclass, 0x5EF1, 0);
+        }
+        if (!AddClipboardFormatListener(App.WindowHandle))
+            logger.Warn($"AddClipboardFormatListener failed: {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}");
+    }
+
+    private void StopClipboardListener() => RemoveClipboardFormatListener(App.WindowHandle);
+#endif
 #if !WINDOWS
     // macOS reports pasteboard changes by polling, so they arrive after isInternalUpdate is reset
     private long lastInternalChangeCount = -1;
@@ -57,13 +116,21 @@ public class ClipboardFeature(
             {
                 if (!devicesWithClipboardSync.Any() && isMonitoring)
                 {
+#if WINDOWS
+                    StopClipboardListener();
+#else
                     Clipboard.ContentChanged -= OnClipboardContentChanged;
+#endif
                     logger.Info("Clipboard monitoring stopped");
                     isMonitoring = false;
                 }
                 else if (!isMonitoring)
                 {
+#if WINDOWS
+                    StartClipboardListener();
+#else
                     Clipboard.ContentChanged += OnClipboardContentChanged;
+#endif
                     logger.Info("Clipboard monitoring started");
                     isMonitoring = true;
                 }
@@ -78,6 +145,11 @@ public class ClipboardFeature(
     private async void OnClipboardContentChanged(object? sender, object? e)
     {
         if (isInternalUpdate) return;
+#if WINDOWS
+        var sequence = GetClipboardSequenceNumber();
+        if (sequence == lastHandledSequence || sequence == lastInternalSequence) return;
+        lastHandledSequence = sequence;
+#endif
 #if !WINDOWS
         if (OperatingSystem.IsMacOS() && Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.ChangeCount == lastInternalChangeCount) return;
 #endif
@@ -186,7 +258,21 @@ public class ClipboardFeature(
     private static async Task<StorageFile?> GetClipboardFileAsync(DataPackageView dataPackageView)
     {
         if (dataPackageView.Contains(StandardDataFormats.StorageItems))
-            return (await dataPackageView.GetStorageItemsAsync()).OfType<StorageFile>().FirstOrDefault();
+        {
+            var file = (await dataPackageView.GetStorageItemsAsync()).OfType<StorageFile>().FirstOrDefault();
+#if !WINDOWS
+            // Uno on macOS can hand back the pasteboard file URL ("file:/Users/...") as the path,
+            // which then resolves relative to the app bundle. Convert it to a local path.
+            if (file is not null && file.Path.Contains("file:", StringComparison.Ordinal))
+            {
+                var url = file.Path[file.Path.IndexOf("file:", StringComparison.Ordinal)..];
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile && File.Exists(uri.LocalPath))
+                    return await StorageFile.GetFileFromPathAsync(uri.LocalPath);
+                return null;
+            }
+#endif
+            return file;
+        }
 
 #if !WINDOWS
         if (OperatingSystem.IsMacOS() && Sefirah.Platforms.Desktop.Mac.MacClipboardHelper.GetCopiedFilePath() is string path && File.Exists(path))
@@ -206,7 +292,7 @@ public class ClipboardFeature(
 #endif
 
 
-    private static async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
+    private async Task TryHandleTextContent(DataPackageView dataPackageView, List<PairedDevice> devices)
     {
         if (!dataPackageView.Contains(StandardDataFormats.Text)) return;
 
@@ -219,6 +305,8 @@ public class ClipboardFeature(
         var message = new ClipboardInfo { Content = text, ClipboardType = "text/plain" };
 
         devices.ForEach(d => d.SendMessage(message));
+        // Names only, never content: shows which peers a local copy went to.
+        logger.Info($"Clipboard text sent to {string.Join(", ", devices.Select(d => d.Name))}");
     }
 
     private async Task HandleLargeImageTransfer(StorageFile file, string fileType, string mimeType, List<PairedDevice> devices)
@@ -316,7 +404,10 @@ public class ClipboardFeature(
                 else
 #endif
                 Clipboard.SetContent(dataPackage);
-                logger.Info($"Clipboard content set. Type: {content.GetType().Name}");
+#if WINDOWS
+                lastInternalSequence = GetClipboardSequenceNumber();
+#endif
+                logger.Info($"Clipboard content set from {sourceDevice.Name}. Type: {content.GetType().Name}");
             }
             catch (Exception ex)
             {

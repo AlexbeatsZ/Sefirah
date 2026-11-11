@@ -284,7 +284,7 @@
                                 </Flyout.FlyoutPresenterStyle>
 
                                 <StackPanel Spacing="8">
-                                    <Grid ColumnSpacing="8">
+                                    <Grid ColumnSpacing="8" Visibility="{x:Bind ViewModel.IsMobileDevice, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
@@ -347,6 +347,7 @@
                                             Background="Transparent"
                                             BorderThickness="0"
                                             Click="BrowseFilesAction_Click"
+                                            Visibility="{x:Bind ViewModel.IsMobileDevice, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
                                             RightTapped="BrowseFilesAction_RightTapped"
                                             ToolTipService.ToolTip="{helpers:ResourceString Name=BrowseFilesTooltip}">
                                             <StackPanel Orientation="Horizontal" Spacing="12">
@@ -400,51 +401,53 @@
                                     </Flyout.FlyoutPresenterStyle>
 
                                     <StackPanel Spacing="8">
-                                        <ListView
-                                            ItemsSource="{x:Bind ViewModel.Device.ConnectedAdbDevices, Mode=OneWay}"
-                                            SelectionMode="None"
-                                            ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                            <ListView.ItemTemplate>
-                                                <DataTemplate x:DataType="models:AdbDevice">
-                                                    <Grid Padding="12,8" ColumnSpacing="8">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <FontIcon
-                                                            Grid.Column="0"
-                                                            VerticalAlignment="Center"
-                                                            Foreground="{ThemeResource AccentFillColorDefaultBrush}"
-                                                            Glyph="{x:Bind TypeIconGlyph, Mode=OneWay}" />
-                                                        <TextBlock
-                                                            Grid.Column="1"
-                                                            VerticalAlignment="Center"
-                                                            Text="{x:Bind DisplayName, Mode=OneWay}" />
-                                                        <Button
-                                                            Grid.Column="2"
-                                                            Padding="8,8"
-                                                            Background="Transparent"
-                                                            BorderThickness="0"
-                                                            Click="DisconnectAdbDeviceButton_Click"
-                                                            Tag="{x:Bind}"
-                                                            ToolTipService.ToolTip="{helpers:ResourceString Name=Disconnect}"
-                                                            Visibility="{x:Bind CanDisconnect, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                            <FontIcon FontSize="12" Glyph="&#xE711;" />
-                                                        </Button>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ListView.ItemTemplate>
-                                        </ListView>
+                                        <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.IsMobileDevice, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ListView
+                                                ItemsSource="{x:Bind ViewModel.Device.ConnectedAdbDevices, Mode=OneWay}"
+                                                SelectionMode="None"
+                                                ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:AdbDevice">
+                                                        <Grid Padding="12,8" ColumnSpacing="8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon
+                                                                Grid.Column="0"
+                                                                VerticalAlignment="Center"
+                                                                Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                                                Glyph="{x:Bind TypeIconGlyph, Mode=OneWay}" />
+                                                            <TextBlock
+                                                                Grid.Column="1"
+                                                                VerticalAlignment="Center"
+                                                                Text="{x:Bind DisplayName, Mode=OneWay}" />
+                                                            <Button
+                                                                Grid.Column="2"
+                                                                Padding="8,8"
+                                                                Background="Transparent"
+                                                                BorderThickness="0"
+                                                                Click="DisconnectAdbDeviceButton_Click"
+                                                                Tag="{x:Bind}"
+                                                                ToolTipService.ToolTip="{helpers:ResourceString Name=Disconnect}"
+                                                                Visibility="{x:Bind CanDisconnect, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                <FontIcon FontSize="12" Glyph="&#xE711;" />
+                                                            </Button>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
 
-                                        <TextBlock
-                                            FontSize="12"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Text="{helpers:ResourceString Name=AdbNoDevice}"
-                                            HorizontalAlignment="Center"
-                                            Visibility="{x:Bind ViewModel.Device.HasAdbConnection, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{helpers:ResourceString Name=AdbNoDevice}"
+                                                HorizontalAlignment="Center"
+                                                Visibility="{x:Bind ViewModel.Device.HasAdbConnection, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
 
-                                        <Rectangle Height="1" Fill="{ThemeResource ControlStrokeColorDefaultBrush}" />
+                                            <Rectangle Height="1" Fill="{ThemeResource ControlStrokeColorDefaultBrush}" />
+                                        </StackPanel>
 
                                         <ListView
                                             IsItemClickEnabled="True"

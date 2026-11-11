@@ -36,6 +36,22 @@ public class NetworkService(
     private readonly Dictionary<string, (Guid SessionId, long Ticks)> authenticationReplies = [];
     private static readonly TimeSpan DuplicateConnectionWindow = TimeSpan.FromSeconds(3);
 
+    // Detect a peer that slept or left the network instead of keeping a half-open link forever.
+    private const int KeepAliveTimeSeconds = 30;
+    private const int KeepAliveIntervalSeconds = 10;
+    private const int KeepAliveRetryCount = 3;
+
+    // Desktop peers only meet again through discovery, which runs once at startup. Phones keep
+    // reconnecting on their own, so only computer peers are retried here. The side with the
+    // smaller device ID retries on every tick and the other side only as a fallback, so both
+    // ends rarely connect at once and close each other's link.
+    private static readonly TimeSpan DesktopReconnectTick = TimeSpan.FromSeconds(20);
+    private const int DesktopReconnectFallbackTicks = 4;
+    private static readonly TimeSpan DesktopReconnectMaxBackoff = TimeSpan.FromMinutes(5);
+    private int desktopReconnectTicks;
+    private readonly ConcurrentDictionary<string, (int Failures, DateTime NextAttempt)> desktopReconnectBackoff = [];
+    private CancellationTokenSource? desktopReconnectCts;
+
     private sealed class DeviceAuth
     {
         public ConcurrentQueue<SocketMessage> Deferred { get; } = new();
@@ -64,6 +80,10 @@ public class NetworkService(
                 {
                     OptionReuseAddress = true,
                     OptionDualMode = true,
+                    OptionKeepAlive = true,
+                    OptionTcpKeepAliveTime = KeepAliveTimeSeconds,
+                    OptionTcpKeepAliveInterval = KeepAliveIntervalSeconds,
+                    OptionTcpKeepAliveRetryCount = KeepAliveRetryCount,
                 };
 
                 if (server.Start())
@@ -71,6 +91,7 @@ public class NetworkService(
                     ServerPort = port;
                     isRunning = true;
                     logger.Info($"Server started on port: {port}");
+                    StartDesktopReconnectLoop();
                     return;
                 }
                 server.Dispose();
@@ -86,13 +107,94 @@ public class NetworkService(
         logger.Error($"Failed to start server");
     }
 
+    private void StartDesktopReconnectLoop()
+    {
+        if (desktopReconnectCts is not null) return;
+        desktopReconnectCts = new CancellationTokenSource();
+        var token = desktopReconnectCts.Token;
+
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+
+        _ = Task.Run(async () =>
+        {
+            using var timer = new PeriodicTimer(DesktopReconnectTick);
+            try
+            {
+                while (await timer.WaitForNextTickAsync(token))
+                {
+                    var tick = Interlocked.Increment(ref desktopReconnectTicks);
+                    await ReconnectDesktopPeersAsync(fallback: tick % DesktopReconnectFallbackTicks == 0);
+                }
+            }
+            catch (OperationCanceledException) { }
+        }, token);
+    }
+
+    private async void OnNetworkAddressChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            // Let the new address settle (DHCP, VPN routes) before dialing.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            desktopReconnectBackoff.Clear();
+            await ReconnectDesktopPeersAsync(fallback: true);
+        }
+        catch (Exception ex)
+        {
+            logger.Debug("Desktop reconnect after network change failed", ex);
+        }
+    }
+
+    private async Task ReconnectDesktopPeersAsync(bool fallback)
+    {
+        try
+        {
+            var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
+            foreach (var device in PairedDevices.ToList())
+            {
+                if (!device.IsComputer || device.IsConnectedOrConnecting || device.IsForcedDisconnect)
+                    continue;
+                if (device.Certificate is not { Length: > 0 })
+                    continue;
+
+                var preferred = string.CompareOrdinal(localId, device.Id) < 0;
+                if (!preferred && !fallback)
+                    continue;
+
+                // Back off for peers that stay unreachable (asleep, away) to keep logs and sockets quiet.
+                var now = DateTime.UtcNow;
+                var state = desktopReconnectBackoff.GetValueOrDefault(device.Id);
+                if (now < state.NextAttempt)
+                    continue;
+                var delay = TimeSpan.FromTicks(Math.Min(
+                    DesktopReconnectMaxBackoff.Ticks,
+                    DesktopReconnectTick.Ticks << Math.Min(state.Failures, 4)));
+                desktopReconnectBackoff[device.Id] = (state.Failures + 1, now + delay);
+
+                var addresses = device.GetEnabledAddresses();
+                if (!string.IsNullOrEmpty(device.Address) && addresses.Remove(device.Address))
+                    addresses.Insert(0, device.Address);
+                if (addresses.Count == 0)
+                    continue;
+
+                logger.Debug($"Reconnecting desktop peer {device.Name}");
+                ConnectCore(device, addresses);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Debug("Desktop reconnect pass failed", ex);
+        }
+    }
+
     private async void ConnectionStatusChangedEvent(object? sender, PairedDevice device)
     {
         if (device.IsConnected)
         {
+            desktopReconnectBackoff.TryRemove(device.Id, out _);
             await SendDeviceInfo(device);
 
-            if (device.DeviceSettings.AdbAutoConnect)
+            if (device.IsMobile && device.DeviceSettings.AdbAutoConnect)
             {
                 await adbService.TryConnectTcp(device.Address, device.Model);
             }
@@ -414,7 +516,6 @@ public class NetworkService(
         cancellationToken.ThrowIfCancellationRequested();
 
         pairedDevice.Session = session;
-        pairedDevice.Address = address;
 
         // Reply like Android servers do, so a connecting desktop can mark this server connected.
         // Sent before ConnectionStatusChanged so it precedes DeviceInfo on the wire.
@@ -422,8 +523,10 @@ public class NetworkService(
         cancellationToken.ThrowIfCancellationRequested();
         ReplyAuthentication(session, pairedDevice, authReply);
 
+        // Address and status are bound to the UI; WinUI throws RPC_E_WRONG_THREAD off the UI thread.
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
+            pairedDevice.Address = address;
             pairedDevice.TryAddAddress(address);
             pairedDevice.ConnectionStatus = new Connected();
             deviceManager.ActiveDevice = pairedDevice;
@@ -753,7 +856,13 @@ public class NetworkService(
                 var clientContext = SslHelper.CreateSslContext(device.Certificate);
 
                 logger.Info($"Connecting to {address}:{device.Port}");
-                var client = new Client(clientContext, address, device.Port, this);
+                var client = new Client(clientContext, address, device.Port, this)
+                {
+                    OptionKeepAlive = true,
+                    OptionTcpKeepAliveTime = KeepAliveTimeSeconds,
+                    OptionTcpKeepAliveInterval = KeepAliveIntervalSeconds,
+                    OptionTcpKeepAliveRetryCount = KeepAliveRetryCount,
+                };
                 var tcs = new TaskCompletionSource<bool>();
                 handshakeCompletion[client.Id] = tcs;
 
@@ -997,11 +1106,12 @@ public class NetworkService(
         cancellationToken.ThrowIfCancellationRequested();
 
         pairedDevice.Client = client;
-        pairedDevice.Address = address;
         pairedDevice.Port = client.Port;
 
+        // Address and status are bound to the UI; WinUI throws RPC_E_WRONG_THREAD off the UI thread.
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
+            pairedDevice.Address = address;
             pairedDevice.TryAddAddress(address);
             pairedDevice.ConnectionStatus = new Connected();
             deviceManager.ActiveDevice = pairedDevice;

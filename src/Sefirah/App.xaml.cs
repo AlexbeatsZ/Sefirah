@@ -31,6 +31,9 @@ public partial class App : Application
 
     public App()
     {
+#if !WINDOWS
+        NormalizeChineseUiCulture();
+#endif
         InitializeComponent();
 #if !WINDOWS
         Sefirah.Platforms.Desktop.Mac.MacSymbolFontHelper.RegisterFluentSymbols();
@@ -40,6 +43,36 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (sender, e) => AppLifecycleHelper.HandleUnobservedTaskException(e);
     }
+
+#if !WINDOWS
+    // Uno ships its control strings (ToggleSwitch On/Off, etc.) for zh-CN and zh-TW only. A
+    // Simplified Chinese locale such as zh-SG or zh-Hans-SG falls back to zh-TW, so switches read
+    // "關閉" inside a Simplified UI. Use zh-CN for UI resources; formatting culture is unchanged.
+    private static void NormalizeChineseUiCulture()
+    {
+        try
+        {
+            var name = Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride;
+            if (string.IsNullOrEmpty(name))
+                name = System.Globalization.CultureInfo.CurrentUICulture.Name;
+            if (!name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) || name.Equals("zh-CN", StringComparison.OrdinalIgnoreCase))
+                return;
+            var traditional = name.Contains("Hant", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith("-TW", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith("-HK", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith("-MO", StringComparison.OrdinalIgnoreCase);
+            if (traditional)
+                return;
+            var simplified = new System.Globalization.CultureInfo("zh-CN");
+            System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = simplified;
+            System.Globalization.CultureInfo.CurrentUICulture = simplified;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to normalize UI culture: {ex.Message}");
+        }
+    }
+#endif
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {

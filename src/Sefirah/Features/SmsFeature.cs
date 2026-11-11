@@ -40,6 +40,9 @@ public class SmsFeature(
                 return;
             }
 
+            // Only phones have SMS; desktop peers log every request as an unknown message.
+            if (device.IsComputer) return;
+
             SendQueuedMessages(device);
             var conversations = await smsRepository.GetConversationsAsync(device.Id);
             device.SendMessage(new ConversationsRequest

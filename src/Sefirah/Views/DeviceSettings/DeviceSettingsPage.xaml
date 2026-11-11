@@ -18,6 +18,7 @@
         <wctconverters:EmptyObjectToObjectConverter x:Key="EmptyObjectToOpacityConverter" EmptyValue="1.0" NotEmptyValue="0.0" />
         <converters:EmptyObjectToVisibilityConverter x:Key="EmptyObjectToVisibilityConverter" />
         <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Page.Resources>
 
     <ScrollViewer>
@@ -162,6 +163,7 @@
                 <!--  Screen Mirror Settings  -->
                 <wuc:SettingsCard
                     Click="OpenScreenMirrorSettings"
+                    Visibility="{x:Bind ViewModel.Device.IsMobile, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
                     Description="{helpers:ResourceString Name=ScreenMirrorSettingsDescription}"
                     Header="{helpers:ResourceString Name=ScreenMirrorSettings}"
                     IsClickEnabled="True">
@@ -173,6 +175,7 @@
                 <!--  ADB Settings  -->
                 <wuc:SettingsCard
                     Click="OpenAdbSettings"
+                    Visibility="{x:Bind ViewModel.Device.IsMobile, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
                     Description="{helpers:ResourceString Name=AdbSettingsDescription}"
                     Header="{helpers:ResourceString Name=AdbSettings}"
                     IsClickEnabled="True">
@@ -192,13 +195,23 @@
                     </wuc:SettingsCard.HeaderIcon>
                 </wuc:SettingsCard>
 
-
-                <wuc:SettingsCard Header="{helpers:ResourceString Name=RemoteBluetoothControl}"
-                                  Description="{helpers:ResourceString Name=RemoteBluetoothControlDescription}">
+                <!--  Remote Bluetooth Control  -->
+                <wuc:SettingsCard
+                    Description="{helpers:ResourceString Name=RemoteBluetoothControlDescription}"
+                    Header="{helpers:ResourceString Name=RemoteBluetoothControl}">
+                    <wuc:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE702;" />
+                    </wuc:SettingsCard.HeaderIcon>
                     <ToggleSwitch IsOn="{x:Bind ViewModel.AllowRemoteBluetoothControl, Mode=TwoWay}" />
                 </wuc:SettingsCard>
 
-                <wuc:SettingsCard Header="{helpers:ResourceString Name=ShareWallpaperWithDevice}" Description="{helpers:ResourceString Name=ShareWallpaperWithDeviceDescription}">
+                <!--  Wallpaper Preview Sharing  -->
+                <wuc:SettingsCard
+                    Description="{helpers:ResourceString Name=ShareWallpaperWithDeviceDescription}"
+                    Header="{helpers:ResourceString Name=ShareWallpaperWithDevice}">
+                    <wuc:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xEB9F;" />
+                    </wuc:SettingsCard.HeaderIcon>
                     <ToggleSwitch IsOn="{x:Bind ViewModel.ShareWallpaperPreview, Mode=TwoWay}" />
                 </wuc:SettingsCard>
 
@@ -232,7 +245,10 @@
                 </wuc:SettingsCard>
 
                 <!--  Storage Access Settings  -->
-                <wuc:SettingsCard Description="{x:Bind ViewModel.StorageAccessDescription}" Header="{x:Bind ViewModel.StorageAccessHeader}">
+                <wuc:SettingsCard
+                    Description="{x:Bind ViewModel.StorageAccessDescription}"
+                    Header="{x:Bind ViewModel.StorageAccessHeader}"
+                    Visibility="{x:Bind ViewModel.Device.IsMobile, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <wuc:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xE8A5;" />
                     </wuc:SettingsCard.HeaderIcon>

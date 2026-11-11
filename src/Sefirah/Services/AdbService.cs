@@ -726,15 +726,7 @@ public class AdbService(
                    d.Model.Replace('_', ' ').Trim().Contains(cleanTargetModel, StringComparison.OrdinalIgnoreCase) ||
                    cleanTargetModel.Contains(d.Model.Replace('_', ' ').Trim(), StringComparison.OrdinalIgnoreCase)))));
 
-            if (usbDevice is null)
-            {
-                var onlineUsb = AdbDevices.Where(d => d.Type is DeviceType.USB && d.IsOnline).ToList();
-                if (onlineUsb.Count == 1)
-                {
-                    usbDevice = onlineUsb[0];
-                }
-            }
-
+            // Never fall back to an unrelated USB device or emulator: "tcpip 5555" restarts its adbd.
             if (usbDevice is null) return false;
             
             // If connection failed, try to enable TCP/IP mode using ADB if USB is connected
