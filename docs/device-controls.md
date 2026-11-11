@@ -13,8 +13,13 @@ never queued across reconnects. Results are `applied`, `denied`, `unsupported`,
 on the target and is not success. Observe actual state before changing the UI.
 
 Existing ringer messages remain available to legacy peers. New Bluetooth control
-defaults to denied. Android never invokes the deprecated enable/disable APIs;
-it presents a local confirmation before the system UI. macOS/Linux do not claim
+defaults to denied. Android never invokes the deprecated enable/disable APIs.
+When a shell-UID worker (root launcher or Shizuku) is alive, Android declares
+`direct` and the worker runs `cmd bluetooth_manager enable|disable` (the same
+path as adb shell); `applied` is reported only after the adapter reaches the
+requested state. Without that worker it declares `local` and presents a local
+confirmation before the system UI. Capabilities are republished when the worker
+status changes. macOS/Linux do not claim
 Windows radio-control support. No privileged service or new OS tool is installed.
 
 Device deployment, physical Bluetooth transitions and UI acceptance are separate
