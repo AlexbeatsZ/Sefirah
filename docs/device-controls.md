@@ -19,8 +19,11 @@ When a shell-UID worker (root launcher or Shizuku) is alive, Android declares
 path as adb shell); `applied` is reported only after the adapter reaches the
 requested state. Without that worker it declares `local` and presents a local
 confirmation before the system UI. Capabilities are republished when the worker
-status changes. macOS/Linux do not claim
-Windows radio-control support. No privileged service or new OS tool is installed.
+status changes. macOS declares `direct` (when allowed) and switches power through IOBluetooth's
+IOBluetoothPreferenceGet/SetControllerPowerState (no public API; same calls as
+blueutil). The bundle declares NSBluetoothAlwaysUsageDescription, otherwise TCC
+kills the process on first use; the state is polled every 5 s to republish
+changes. Linux declares nothing. No privileged service or new OS tool is installed.
 
 Device deployment, physical Bluetooth transitions and UI acceptance are separate
 from compilation and protocol regression checks.

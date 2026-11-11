@@ -62,8 +62,14 @@ public sealed class LocalManagementService(IDeviceManager devices, ISessionManag
         {
             case "status":
                 var local = await devices.GetLocalDeviceAsync();
+                // What this device declares to the first connected peer: Bluetooth control mode and state.
+                var controlPeer = devices.PairedDevices.FirstOrDefault(d => d.IsConnected);
+                var localControls = controlPeer is null ? null
+                    : await Ioc.Default.GetRequiredService<DeviceControlService>().GetCapabilitiesAsync(controlPeer);
                 return new JsonObject
                 {
+                    ["bluetooth"] = localControls is null ? null : new JsonObject
+                    { ["control"] = localControls.BluetoothControl, ["enabled"] = localControls.BluetoothEnabled, ["declaredTo"] = controlPeer!.Name },
                     ["apiVersion"] = 1, ["version"] = typeof(LocalManagementService).Assembly.GetName().Version?.ToString() ?? "unknown",
                     ["deviceId"] = local.DeviceId, ["deviceName"] = local.DeviceName,
                     ["port"] = NetworkService.ServerPort,
@@ -75,6 +81,13 @@ public sealed class LocalManagementService(IDeviceManager devices, ISessionManag
                     ["pending"] = new JsonArray(network.PendingManagementPairings.Select(p => (JsonNode)new JsonObject
                     { ["deviceId"] = p.DeviceId, ["verificationCode"] = p.VerificationCode }).ToArray())
                 };
+            case "bluetooth":
+                // Local same-user pipe only: switch this device's Bluetooth through the same path remote requests use.
+                var control = Ioc.Default.GetRequiredService<DeviceControlService>();
+                var status = await control.SetLocalBluetoothAsync(Required("enabled") == "true");
+                foreach (var peer in devices.PairedDevices.Where(d => d.IsConnected).ToArray())
+                    await control.PublishAsync(peer);
+                return new JsonObject { ["status"] = status };
             case "connect":
                 var id = Required("deviceId");
                 if (devices.FindDeviceById(id) is { } paired) sessions.Connect(paired);

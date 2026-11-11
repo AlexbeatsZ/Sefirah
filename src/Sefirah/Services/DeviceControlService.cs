@@ -1,5 +1,6 @@
 using CommunityToolkit.WinUI;
 using Sefirah.Data.Models;
+using Sefirah.Utils;
 
 namespace Sefirah.Services;
 
@@ -27,9 +28,36 @@ public sealed class DeviceControlService(IDeviceManager devices)
             };
             result.BluetoothControl = peer.DeviceSettings.AllowRemoteBluetoothControl ? "direct" : "denied";
         }
+#else
+        if (MacBluetoothPower.GetEnabled() is { } enabled)
+        {
+            WatchMacBluetooth(enabled);
+            result.BluetoothEnabled = enabled;
+            result.BluetoothControl = peer.DeviceSettings.AllowRemoteBluetoothControl ? "direct" : "denied";
+        }
 #endif
         return result;
     }
+
+#if !WINDOWS
+    // IOBluetooth has no public power-change notification; a light poll republishes capabilities on change.
+    private void WatchMacBluetooth(bool current)
+    {
+        if (Interlocked.Exchange(ref radioSubscribed, 1) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            bool? last = current;
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5));
+                var state = MacBluetoothPower.GetEnabled();
+                if (state == last) continue;
+                last = state;
+                PublishAll();
+            }
+        });
+    }
+#endif
 
     private async void PublishAll()
     {
@@ -45,6 +73,30 @@ public sealed class DeviceControlService(IDeviceManager devices)
         if (!peer.IsConnected || peer.Controls?.Version != 1) return;
         var local = await devices.GetLocalDeviceAsync();
         peer.SendMessage(new DeviceInfo { DeviceName = local.DeviceName, Controls = await GetCapabilitiesAsync(peer) });
+    }
+
+    /// <summary>Switches this device's Bluetooth and reports applied/unconfirmed/unsupported. Shared by remote requests and local management.</summary>
+    public async Task<string> SetLocalBluetoothAsync(bool enabled)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try
+        {
+#if WINDOWS
+            var radio = Ioc.Default.GetRequiredService<Platforms.Windows.Bluetooth.BluetoothRadioManager>();
+            // RequestAccessAsync may display consent, so invoke from the target's UI thread.
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!App.MainWindow.DispatcherQueue.TryEnqueue(async () =>
+            {
+                try { completion.TrySetResult(await radio.TrySetEnabledAsync(enabled, timeout.Token)); }
+                catch (Exception) { completion.TrySetResult(false); }
+            })) completion.TrySetResult(false);
+            return await completion.Task.WaitAsync(timeout.Token) ? "applied" : "unconfirmed";
+#else
+            if (!MacBluetoothPower.IsSupported) return "unsupported";
+            return await MacBluetoothPower.TrySetEnabledAsync(enabled, timeout.Token) ? "applied" : "unconfirmed";
+#endif
+        }
+        catch (OperationCanceledException) { return "unconfirmed"; }
     }
 
     public async Task HandleAsync(PairedDevice peer, DeviceControlRequest request)
@@ -73,20 +125,7 @@ public sealed class DeviceControlService(IDeviceManager devices)
                 status = "denied";
                 if (peer.DeviceSettings.AllowRemoteBluetoothControl)
                 {
-#if WINDOWS
-                    var radio = Ioc.Default.GetRequiredService<Platforms.Windows.Bluetooth.BluetoothRadioManager>();
-                    // RequestAccessAsync may display consent, so invoke from the target's UI thread.
-                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                    var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    if (!App.MainWindow.DispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try { completion.TrySetResult(await radio.TrySetEnabledAsync(request.Value == 1, timeout.Token)); }
-                        catch (Exception) { completion.TrySetResult(false); }
-                    })) completion.TrySetResult(false);
-                    status = await completion.Task.WaitAsync(timeout.Token) ? "applied" : "unconfirmed";
-#else
-                    status = "unsupported";
-#endif
+                    status = await SetLocalBluetoothAsync(request.Value == 1);
                 }
             }
             else if (request.Control == "bluetooth") status = "invalid";
