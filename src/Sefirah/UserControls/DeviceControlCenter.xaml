@@ -139,6 +139,11 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap" FontSize="12" />
                 <StackPanel Orientation="Horizontal" Spacing="4">
+                    <StackPanel.Resources>
+                        <!--  Icon buttons stay transparent when disabled; the template's Disabled state otherwise paints a grey box. Hover/press keep the default fill.  -->
+                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+                        <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="Transparent" />
+                    </StackPanel.Resources>
                     <Button
                         Padding="4"
                         Background="Transparent"

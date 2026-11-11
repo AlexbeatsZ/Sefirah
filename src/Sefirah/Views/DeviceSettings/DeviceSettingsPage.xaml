@@ -205,16 +205,6 @@
                     <ToggleSwitch IsOn="{x:Bind ViewModel.AllowRemoteBluetoothControl, Mode=TwoWay}" />
                 </wuc:SettingsCard>
 
-                <!--  Wallpaper Preview Sharing  -->
-                <wuc:SettingsCard
-                    Description="{helpers:ResourceString Name=ShareWallpaperWithDeviceDescription}"
-                    Header="{helpers:ResourceString Name=ShareWallpaperWithDevice}">
-                    <wuc:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xEB9F;" />
-                    </wuc:SettingsCard.HeaderIcon>
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.ShareWallpaperPreview, Mode=TwoWay}" />
-                </wuc:SettingsCard>
-
                 <!--  Audio Sync Settings  -->
                 <wuc:SettingsCard Description="{helpers:ResourceString Name=AudioControlDescription}" Header="{helpers:ResourceString Name=AudioControl}">
                     <wuc:SettingsCard.HeaderIcon>

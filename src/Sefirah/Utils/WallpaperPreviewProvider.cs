@@ -52,19 +52,52 @@ internal static partial class WallpaperPreviewProvider
         var bytes = output.ToArray();
 #else
         using var codec = SKCodec.Create(input);
-        if (codec is null || (long)codec.Info.Width * codec.Info.Height > 32 * 1024 * 1024) return null;
+        // Skia has no HEIF decoder; macOS desktop pictures are usually .heic, so use the system's ImageIO via sips.
+        if (codec is null) return OperatingSystem.IsMacOS() ? await CreateThumbnailWithSipsAsync(path) : null;
+        if ((long)codec.Info.Width * codec.Info.Height > 32 * 1024 * 1024) return null;
         using var image = SKBitmap.Decode(codec);
-        if (image is null) return null;
+        if (image is null) return OperatingSystem.IsMacOS() ? await CreateThumbnailWithSipsAsync(path) : null;
         var scale = Math.Min(1d, PresentationImage.MaxEdge / (double)Math.Max(image.Width, image.Height));
         using var resized = image.Resize(new SKImageInfo(Math.Max(1, (int)(image.Width * scale)),
             Math.Max(1, (int)(image.Height * scale))), new SKSamplingOptions(SKFilterMode.Linear));
         if (resized is null) return null;
         using var encoded = resized.Encode(SKEncodedImageFormat.Jpeg, 75);
         var bytes = encoded.ToArray();
-        await Task.CompletedTask;
 #endif
         return PresentationImage.IsValid(bytes) ? bytes : null;
     }
+
+#if !WINDOWS
+    private static async Task<byte[]?> CreateThumbnailWithSipsAsync(string path)
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"sefirah-wallpaper-{Guid.NewGuid():N}.jpg");
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/sips")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            foreach (var argument in new[] { "-s", "format", "jpeg", "-s", "formatOptions", "60",
+                         "-Z", PresentationImage.MaxEdge.ToString(), path, "--out", output })
+                start.ArgumentList.Add(argument);
+            using var process = System.Diagnostics.Process.Start(start);
+            if (process is null) return null;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var drainOut = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var drainErr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try { await process.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException) { process.Kill(); return null; }
+            await Task.WhenAll(drainOut, drainErr);
+            if (process.ExitCode != 0 || !File.Exists(output)) return null;
+            var bytes = await File.ReadAllBytesAsync(output);
+            return PresentationImage.IsValid(bytes) ? bytes : null;
+        }
+        catch (Exception) { return null; }
+        finally { try { File.Delete(output); } catch (Exception) { } }
+    }
+#endif
 
 #if WINDOWS
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

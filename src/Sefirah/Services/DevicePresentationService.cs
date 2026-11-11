@@ -21,7 +21,7 @@ public sealed class DevicePresentationService(IUserSettingsService settings)
             AspectRatio = prefs.PresentationRatio
         };
         if (!presentation.IsValid) presentation = new DevicePresentation { Kind = "computer" };
-        if (!prefs.ShareWallpaperPreview || peer is not null && !peer.DeviceSettings.ShareWallpaperPreview)
+        if (!prefs.ShareWallpaperPreview)
             return presentation;
         await imageGate.WaitAsync();
         try
@@ -40,7 +40,7 @@ public sealed class DevicePresentationService(IUserSettingsService settings)
             }
             if (cachedImage is null) return presentation;
             // Recheck after asynchronous image acquisition; consent may have been revoked meanwhile.
-            if (!prefs.ShareWallpaperPreview || peer is not null && !peer.DeviceSettings.ShareWallpaperPreview)
+            if (!prefs.ShareWallpaperPreview)
                 return presentation;
             presentation.WallpaperSource = manual ? "userSelected" : "wallpaper";
             presentation.WallpaperId = PresentationImage.Id(cachedImage);

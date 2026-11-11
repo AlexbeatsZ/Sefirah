@@ -9,7 +9,6 @@ public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyC
     /// </summary>
     string DeviceId { get; }
     string PresentationJson { get; set; }
-    bool ShareWallpaperPreview { get; set; }
 
     bool AllowRemoteBluetoothControl { get; set; }
 
