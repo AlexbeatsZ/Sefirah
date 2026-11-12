@@ -118,13 +118,14 @@ public static class AppLifecycleHelper
                 .AddSingleton<CallLogRepository>()
                 .AddSingleton<NotificationRepository>()
 
+                // Before platform services so macOS can replace it with Bonjour.
+                .AddSingleton<IMdnsService, MdnsService>()
                 // Platform-specific services
                 .AddPlatformServices()
                 // Services
                 .AddSingleton<IDeviceManager, DeviceManager>()
                 .AddSingleton(sp => (ITcpServerProvider)sp.GetRequiredService<INetworkService>())
                 .AddSingleton(sp => (ISessionManager)sp.GetRequiredService<INetworkService>())
-                .AddSingleton<IMdnsService, MdnsService>()
                 .AddSingleton<IDiscoveryService, DiscoveryService>()
                 .AddSingleton<INetworkService, NetworkService>()
                 .AddSingleton<LocalManagementService>()

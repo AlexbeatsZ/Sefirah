@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<IBluetoothPairingService, BluetoothPairingService>();
             services.AddSingleton<BluetoothPairingService>(sp => (BluetoothPairingService)sp.GetRequiredService<IBluetoothPairingService>());
             services.AddSingleton<ISystemTrayService, MacSystemTrayService>();
+            services.AddSingleton<IMdnsService, MacBonjourService>();
             return services;
         }
         services.AddSingleton<IPlatformNotificationHandler, NotificationHandler>();

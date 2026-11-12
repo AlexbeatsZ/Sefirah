@@ -38,12 +38,14 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.castle.sefirah</string>
 <key>CFBundleName</key><string>Sefirah</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>3.2.0.8</string>
-<key>CFBundleVersion</key><string>82</string>
+<key>CFBundleShortVersionString</key><string>3.2.0.9</string>
+<key>CFBundleVersion</key><string>83</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSBluetoothAlwaysUsageDescription</key><string>Sefirah switches this Mac's Bluetooth on or off when a paired device you allowed asks for it.</string>
+<key>NSLocalNetworkUsageDescription</key><string>Sefirah finds and connects to your paired phones and computers on the local network.</string>
+<key>NSBonjourServices</key><array><string>_sefirah._udp</string></array>
 </dict></plist>
 PLIST
 chmod +x "$runtime/Sefirah.Desktop"
