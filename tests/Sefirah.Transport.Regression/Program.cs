@@ -153,8 +153,10 @@ Console.WriteLine($"PASS {checks} transport checks, including 24 concurrent mutu
 static X509Certificate2 CreateCertificate()
 {
     using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-    return new CertificateRequest("CN=TransportRegression", key, HashAlgorithmName.SHA256)
+    using var certificate = new CertificateRequest("CN=TransportRegression", key, HashAlgorithmName.SHA256)
         .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+    // Schannel needs a PFX-imported private key rather than CreateSelfSigned's ephemeral CNG key.
+    return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.Exportable);
 }
 
 sealed class ServerProvider : ITcpServerProvider
