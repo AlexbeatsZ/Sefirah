@@ -8,7 +8,7 @@ Each live connection processes application messages in wire order. Desktop socke
 
 ## JSON stream
 
-Control connections carry UTF-8 JSON objects separated by LF. CRLF is accepted. Decode complete byte-framed lines so a multi-byte code point can cross arbitrary socket reads. Unsupported or malformed JSON messages are skipped individually. Desktop frames are limited to 16 MiB and a connection queue to 1024 messages.
+Control connections carry UTF-8 JSON objects separated by LF. CRLF is accepted. Decode complete byte-framed lines so a multi-byte code point can cross arbitrary socket reads. Unsupported or malformed JSON messages are skipped individually. Desktop queues hold 1024 messages and apply TCP receive backpressure while handlers catch up. Valid large messages and synchronization bursts retain their existing behavior.
 
 `type` is the case-sensitive message discriminator. Enum names remain compatible with the 3.2.0 baseline, including `MediaAction.actionType = Stop`. `Authentication.protocolVersion` is optional and defaults to zero for legacy peers. Version 1 confirms the updated authentication lifecycle. New peers receive one reply per transport. Legacy peers retain the reply-per-burst workaround. Optional `DeviceInfo` extensions negotiate controls and presentation through their own `version` fields. Absent phone numbers preserve saved numbers; an explicit empty list clears them.
 

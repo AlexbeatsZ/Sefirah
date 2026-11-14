@@ -43,6 +43,14 @@ static class NetworkRegression
             await WaitAsync(() => aMessages.Clipboard.Contains(content) && bMessages.Clipboard.Contains(content));
             check(aMessages.Clipboard.Count(item => item == content) == 1 && bMessages.Clipboard.Count(item => item == content) == 1,
                 "one intact Unicode message each direction");
+            if (round == 0)
+            {
+                for (var index = 0; index < 2000; index++)
+                    aPeer.SendMessage(new BatteryState { BatteryLevel = index % 101 });
+                await WaitAsync(() => bMessages.Battery.Count == 2000);
+                check(bMessages.Battery.SequenceEqual(Enumerable.Range(0, 2000).Select(index => index % 101)),
+                    "backpressure preserves a 2000-message burst in order");
+            }
             aNetwork.DisconnectDevice(aPeer, true);
             try { await WaitAsync(() => aPeer.IsForcedDisconnect && bPeer.IsForcedDisconnect); }
             catch
@@ -82,11 +90,16 @@ static class NetworkRegression
     {
         public NetworkService Network { get; set; } = null!;
         public ConcurrentBag<string> Clipboard { get; } = [];
-        public Task HandleMessageAsync(PairedDevice device, SocketMessage message)
+        public ConcurrentQueue<int> Battery { get; } = [];
+        public async Task HandleMessageAsync(PairedDevice device, SocketMessage message)
         {
+            if (message is BatteryState battery)
+            {
+                await Task.Delay(1);
+                Battery.Enqueue(battery.BatteryLevel);
+            }
             if (message is ClipboardInfo clipboard) Clipboard.Add(clipboard.Content);
             if (message is Disconnect) Network.DisconnectDevice(device, true, notifyPeer: false);
-            return Task.CompletedTask;
         }
     }
 }

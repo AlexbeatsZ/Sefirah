@@ -383,7 +383,7 @@ public class NetworkService(
         {
             if (!connectionBuffers.TryGetValue(id, out var framing) || !messageQueues.TryGetValue(id, out var queue)) return;
             foreach (var message in DecodeMessages(framing.Append(buffer.AsSpan((int)offset, (int)size)), logger))
-                if (!queue.Writer.TryWrite(message)) throw new IOException("Connection message queue is full");
+                queue.Writer.WriteAsync(message).AsTask().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
