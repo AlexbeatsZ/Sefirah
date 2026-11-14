@@ -25,7 +25,7 @@ public class MessageHandler(
     IAdbService adbService,
     ILogger<MessageHandler> logger) : IMessageHandler
 {
-    public async void HandleMessageAsync(PairedDevice device, SocketMessage message)
+    public async Task HandleMessageAsync(PairedDevice device, SocketMessage message)
     {
         try
         {
@@ -44,10 +44,12 @@ public class MessageHandler(
                     break;
 
                 case AudioAction action:
+                    if (!device.DeviceSettings.AudioSync) break;
                     await audioFeature.HandleAudioActionAsync(action);
                     break;
 
                 case MediaAction action:
+                    if (!device.DeviceSettings.MediaSessionSend) break;
                     await mediaFeature.HandleMediaActionAsync(action);
                     break;
 
@@ -150,7 +152,7 @@ public class MessageHandler(
                     break;
 
                 case ActionInfo action:
-                    await actionFeature.HandleActionMessage(action);
+                    if (device.DeviceSettings.AllowRemoteActions) await actionFeature.HandleActionMessage(action);
                     break;
 
                 case SftpServerInfo sftpServerInfo:
@@ -164,6 +166,7 @@ public class MessageHandler(
                     break;
 
                 case ClipboardTransfer clipboardTransfer:
+                    if (!device.DeviceSettings.ClipboardReceive || !device.DeviceSettings.ClipboardIncludeImages) break;
                     var clipboardFile = await fileTransferService.Receive(clipboardTransfer.Transfer, device, silent: true);
                     if (clipboardFile is not null)
                         await clipboardFeature.SetContentAsync(clipboardFile, device);
@@ -216,7 +219,7 @@ public class MessageHandler(
                     break;
 
                 case Disconnect:
-                    sessionManager.DisconnectDevice(device, true);
+                    sessionManager.DisconnectDevice(device, true, notifyPeer: false);
                     break;
 
                 // Desktop peers announce these to phones; another desktop has no handler for them.

@@ -16,7 +16,7 @@ public interface ISessionManager
     void BroadcastMessage(SocketMessage message);
 
     /// <summary>Disconnects the active session or client for a paired device.</summary>
-    void DisconnectDevice(PairedDevice device, bool forcedDisconnect = false);
+    void DisconnectDevice(PairedDevice device, bool forcedDisconnect = false, bool notifyPeer = true);
 
     /// <summary>Connects to a paired device using its enabled addresses. Cancels an in-progress attempt if one exists.</summary>
     void Connect(PairedDevice device);

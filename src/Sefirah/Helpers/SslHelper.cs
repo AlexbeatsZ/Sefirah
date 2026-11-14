@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
@@ -12,10 +11,7 @@ namespace Sefirah.Helpers;
 /// </summary>
 public static class SslHelper
 {
-    private static readonly TimeSpan StashTtl = TimeSpan.FromSeconds(30);
-
-    private static readonly ConcurrentDictionary<string, ConcurrentQueue<(byte[] Cert, long Ticks)>> CertByPublicKey = new();
-    private static readonly Timer StashCleanupTimer = new(_ => PurgeExpiredStash(), null, Timeout.Infinite, Timeout.Infinite);
+    private static readonly Lazy<X509Certificate2> LocalCertificate = new(LoadOrCreateCertificate);
 
     public static byte[] DevicePublicKeyEncoded => _devicePublicKeyEncoded ??= GetPublicKeyEncoded(GetOrCreateCertificate());
     private static byte[]? _devicePublicKeyEncoded;
@@ -69,37 +65,13 @@ public static class SslHelper
         return hex.ToString().ToUpperInvariant();
     }
 
-    public static byte[]? GetCertForPublicKey(string? publicKeyString)
+    public static byte[] VerifyPeerCertificate(byte[]? certificate, string publicKey)
     {
-        if (string.IsNullOrEmpty(publicKeyString) || !CertByPublicKey.TryGetValue(publicKeyString, out var queue))
-            return null;
-
-        if (!queue.TryDequeue(out var entry))
-        {
-            CertByPublicKey.TryRemove(publicKeyString, out _);
-            return null;
-        }
-
-        if (queue.IsEmpty)
-            CertByPublicKey.TryRemove(publicKeyString, out _);
-
-        return entry.Cert;
-    }
-
-    private static void PurgeExpiredStash()
-    {
-        var now = Environment.TickCount64;
-        foreach (var (key, queue) in CertByPublicKey)
-        {
-            while (queue.TryPeek(out var entry) && now - entry.Ticks > StashTtl.TotalMilliseconds)
-                queue.TryDequeue(out _);
-
-            if (queue.IsEmpty)
-                CertByPublicKey.TryRemove(key, out _);
-        }
-
-        if (CertByPublicKey.IsEmpty)
-            StashCleanupTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        if (certificate is null) throw new AuthenticationException("TLS peer certificate is missing");
+        using var peer = X509CertificateLoader.LoadCertificate(certificate);
+        if (GetPublicKeyStringBase64(GetPublicKeyEncoded(peer)) != publicKey)
+            throw new AuthenticationException("Authentication public key does not match this TLS peer");
+        return certificate;
     }
 
     private static string CertificateFileName { get; } = "Sefirah.pfx";
@@ -108,7 +80,6 @@ public static class SslHelper
     {
         // Create ECDSA with NIST P-256 curve
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var parameters = ecdsa.ExportParameters(true);
 
         var subjectName = new X500DistinguishedName("CN=SefirahCastle");
         CertificateRequest certRequest = new(subjectName, ecdsa, HashAlgorithmName.SHA256);
@@ -120,41 +91,38 @@ public static class SslHelper
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment, true));
 
         // Create self-signed certificate valid for 10 years
-        X509Certificate2 certificate = certRequest.CreateSelfSigned(DateTimeOffset.Now, DateTimeOffset.Now.AddYears(10));
+        using X509Certificate2 certificate = certRequest.CreateSelfSigned(DateTimeOffset.Now, DateTimeOffset.Now.AddYears(10));
 
         // Ensure the certificate is exportable
         byte[] exportedData = certificate.Export(X509ContentType.Pfx);
-        certificate = X509CertificateLoader.LoadPkcs12(exportedData, null, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
-
-        string certPath = Path.Combine(ApplicationData.Current.LocalFolder.Path, CertificateFileName);
-
-        File.WriteAllBytes(certPath, exportedData);
-
-        return certificate;
+        var certPath = Path.Combine(ApplicationData.Current.LocalFolder.Path, CertificateFileName);
+        var temporary = certPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllBytes(temporary, exportedData);
+            try { File.Move(temporary, certPath, overwrite: false); }
+            catch (IOException) when (File.Exists(certPath))
+            { return X509CertificateLoader.LoadPkcs12FromFile(certPath, null); }
+            return X509CertificateLoader.LoadPkcs12(exportedData, null, X509KeyStorageFlags.Exportable);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
-    public static X509Certificate2 GetOrCreateCertificate()
+    public static X509Certificate2 GetOrCreateCertificate() => LocalCertificate.Value;
+
+    private static X509Certificate2 LoadOrCreateCertificate()
     {
         string certPath = Path.Combine(ApplicationData.Current.LocalFolder.Path, CertificateFileName);
 
-        if (File.Exists(certPath))
-        {
-            try
-            {
-                return X509CertificateLoader.LoadPkcs12FromFile(certPath, null);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Failed to load certificate: {ex.Message}");
-            }
-        }
+        // A read failure must preserve the existing identity and surface the error.
+        if (File.Exists(certPath)) return X509CertificateLoader.LoadPkcs12FromFile(certPath, null);
 
         return CreateECDSACertificate();
     }
 
     public static SslContext GetSslContext()
     {
-        return new SslContext(SslProtocols.Tls12 | SslProtocols.Tls13, GetOrCreateCertificate(), StashCertAndAccept)
+        return new SslContext(SslProtocols.Tls12 | SslProtocols.Tls13, GetOrCreateCertificate(), (sender, cert, chain, errors) => TlsHandshake.Capture(sender, cert))
         {
             ClientCertificateRequired = true
         };
@@ -173,18 +141,8 @@ public static class SslHelper
             if (cert is null) return false;
             using var c = new X509Certificate2(cert);
             var raw = c.RawData;
-            return raw.Length == expectedPeerCert.Length && raw.AsSpan().SequenceEqual(expectedPeerCert);
+            return raw.AsSpan().SequenceEqual(expectedPeerCert) && TlsHandshake.Capture(sender, cert);
         }
     }
 
-    private static bool StashCertAndAccept(object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)
-    {
-        if (cert is null) return false;
-        using var c = new X509Certificate2(cert);
-        var publicKeyString = GetPublicKeyStringBase64(GetPublicKeyEncoded(c));
-        var queue = CertByPublicKey.GetOrAdd(publicKeyString, _ => new ConcurrentQueue<(byte[], long)>());
-        queue.Enqueue((cert.GetRawCertData(), Environment.TickCount64));
-        StashCleanupTimer.Change(StashTtl, StashTtl);
-        return true;
-    }
 }

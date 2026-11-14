@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Channels;
 using Sefirah.Data.Models;
 using Sefirah.Helpers;
 using Sefirah.Services.Socket;
@@ -27,13 +28,13 @@ public partial class SendFileHandler(
     private uint notificationSequence = 1;
     private long lastNotificationUpdateTimestamp;
     private TaskCompletionSource<ServerSession>? connectionSource;
-    private TaskCompletionSource<bool>? transferCompletionSource;
-    private TaskCompletionSource<bool>? startMessageSource;
+    private readonly Channel<string> controls = Channel.CreateBounded<string>(32);
+    private readonly TransferControlBuffer controlBuffer = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private bool disposed;
 
     public Guid TransferId { get; private set; }
-    public double Progress => (double)totalBytesTransferred / totalBytes * 100;
+    public double Progress => totalBytes == 0 ? 100 : (double)totalBytesTransferred / totalBytes * 100;
     public bool IsBulkTransfer => files.Count > 1;
 
     /// <summary>
@@ -42,6 +43,7 @@ public partial class SendFileHandler(
     /// <returns>The transfer ID for tracking this transfer.</returns>
     public async Task<Guid> WaitForConnectionAsync()
     {
+        connectionSource = new TaskCompletionSource<ServerSession>(TaskCreationOptions.RunContinuationsAsynchronously);
         // Initialize server
         serverInfo = InitializeServer();
 
@@ -49,8 +51,8 @@ public partial class SendFileHandler(
         sendTransferMessage(serverInfo);
 
         // Wait for client to connect
-        connectionSource = new TaskCompletionSource<ServerSession>();
-        session = await connectionSource.Task;
+        session = await connectionSource.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationTokenSource.Token);
+        session.Socket.SendTimeout = 30_000;
         TransferId = session.Id;
 
         return TransferId;
@@ -74,12 +76,10 @@ public partial class SendFileHandler(
                 logger.Debug($"Sending file: {files[i].FileName}");
                 
                 // Wait for client to send "start" message indicating readiness to receive
-                startMessageSource = new TaskCompletionSource<bool>();
-                await startMessageSource.Task;
+                await ExpectControlAsync(FileTransferService.StartMessage);
                 
-                transferCompletionSource = new TaskCompletionSource<bool>();
                 await SendFileData(files[i], await storageFiles[i].OpenStreamForReadAsync());
-                await transferCompletionSource.Task;
+                await ExpectControlAsync(FileTransferService.CompleteMessage);
 
                 currentFileIndex++;
             }
@@ -127,8 +127,8 @@ public partial class SendFileHandler(
     public void Cancel()
     {
         cancellationTokenSource.Cancel();
-        startMessageSource?.TrySetCanceled(cancellationTokenSource.Token);
-        transferCompletionSource?.TrySetCanceled(cancellationTokenSource.Token);
+        connectionSource?.TrySetCanceled(cancellationTokenSource.Token);
+        controls.Writer.TryComplete(new OperationCanceledException());
     }
 
     private async Task SendFileData(FileMetadata metadata, Stream stream)
@@ -145,10 +145,10 @@ public partial class SendFileHandler(
                 if (session is null || !session.IsConnected)
                     throw new IOException("Remote device disconnected during transfer");
 
-                int bytesRead = await stream.ReadAsync(buffer);
-                if (bytesRead == 0) break;
+                int bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, metadata.FileSize - bytesTransferred)), cancellationTokenSource.Token);
+                if (bytesRead == 0) throw new EndOfStreamException("Source file changed during transfer");
 
-                session.Send(buffer, 0, bytesRead);
+                if (session.Send(buffer, 0, bytesRead) != bytesRead) throw new IOException("Incomplete socket write");
                 bytesTransferred += bytesRead;
                 totalBytesTransferred += bytesRead;
 
@@ -183,8 +183,8 @@ public partial class SendFileHandler(
             : string.Format("FileTransferNotification.Sending".GetLocalizedResource(), device.Name);
 
         // Status: "{transferred} / {total}"
-        var transferredFormatted = FormatBytes(totalBytesTransferred);
-        var totalFormatted = FormatBytes(totalBytes);
+        var transferredFormatted = TransferFiles.FormatBytes(totalBytesTransferred);
+        var totalFormatted = TransferFiles.FormatBytes(totalBytes);
         var status = $"{transferredFormatted} / {totalFormatted}";
 
         notificationHandler.ShowFileTransferNotification(
@@ -196,17 +196,11 @@ public partial class SendFileHandler(
             Progress);
     }
 
-    private static string FormatBytes(long bytes)
+    private async Task ExpectControlAsync(string expected)
     {
-        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {sizes[order]}";
+        var message = await controls.Reader.ReadAsync(cancellationTokenSource.Token).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(30), cancellationTokenSource.Token);
+        if (message != expected) throw new InvalidDataException($"Expected {expected}, received {message}");
     }
 
     private ServerInfo InitializeServer()
@@ -220,7 +214,7 @@ public partial class SendFileHandler(
                 {
                     OptionDualMode = true,
                 };
-                server.Start();
+                if (!server.Start()) throw new IOException("Transfer port unavailable");
 
                 serverInfo = new ServerInfo(port);
                 logger.Info($"File transfer server initialized at {serverInfo.Port} (cert-only auth)");
@@ -239,36 +233,30 @@ public partial class SendFileHandler(
 
     #region ITcpServerProvider Implementation
 
-    public void OnConnected(ServerSession session)
+    public void OnConnected(ServerSession session) { }
+
+    public void OnHandshaked(ServerSession connected)
     {
-        logger.Info($"Client connected to file transfer server: {session.Id}");
-        if (connectionSource?.Task.IsCompleted is false)
-            connectionSource.SetResult(session);
+        if (Interlocked.CompareExchange(ref session, connected, null) is null)
+            connectionSource?.TrySetResult(connected);
+        else connected.Disconnect();
     }
 
-    public void OnDisconnected(ServerSession session)
+    public void OnDisconnected(ServerSession disconnected)
     {
-        logger.Info($"Client disconnected from file transfer server: {session.Id}");
-
-        // Unblock any pending waits so the transfer stops instead of hanging.
-        transferCompletionSource?.TrySetException(new IOException("Remote device disconnected during transfer"));
-        startMessageSource?.TrySetException(new IOException("Remote device disconnected before transfer started"));
+        if (session != disconnected) return;
+        controls.Writer.TryComplete(new IOException("Remote device disconnected during transfer"));
     }
 
-    public void OnReceived(ServerSession session, byte[] buffer, long offset, long size)
+    public void OnReceived(ServerSession connected, byte[] buffer, long offset, long size)
     {
-        string message = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
-
-        if (message == FileTransferService.StartMessage && startMessageSource?.Task.IsCompleted is false)
+        if (session != connected) return;
+        try
         {
-            startMessageSource.TrySetResult(true);
-            return;
+            foreach (var message in controlBuffer.Append(buffer.AsSpan((int)offset, (int)size)))
+                if (!controls.Writer.TryWrite(message)) throw new IOException("Too many transfer controls");
         }
-
-        if (message == FileTransferService.CompleteMessage)
-        {
-            transferCompletionSource?.TrySetResult(true);
-        }
+        catch (Exception ex) { controls.Writer.TryComplete(ex); }
     }
 
     public void OnError(SocketError error)
@@ -289,8 +277,7 @@ public partial class SendFileHandler(
         session = null;
         serverInfo = null;
         connectionSource = null;
-        transferCompletionSource = null;
-        startMessageSource = null;
+        controls.Writer.TryComplete();
         cancellationTokenSource.Dispose();
         
         GC.SuppressFinalize(this);

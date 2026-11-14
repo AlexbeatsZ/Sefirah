@@ -303,6 +303,8 @@ public partial class PairedDevice : BaseRemoteDevice
         deviceSettings = userSettingsService.GetDeviceSettings(deviceId);
     }
 
+    public void Detach() => adbService.AdbDevices.CollectionChanged -= OnAdbDevicesChanged;
+
     public bool IsMatchingAdbDevice(AdbDevice adbDevice)
     {
         if (IsComputer || adbDevice is null || !adbDevice.IsOnline) return false;

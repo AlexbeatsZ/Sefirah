@@ -1,4 +1,3 @@
-using MeaMod.DNS.Multicast;
 using Sefirah.Data.EventArguments;
 using Sefirah.Data.Models;
 
@@ -13,11 +12,6 @@ public interface IMdnsService
     /// Event triggered when a new device is discovered via local network.
     /// </summary>
     event EventHandler<DiscoveredMdnsServiceArgs>? DiscoveredMdnsService;
-
-    /// <summary>
-    /// Event triggered when a previously discovered device is lost.
-    /// </summary>
-    event EventHandler<ServiceInstanceShutdownEventArgs>? ServiceInstanceShutdown;
 
     /// <summary>
     /// Advertises the device to the local network.

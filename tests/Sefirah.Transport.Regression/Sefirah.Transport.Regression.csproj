@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Sefirah/Services/NetworkService.cs" Link="NetworkService.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/BaseRemoteDevice.cs" Link="BaseRemoteDevice.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/ConnectionStatus.cs" Link="ConnectionStatus.cs" />
+    <Compile Include="../../src/Sefirah/Data/Contracts/IMessageHandler.cs" Link="IMessageHandler.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/SocketMessage.cs" Link="SocketMessage.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/DeviceControls.cs" Link="DeviceControls.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/DevicePresentation.cs" Link="DevicePresentation.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/FileMetadata.cs" Link="FileMetadata.cs" />
+    <Compile Include="../../src/Sefirah/Data/Models/Messages/PhoneNumber.cs" Link="PhoneNumber.cs" />
+    <Compile Include="../../src/Sefirah/Data/Enums/MessageTypes.cs" Link="MessageTypes.cs" />
+    <Compile Include="../../src/Sefirah/Utils/Serialization/JsonMessageSerializer.cs" Link="JsonMessageSerializer.cs" />
+    <None Include="../../protocol/messages.json" Link="messages.json" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="NetCoreServer" Version="8.0.7" />
+    <Compile Include="../../src/Sefirah/Data/Models/ServerInfo.cs" Link="ServerInfo.cs" />
+    <Compile Include="../../src/Sefirah/Helpers/SslHelper.cs" Link="SslHelper.cs" />
+    <Compile Include="../../src/Sefirah/Helpers/TlsHandshake.cs" Link="TlsHandshake.cs" />
+    <Compile Include="../../src/Sefirah/Services/Socket/*.cs" Link="Socket/%(Filename)%(Extension)" />
+    <Compile Include="../../src/Sefirah/Services/Transfer/SendFileHandler.cs" Link="SendFileHandler.cs" />
+    <Compile Include="../../src/Sefirah/Services/Transfer/ReceiveFileHandler.cs" Link="ReceiveFileHandler.cs" />
+    <Compile Include="../../src/Sefirah/Services/Transfer/TransferProtocol.cs" Link="TransferProtocol.cs" />
+  </ItemGroup>
+</Project>

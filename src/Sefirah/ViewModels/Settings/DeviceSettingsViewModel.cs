@@ -8,6 +8,12 @@ namespace Sefirah.ViewModels.Settings;
 
 public sealed partial class DeviceSettingsViewModel : BaseViewModel
 {
+    public bool AllowRemoteActions
+    {
+        get => DeviceSettings.AllowRemoteActions;
+        set { DeviceSettings.AllowRemoteActions = value; OnPropertyChanged(); }
+    }
+
     public bool AllowRemoteBluetoothControl
     {
         get => DeviceSettings.AllowRemoteBluetoothControl;

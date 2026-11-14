@@ -4,6 +4,7 @@ namespace Sefirah.Services.Socket;
 
 public interface ITcpServerProvider
 {
+    void OnHandshaked(ServerSession session) { }
     void OnConnected(ServerSession session);
     void OnDisconnected(ServerSession session);
     void OnError(SocketError error);

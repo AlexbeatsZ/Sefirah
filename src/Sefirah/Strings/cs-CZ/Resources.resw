@@ -872,4 +872,6 @@ input text %pwd%</value>
   <data name="CallAudioRouteToPc" xml:space="preserve">
     <value>Transfer to PC</value>
   </data>
+  <data name="RemoteActions" xml:space="preserve"><value>Allow remote actions</value></data>
+  <data name="RemoteActionsDescription" xml:space="preserve"><value>Allow this device to run configured power and command actions</value></data>
 </root>

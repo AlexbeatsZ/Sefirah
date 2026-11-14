@@ -9,8 +9,7 @@
         <!-- App Identifier -->
         <ApplicationId>com.castle.sefirah</ApplicationId>
         <!-- Versions -->
-        <ApplicationDisplayVersion>3.2.0.9</ApplicationDisplayVersion>
-        <ApplicationVersion>75</ApplicationVersion>
+        <ApplicationVersion>$(SefirahMacBuild)</ApplicationVersion>
         <!-- Package Publisher -->
         <ApplicationPublisher>shrimqy (local macOS adaptation)</ApplicationPublisher>
         <!-- Package Description -->

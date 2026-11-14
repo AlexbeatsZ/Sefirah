@@ -41,11 +41,9 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
     private IntPtr browse;
     private string? localInstance;
     private Timer? refreshTimer;
+    private Timer? cleanupTimer;
 
     public event EventHandler<DiscoveredMdnsServiceArgs>? DiscoveredMdnsService;
-
-    // Nothing in the app consumes shutdown events; Bonjour removals are simply ignored.
-    public event EventHandler<ServiceInstanceShutdownEventArgs>? ServiceInstanceShutdown { add { } remove { } }
 
     public MacBonjourService(ILogger logger)
     {
@@ -57,7 +55,7 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
         queue = dispatch_queue_create("com.castle.sefirah.bonjour", IntPtr.Zero);
     }
 
-    private sealed record PendingResolve(string Instance, string? DeviceName, int Port);
+    private sealed record PendingResolve(string Instance, string? DeviceName, int Port, uint InterfaceIndex, long ExpiresAt);
 
     public void AdvertiseService(UdpBroadcast broadcast, int port) => Post(() =>
     {
@@ -65,7 +63,7 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
         localInstance = broadcast.DeviceId;
         var txt = BuildTxt((DeviceNameProperty, broadcast.DeviceName), (ServerPortProperty, broadcast.Port.ToString()));
         var error = DNSServiceRegister(out var sdRef, 0, 0, broadcast.DeviceId, ServiceType, null, null,
-            (ushort)IPAddress.HostToNetworkOrder((short)port), (ushort)txt.Length, txt, registerReply, IntPtr.Zero);
+            (ushort)IPAddress.HostToNetworkOrder((short)broadcast.Port), (ushort)txt.Length, txt, registerReply, IntPtr.Zero);
         if (error != 0 || !Attach(sdRef))
         {
             logger.Error($"Bonjour could not advertise {broadcast.DeviceId}: {error}");
@@ -79,6 +77,8 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
     {
         refreshTimer?.Dispose();
         refreshTimer = null;
+        cleanupTimer?.Dispose();
+        cleanupTimer = null;
         Deallocate(ref browse);
         Deallocate(ref registration);
         foreach (var sdRef in pending.Keys) DNSServiceRefDeallocate(sdRef);
@@ -90,11 +90,22 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
         if (!StartBrowse()) return;
         // Re-browsing replays cached instances, so a peer whose service restarted without a goodbye
         // (killed process, reboot) is offered to the session manager again.
+        cleanupTimer ??= new Timer(_ => Post(ExpirePending), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         refreshTimer ??= new Timer(_ => Post(RefreshBrowse), null, BrowseRefresh, BrowseRefresh);
         logger.Info("Started mDNS discovery service via Bonjour");
     });
 
     public void Dispose() => UnAdvertiseService();
+
+    private void ExpirePending()
+    {
+        foreach (var (reference, resolve) in pending.ToArray())
+        {
+            if (resolve.ExpiresAt > Environment.TickCount64) continue;
+            pending.Remove(reference);
+            DNSServiceRefDeallocate(reference);
+        }
+    }
 
     private void RefreshBrowse()
     {
@@ -155,15 +166,23 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
     {
         try
         {
-            if (error != 0 || (flags & FlagsAdd) == 0) return;
+            if (error != 0 || sdRef != browse) return;
             var instance = Marshal.PtrToStringUTF8(serviceName);
             if (string.IsNullOrEmpty(instance) || instance == localInstance) return;
 
+            if ((flags & FlagsAdd) == 0)
+            {
+                foreach (var (reference, value) in pending.ToArray())
+                    if (value.Instance == instance && value.InterfaceIndex == interfaceIndex)
+                    { pending.Remove(reference); DNSServiceRefDeallocate(reference); }
+                return;
+            }
+            if (pending.Values.Any(value => value.Instance == instance && value.InterfaceIndex == interfaceIndex)) return;
             var resolveError = DNSServiceResolve(out var resolveRef, 0, interfaceIndex, instance,
                 Marshal.PtrToStringUTF8(regType) ?? ServiceType, Marshal.PtrToStringUTF8(domain) ?? "local.",
                 resolveReply, IntPtr.Zero);
             if (resolveError != 0 || !Attach(resolveRef)) return;
-            pending[resolveRef] = new PendingResolve(instance, null, 0);
+            pending[resolveRef] = new PendingResolve(instance, null, 0, interfaceIndex, Environment.TickCount64 + 10_000);
         }
         catch (Exception ex)
         {
@@ -188,10 +207,11 @@ public sealed class MacBonjourService : IMdnsService, IDisposable
                 ? parsed
                 : (ushort)IPAddress.NetworkToHostOrder((short)port);
 
+            if (serverPort is < 1 or > 65535) return;
             var addrError = DNSServiceGetAddrInfo(out var addrRef, 0, interfaceIndex, ProtocolIPv4, host,
                 addrInfoReply, IntPtr.Zero);
             if (addrError != 0 || !Attach(addrRef)) return;
-            pending[addrRef] = resolve with { DeviceName = deviceName, Port = serverPort };
+            pending[addrRef] = resolve with { DeviceName = deviceName, Port = serverPort, ExpiresAt = Environment.TickCount64 + 10_000 };
         }
         catch (Exception ex)
         {

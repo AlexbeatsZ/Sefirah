@@ -19,11 +19,10 @@ public class DiscoveryService(
     ) : IDiscoveryService, IUdpClientProvider
 {
     private MulticastClient? udpClient; 
-    private const string DEFAULT_BROADCAST = "255.255.255.255";
     private LocalDeviceEntity? localDevice;
     private readonly int port = 5149;
-    private List<IPEndPoint> broadcastEndpoints = [];
     private const int DiscoveryPort = 5149;
+    private Timer? announceTimer;
 
     public UdpBroadcast? BroadcastMessage { get; private set; }
 
@@ -43,28 +42,8 @@ public class DiscoveryService(
             };
 
             mdnsService.AdvertiseService(BroadcastMessage, port);
-            mdnsService.StartDiscovery();
             mdnsService.DiscoveredMdnsService += OnDiscoveredMdnsService;
-
-            broadcastEndpoints = [.. localAddresses.Select(ipInfo =>
-            {
-                var network = new Data.Models.IPNetwork(ipInfo.Address, ipInfo.SubnetMask);
-                var broadcastAddress = network.BroadcastAddress;
-
-                // Fallback to gateway if broadcast is limited
-                return broadcastAddress.Equals(IPAddress.Broadcast) && ipInfo.Gateway is not null
-                    ? new IPEndPoint(ipInfo.Gateway, DiscoveryPort)
-                    : new IPEndPoint(broadcastAddress, DiscoveryPort);
-
-            }).Distinct()];
-
-            // Always include default broadcast as fallback
-            broadcastEndpoints.Add(new IPEndPoint(IPAddress.Parse(DEFAULT_BROADCAST), DiscoveryPort));
-
-            var addresses = deviceManager.GetRemoteDeviceAddresses();
-            broadcastEndpoints.AddRange(addresses.Select(address => new IPEndPoint(IPAddress.Parse(address), DiscoveryPort)));
-
-            logger.Info($"Active broadcast endpoints: {string.Join(", ", broadcastEndpoints)}");
+            mdnsService.StartDiscovery();
 
             udpClient = new MulticastClient("0.0.0.0", port, this, logger)
             {
@@ -79,6 +58,7 @@ public class DiscoveryService(
                 udpClient.Socket.EnableBroadcast = true;
                 logger.Info($"UDP Client connected successfully {port}");
                 BroadcastDeviceInfoAsync(BroadcastMessage);
+                announceTimer = new Timer(_ => BroadcastDeviceInfoAsync(BroadcastMessage), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30));
             }
             else
             {
@@ -96,13 +76,18 @@ public class DiscoveryService(
         sessionManager.Connect(e.DeviceId, e.Address, e.Port);
     }
 
-    private async void BroadcastDeviceInfoAsync(UdpBroadcast udpBroadcast)
+    private void BroadcastDeviceInfoAsync(UdpBroadcast udpBroadcast)
     {
         if (udpClient is null || udpBroadcast is null) return;
         
         string jsonMessage = JsonMessageSerializer.Serialize(udpBroadcast);
         byte[] messageBytes = Encoding.UTF8.GetBytes(jsonMessage);
-        foreach (var endPoint in broadcastEndpoints)
+        var endpoints = NetworkHelper.GetAllValidAddresses()
+            .Select(info => new IPEndPoint(new Data.Models.IPNetwork(info.Address, info.SubnetMask).BroadcastAddress, DiscoveryPort))
+            .Append(new IPEndPoint(IPAddress.Broadcast, DiscoveryPort))
+            .Concat(deviceManager.GetRemoteDeviceAddresses().Where(address => IPAddress.TryParse(address, out _))
+                .Select(address => new IPEndPoint(IPAddress.Parse(address), DiscoveryPort))).Distinct().ToArray();
+        foreach (var endPoint in endpoints)
         {
             try
             {
@@ -123,7 +108,7 @@ public class DiscoveryService(
             var address = ((IPEndPoint)endpoint).Address;
             if (JsonMessageSerializer.DeserializeMessage(message) is not UdpBroadcast broadcast) return;
 
-            if (broadcast.DeviceId == localDevice?.DeviceId || address is null) return;
+            if (broadcast.DeviceId == localDevice?.DeviceId || broadcast.Port is < 1 or > 65535) return;
 
             sessionManager.Connect(broadcast.DeviceId, address.ToString(), broadcast.Port);
         }
@@ -137,6 +122,8 @@ public class DiscoveryService(
     {
         try
         {
+            announceTimer?.Dispose();
+            announceTimer = null;
             mdnsService.DiscoveredMdnsService -= OnDiscoveredMdnsService;
             mdnsService.UnAdvertiseService();
             udpClient?.Dispose();

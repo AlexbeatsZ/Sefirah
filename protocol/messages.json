@@ -1,0 +1,14 @@
+[
+  {"type":"Authentication","protocolVersion":1,"deviceId":"contract-peer","deviceName":"电脑🙂","publicKey":"test-only-key","model":"Contract"},
+  {"type":"UdpBroadcast","deviceId":"contract-peer","deviceName":"Contract","port":5150},
+  {"type":"ClipboardInfo","clipboardType":"text/plain","content":"中文🙂\nsecond line"},
+  {"type":"MediaAction","actionType":"Stop","source":"contract-player"},
+  {"type":"BatteryState","batteryLevel":42,"isCharging":false},
+  {"type":"AudioStreamState","streamType":3,"level":25},
+  {"type":"DeviceInfo","deviceName":"Contract","futureExtension":true},
+  {"type":"DeviceInfo","deviceName":"Contract","controls":{"version":1,"ringerControl":true,"bluetoothControl":"direct","bluetoothEnabled":true}},
+  {"type":"DeviceControlRequest","requestId":"00000000-0000-0000-0000-000000000001","control":"bluetooth","value":1},
+  {"type":"DeviceControlResult","requestId":"00000000-0000-0000-0000-000000000001","status":"applied"},
+  {"type":"ShareTransfer","transfer":{"files":[{"fileName":"empty.txt","mimeType":"text/plain","fileSize":0}],"serverInfo":{"port":5152}}},
+  {"type":"Disconnect"}
+]

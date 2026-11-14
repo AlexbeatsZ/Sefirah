@@ -18,7 +18,9 @@ public class MdnsService(ILogger logger) : IMdnsService
     private ServiceDiscovery? serviceDiscovery;
 
     public event EventHandler<DiscoveredMdnsServiceArgs>? DiscoveredMdnsService;
-    public event EventHandler<ServiceInstanceShutdownEventArgs>? ServiceInstanceShutdown;
+    private readonly object cacheLock = new();
+    private readonly Dictionary<string, (ResourceRecord Record, DateTime Expires)> records = [];
+    private Timer? queryTimer;
 
     /// <inheritdoc />
     public void AdvertiseService(UdpBroadcast broadcast, int port)
@@ -26,7 +28,7 @@ public class MdnsService(ILogger logger) : IMdnsService
         try
         {
             // Set up the service profile
-            serviceProfile = new ServiceProfile(broadcast.DeviceId, ServiceType, (ushort)port);
+            serviceProfile = new ServiceProfile(broadcast.DeviceId, ServiceType, (ushort)broadcast.Port);
             serviceProfile.AddProperty("deviceName", broadcast.DeviceName);
             serviceProfile.AddProperty("serverPort", broadcast.Port.ToString());
 
@@ -46,6 +48,9 @@ public class MdnsService(ILogger logger) : IMdnsService
     /// <inheritdoc />
     public void UnAdvertiseService()
     {
+        queryTimer?.Dispose();
+        queryTimer = null;
+        lock (cacheLock) records.Clear();
         try
         {
             if (serviceDiscovery is not null && serviceProfile is not null && multicastService is not null)
@@ -100,65 +105,51 @@ public class MdnsService(ILogger logger) : IMdnsService
 
             // Add handler for answers
             multicastService.AnswerReceived += (sender, args) => {
-                var txtRecords = args.Message.Answers.OfType<TXTRecord>();
-                var srvRecords = args.Message.Answers.OfType<SRVRecord>()
-                    .Concat(args.Message.AdditionalRecords.OfType<SRVRecord>())
-                    .ToList();
-                var aRecords = args.Message.Answers.OfType<AddressRecord>()
-                    .Concat(args.Message.AdditionalRecords.OfType<AddressRecord>())
-                    .Where(a => a.Address is not null && a.Address.AddressFamily is AddressFamily.InterNetwork)
-                    .ToList();
-                
-                // Process TXT records to get device information
-                foreach (var txtRecord in txtRecords)
+                var incoming = args.Message.Answers.Concat(args.Message.AdditionalRecords).ToList();
+                List<DiscoveredMdnsServiceArgs> found = [];
+                lock (cacheLock)
                 {
-                    string? deviceName = null;
-                    int? port = null;
-
-                    // Only process _sefirah._udp services
-                    if (!txtRecord.CanonicalName.Contains(ServiceType)) continue;
-
-                    foreach (var txtData in txtRecord.Strings)
+                    var now = DateTime.UtcNow;
+                    foreach (var key in records.Where(item => item.Value.Expires <= now).Select(item => item.Key).ToArray())
+                        records.Remove(key);
+                    foreach (var record in incoming.Where(record => record is TXTRecord or SRVRecord or AddressRecord))
                     {
-                        var cleanTxtData = txtData.Trim();
-                        var parts = cleanTxtData.Split(['='], 2); // Split at first '='
-                        if (parts.Length == 2)
-                        {
-                            if (parts[0] == DeviceNameProperty)
-                                deviceName = parts[1];
-                            else if (parts[0] == ServerPortProperty && int.TryParse(parts[1], out var parsedPort))
-                                port = parsedPort;
-                        }
+                        var key = $"{record.GetType().Name}:{record.CanonicalName}";
+                        if (record is AddressRecord address) key += $":{address.Address}";
+                        if (record.TTL <= TimeSpan.Zero) records.Remove(key);
+                        else records[key] = (record, now + record.TTL);
                     }
-
-                    if (!string.IsNullOrEmpty(deviceName) && txtRecord.CanonicalName != serviceProfile!.FullyQualifiedName)
+                    if (records.Count > 2048) records.Clear();
+                    var cached = records.Values.Select(value => value.Record).ToList();
+                    foreach (var txt in cached.OfType<TXTRecord>().Where(txt => txt.CanonicalName.Contains(ServiceType)))
                     {
-                        var deviceId = txtRecord.CanonicalName.Split('.')[0];
-
-                        // Get hostname from SRV record, then find matching A record
-                        var srvRecord = srvRecords.FirstOrDefault(s => s.CanonicalName.Contains(deviceId));
-                        if (srvRecord?.Target is not null)
-                        {
-                            var hostname = srvRecord.Target.ToString();
-                            var aRecord = aRecords.FirstOrDefault(a =>
-                                a.CanonicalName.ToString().Equals(hostname.ToString(), StringComparison.OrdinalIgnoreCase));
-                            if (aRecord?.Address is not null)
-                            {
-                                var address = aRecord.Address.ToString();
-                                var finalPort = port ?? srvRecord.Port;
-                                DiscoveredMdnsService?.Invoke(this, new(deviceId, deviceName, address, finalPort));
-                            }
-                        }
+                        var name = txt.CanonicalName.ToString();
+                        if (name.Equals(serviceProfile?.FullyQualifiedName.ToString(), StringComparison.OrdinalIgnoreCase)) continue;
+                        var attributes = txt.Strings.Select(value => value.Split('=', 2)).Where(parts => parts.Length == 2)
+                            .GroupBy(parts => parts[0]).ToDictionary(group => group.Key, group => group.Last()[1]);
+                        if (!attributes.TryGetValue(DeviceNameProperty, out var deviceName)) continue;
+                        var srv = cached.OfType<SRVRecord>().FirstOrDefault(record => record.CanonicalName.ToString().Equals(name, StringComparison.OrdinalIgnoreCase));
+                        if (srv?.Target is null) continue;
+                        var port = attributes.TryGetValue(ServerPortProperty, out var value) && int.TryParse(value, out var parsed)
+                            ? parsed : srv.Port;
+                        if (port is < 1 or > 65535) continue;
+                        foreach (var address in cached.OfType<AddressRecord>().Where(record =>
+                            record.Address?.AddressFamily == AddressFamily.InterNetwork &&
+                            record.CanonicalName.ToString().Equals(srv.Target.ToString(), StringComparison.OrdinalIgnoreCase)))
+                            found.Add(new(name.Split('.')[0], deviceName, address.Address.ToString(), port));
                     }
                 }
-            };
-
-            serviceDiscovery.ServiceInstanceShutdown += (sender, args) =>
-            {
-                ServiceInstanceShutdown?.Invoke(this, args);
+                foreach (var srv in incoming.OfType<SRVRecord>()) multicastService?.SendQuery(srv.Target, type: DnsType.A);
+                foreach (var peer in found) DiscoveredMdnsService?.Invoke(this, peer);
             };
 
             multicastService.Start();
+            serviceDiscovery.QueryServiceInstances(ServiceType);
+            queryTimer ??= new Timer(_ =>
+            {
+                try { serviceDiscovery?.QueryServiceInstances(ServiceType); }
+                catch (Exception ex) { logger.Debug("mDNS refresh failed", ex); }
+            }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
             logger.Info("Started mDNS discovery service");
         }
         catch (Exception ex)

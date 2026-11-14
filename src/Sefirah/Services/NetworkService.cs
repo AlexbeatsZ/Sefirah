@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Channels;
 using CommunityToolkit.WinUI;
 using Sefirah.Data.Models;
 using Sefirah.Dialogs;
@@ -16,7 +17,9 @@ public class NetworkService(
     Lazy<IMessageHandler> messageHandler,
     ILogger<NetworkService> logger,
     IDeviceManager deviceManager,
-    IAdbService adbService) : INetworkService, ISessionManager, ITcpServerProvider, ITcpClientProvider
+    IAdbService adbService,
+    IPAddress? listenAddress = null,
+    int? listenPort = null) : INetworkService, ISessionManager, ITcpServerProvider, ITcpClientProvider
 {
     public static int ServerPort { get; private set; }
 
@@ -25,13 +28,15 @@ public class NetworkService(
 
     private static readonly IEnumerable<int> PORT_RANGE = Enumerable.Range(5150, 20); // 5150 to 5169
 
-    private readonly ConcurrentDictionary<Guid, StringBuilder> connectionBuffers = [];
-    private readonly ConcurrentDictionary<Guid, DeviceAuth> deviceAuths = [];
+    private readonly ConcurrentDictionary<Guid, Utf8LineBuffer> connectionBuffers = [];
+    private readonly ConcurrentDictionary<Guid, Channel<SocketMessage>> messageQueues = [];
+    private readonly ConcurrentDictionary<Guid, Task> messageWorkers = [];
     private readonly HashSet<string> connectingDeviceIds = [];
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> handshakeCompletion = [];
     private readonly ConcurrentDictionary<string, CancellationTokenSource> connectionCancellationTokens = [];
     // Pinned client connections to paired devices that have not yet confirmed us
     private readonly ConcurrentDictionary<Guid, PairedDevice> awaitingServerAuthentication = [];
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> authenticationCompletion = [];
     // Last session each paired client was sent an Authentication reply on
     private readonly Dictionary<string, (Guid SessionId, long Ticks)> authenticationReplies = [];
     private static readonly TimeSpan DuplicateConnectionWindow = TimeSpan.FromSeconds(3);
@@ -52,13 +57,11 @@ public class NetworkService(
     private readonly ConcurrentDictionary<string, (int Failures, DateTime NextAttempt)> desktopReconnectBackoff = [];
     private CancellationTokenSource? desktopReconnectCts;
 
-    private sealed class DeviceAuth
-    {
-        public ConcurrentQueue<SocketMessage> Deferred { get; } = new();
-        public CancellationTokenSource Cts { get; } = new();
-    }
 
-    private ObservableCollection<PairedDevice> PairedDevices => deviceManager.PairedDevices;
+    private PairedDevice[] PairedDevices => pairedSnapshot;
+    private volatile PairedDevice[] pairedSnapshot = [];
+    private volatile DiscoveredDevice[] discoveredSnapshot = [];
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> peerGates = [];
     private ObservableCollection<DiscoveredDevice> DiscoveredDevices => deviceManager.DiscoveredDevices;
 
     /// <summary>
@@ -69,14 +72,21 @@ public class NetworkService(
     public async Task StartServerAsync()
     {
         if (isRunning) return;
+        await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+        {
+            pairedSnapshot = deviceManager.PairedDevices.ToArray();
+            discoveredSnapshot = DiscoveredDevices.ToArray();
+            DiscoveredDevices.CollectionChanged += (_, _) => discoveredSnapshot = DiscoveredDevices.ToArray();
+            deviceManager.PairedDevices.CollectionChanged += (_, _) => pairedSnapshot = deviceManager.PairedDevices.ToArray();
+        });
 
         ConnectionStatusChanged += ConnectionStatusChangedEvent;
 
-        foreach (int port in PORT_RANGE)
+        foreach (int port in listenPort.HasValue ? new[] { listenPort.Value } : PORT_RANGE)
         {
             try
             {
-                server = new Server(SslHelper.GetSslContext(), IPAddress.IPv6Any, port, this)
+                server = new Server(SslHelper.GetSslContext(), listenAddress ?? IPAddress.IPv6Any, port, this)
                 {
                     OptionReuseAddress = true,
                     OptionDualMode = true,
@@ -88,9 +98,9 @@ public class NetworkService(
 
                 if (server.Start())
                 {
-                    ServerPort = port;
+                    ServerPort = ((IPEndPoint)server.Endpoint).Port;
                     isRunning = true;
-                    logger.Info($"Server started on port: {port}");
+                    logger.Info($"Server started on port: {ServerPort}");
                     StartDesktopReconnectLoop();
                     return;
                 }
@@ -213,16 +223,24 @@ public class NetworkService(
         }
     }
 
-    public void DisconnectDevice(PairedDevice device, bool forcedDisconnect = false)
+    public void DisconnectDevice(PairedDevice device, bool forcedDisconnect = false, bool notifyPeer = true)
     {
-        if (device.Session is not null)
+        if (forcedDisconnect && notifyPeer)
         {
-            DisconnectSession(device.Session, true);
+            var bytes = EncodeMessage(new Disconnect());
+            try
+            {
+                if (device.Session?.IsHandshaked == true) device.Session.Send(bytes);
+                else if (device.Client?.IsHandshaked == true) device.Client.Send(bytes);
+            }
+            catch (Exception ex) { logger.Debug("Could not send disconnect", ex); }
         }
-        else if (device.Client is not null)
-        {
-            DisconnectClient(device.Client, true);
-        }
+        if (connectionCancellationTokens.TryGetValue(device.Id, out var attempt)) attempt.Cancel();
+        var session = device.Session;
+        var client = device.Client;
+        if (session is not null) DisconnectSession(session, forcedDisconnect);
+        if (client is not null) DisconnectClient(client, forcedDisconnect);
+        if (session is null && client is null) SetDisconnected(device, forcedDisconnect);
     }
 
     public void SendMessage(ServerSession session, SocketMessage message)
@@ -253,7 +271,7 @@ public class NetworkService(
 
     public void BroadcastMessage(SocketMessage message)
     {
-        if (PairedDevices.Count == 0) return;
+        if (PairedDevices.Length == 0) return;
 
         foreach (var device in PairedDevices.Where(d => d.IsConnected))
         {
@@ -267,42 +285,17 @@ public class NetworkService(
     /// <summary>
     /// Extracts complete newline-delimited messages from the buffer, deserializes them, removes from buffer, returns list.
     /// </summary>
-    private static List<SocketMessage> GetMessagesFromBuffer(StringBuilder sb, ILogger logger)
+    private static List<SocketMessage> DecodeMessages(List<string> lines, ILogger logger)
     {
         List<SocketMessage> messages = [];
-        while (sb.Length > 0)
+        foreach (var line in lines)
         {
-            int newlineIndex = -1;
-            for (int i = 0; i < sb.Length; i++)
-            {
-                if (sb[i] == '\n')
-                {
-                    newlineIndex = i; break;
-                }
-            }
-            if (newlineIndex < 0) break;
-
-            var messageString = sb.ToString(0, newlineIndex).Trim();
-            sb.Remove(0, newlineIndex + 1);
-
-            if (string.IsNullOrEmpty(messageString)) continue;
-
-            var preview = messageString.Length > 100 ? string.Concat(messageString.AsSpan(0, 100), "...") : messageString;
-            logger.Debug($"Processing message: {preview}");
-
-            // Skip only this line: a newer peer's unknown message type must not drop the rest of the batch
+            if (string.IsNullOrWhiteSpace(line)) continue;
             try
             {
-                var socketMessage = JsonMessageSerializer.DeserializeMessage(messageString);
-                if (socketMessage is not null)
-                {
-                    messages.Add(socketMessage);
-                }
+                if (JsonMessageSerializer.DeserializeMessage(line) is { } message) messages.Add(message);
             }
-            catch (Exception ex)
-            {
-                logger.Warn($"Skipping undeserializable message: {preview}", ex);
-            }
+            catch (Exception ex) { logger.Warn("Skipping invalid message line", ex); }
         }
         return messages;
     }
@@ -313,6 +306,7 @@ public class NetworkService(
 
         return new Authentication
         {
+            ProtocolVersion = 1,
             DeviceId = localDevice.DeviceId,
             DeviceName = localDevice.DeviceName,
             PublicKey = SslHelper.DevicePublicKeyString,
@@ -329,14 +323,17 @@ public class NetworkService(
     public void OnConnected(ServerSession session) 
     {
         logger.Debug($"New session connected: {session.Id}");
-        connectionBuffers[session.Id] = new StringBuilder();
+        connectionBuffers[session.Id] = new Utf8LineBuffer();
+        StartMessageQueue(session.Id, message => ProcessSessionMessageAsync(session, message), () => DisconnectSession(session));
+        _ = ExpireUnauthenticatedSessionAsync(session);
     }
 
-    public void OnDisconnected(ServerSession session)
+    public async void OnDisconnected(ServerSession session)
     {
         logger.Debug($"Session disconnected: {session.Id}");
         if (!connectionBuffers.ContainsKey(session.Id)) return;
 
+        await DrainMessagesAsync(session.Id);
         DisconnectSession(session);
     }
 
@@ -345,104 +342,91 @@ public class NetworkService(
         logger.Error($"Error on socket {error}");
     }
 
-    public void OnReceived(ServerSession session, byte[] buffer, long offset, long size)
+    public void OnReceived(ServerSession session, byte[] buffer, long offset, long size) =>
+        EnqueueReceived(session.Id, buffer, offset, size, () => DisconnectSession(session));
+
+    private void StartMessageQueue(Guid id, Func<SocketMessage, Task> handle, Action disconnect)
+    {
+        var channel = Channel.CreateBounded<SocketMessage>(new BoundedChannelOptions(1024)
+        {
+            SingleReader = true,
+            FullMode = BoundedChannelFullMode.Wait,
+        });
+        messageQueues[id] = channel;
+        messageWorkers[id] = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var message in channel.Reader.ReadAllAsync())
+                {
+                    if (!messageQueues.TryGetValue(id, out var current) || current != channel) break;
+                    await handle(message);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Connection message processing failed", ex);
+                disconnect();
+            }
+        });
+    }
+
+    private async Task DrainMessagesAsync(Guid id)
+    {
+        if (messageQueues.TryGetValue(id, out var queue)) queue.Writer.TryComplete();
+        if (messageWorkers.TryGetValue(id, out var worker)) await worker;
+    }
+
+    private void EnqueueReceived(Guid id, byte[] buffer, long offset, long size, Action disconnect)
     {
         try
         {
-            var sb = connectionBuffers.GetOrAdd(session.Id, _ => new StringBuilder());
-            sb.Append(Encoding.UTF8.GetString(buffer, (int)offset, (int)size));
-
-            foreach (var socketMessage in GetMessagesFromBuffer(sb, logger))
-            {
-                if (socketMessage is Authentication authMessage)
-                {
-                    var deviceAuth = StartAuth(session.Id);
-                    AuthenticateSessionAsync(session, authMessage, deviceAuth);
-                    continue;
-                }
-
-                if (deviceAuths.TryGetValue(session.Id, out var active))
-                {
-                    active.Deferred.Enqueue(socketMessage);
-                    continue;
-                }
-
-                RouteMessage(session.Id, socketMessage);
-            }
+            if (!connectionBuffers.TryGetValue(id, out var framing) || !messageQueues.TryGetValue(id, out var queue)) return;
+            foreach (var message in DecodeMessages(framing.Append(buffer.AsSpan((int)offset, (int)size)), logger))
+                if (!queue.Writer.TryWrite(message)) throw new IOException("Connection message queue is full");
         }
         catch (Exception ex)
         {
-            logger.Error($"Error in OnReceived for session {session.Id}", ex);
+            logger.Warn("Invalid connection frame", ex);
+            disconnect();
         }
     }
 
-    private DeviceAuth StartAuth(Guid connectionId)
+    private async Task ProcessSessionMessageAsync(ServerSession session, SocketMessage message)
     {
-        var deviceAuth = new DeviceAuth();
-        if (deviceAuths.TryRemove(connectionId, out var previous))
+        if (message is Authentication authentication)
         {
-            previous.Cts.Cancel();
-            previous.Cts.Dispose();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await HandleServerSessionAuthentication(session, authentication, timeout.Token);
         }
-        deviceAuths[connectionId] = deviceAuth;
-        return deviceAuth;
+        else await RouteMessageAsync(session.Id, message);
     }
 
-    private async void AuthenticateSessionAsync(ServerSession session, Authentication authMessage, DeviceAuth deviceAuth)
+    private async Task ProcessClientMessageAsync(Client client, SocketMessage message)
     {
-        try
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        if (message is Authentication authentication)
+            await HandleServerAuthentication(client, authentication, timeout.Token);
+        else
         {
-            await HandleServerSessionAuthentication(session, authMessage, deviceAuth.Cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            logger.Debug($"Auth cancelled for session {session.Id}");
-        }
-        finally
-        {
-            FinalizeAuth(session.Id, deviceAuth);
+            if (awaitingServerAuthentication.TryGetValue(client.Id, out var legacy) &&
+                client.Socket.RemoteEndPoint is IPEndPoint endpoint)
+                await AuthenticatePairedDeviceServer(client, legacy, endpoint.Address.ToString(), timeout.Token);
+            await RouteMessageAsync(client.Id, message);
         }
     }
 
-    private void FinalizeAuth(Guid connectionId, DeviceAuth deviceAuth)
+    private async Task RouteMessageAsync(Guid id, SocketMessage message)
     {
-        if (!deviceAuths.TryRemove(KeyValuePair.Create(connectionId, deviceAuth)))
-            return;
-
-        deviceAuth.Cts.Dispose();
-        while (deviceAuth.Deferred.TryDequeue(out var message))
-            RouteMessage(connectionId, message);
-    }
-
-    private void CancelAuth(Guid connectionId)
-    {
-        if (!deviceAuths.TryRemove(connectionId, out var deviceAuth))
-            return;
-
-        deviceAuth.Cts.Cancel();
-        deviceAuth.Cts.Dispose();
-    }
-
-    /// <summary>
-    /// Routes a deserialized message from a client and server to the appropriate handler
-    /// </summary>
-    private void RouteMessage(Guid guid, SocketMessage message)
-    {
-        var pairedDevice = PairedDevices.FirstOrDefault(d => (d.Client?.Id == guid || d.Session?.Id == guid));
-        if (pairedDevice is not null)
+        var pairedDevice = PairedDevices.FirstOrDefault(d => d.Client?.Id == id || d.Session?.Id == id);
+        if (pairedDevice is not null && pairedDevice.IsConnected)
         {
-            messageHandler.Value.HandleMessageAsync(pairedDevice, message);
+            await messageHandler.Value.HandleMessageAsync(pairedDevice, message);
             return;
         }
-
-        var discoveredDevice = DiscoveredDevices.FirstOrDefault(d => d.Client?.Id == guid || d.Session?.Id == guid);
-        if (discoveredDevice is not null && message is PairMessage pairMessage)
-        {
-            HandlePairMessage(discoveredDevice, pairMessage);
-            return;
-        }
-
-        logger.Warn($"Received message from unknown client");
+        var discovered = await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+            discoveredSnapshot.FirstOrDefault(d => d.Client?.Id == id || d.Session?.Id == id));
+        if (discovered is not null && message is PairMessage pairing) HandlePairMessage(discovered, pairing);
     }
 
     private void HandlePairMessage(DiscoveredDevice device, PairMessage pairMessage)
@@ -471,8 +455,8 @@ public class NetworkService(
             var address = ip.ToString();
             logger.Info($"Received connection from {address}");
 
-            // Server-side cert-based auth: connecting client sends PublicKey; we look up the stashed cert
-            var cert = SslHelper.GetCertForPublicKey(authMessage.PublicKey);
+            // Bind Authentication to the certificate from this transport's TLS handshake.
+            var cert = SslHelper.VerifyPeerCertificate(session.Handshake.PeerCertificate, authMessage.PublicKey);
             if (cert is null || cert.Length == 0)
             {
                 logger.Warn($"No client certificate or PublicKey mismatch; rejecting connection");
@@ -483,11 +467,12 @@ public class NetworkService(
             var pairedDevice = PairedDevices.FirstOrDefault(d => d.Id == authMessage.DeviceId);
             if (pairedDevice is not null)
             {
+                if (pairedDevice.IsForcedDisconnect) throw new IOException("Peer is manually disconnected");
                 if (pairedDevice.Certificate.Length == 0 || cert.Length != pairedDevice.Certificate.Length || !cert.AsSpan().SequenceEqual(pairedDevice.Certificate))
                 {
                     throw new Exception("Certificate verification failed for paired device");
                 }
-                await AuthenticatePairedDeviceClient(session, pairedDevice, address, cancellationToken);
+                await AuthenticatePairedDeviceClient(session, pairedDevice, address, cancellationToken, authMessage.ProtocolVersion);
                 return;
             }
 
@@ -504,10 +489,25 @@ public class NetworkService(
         }
     }
 
-    private async Task AuthenticatePairedDeviceClient(ServerSession session, PairedDevice pairedDevice, string address, CancellationToken cancellationToken)
+    private async Task AuthenticatePairedDeviceClient(ServerSession session, PairedDevice pairedDevice, string address, CancellationToken cancellationToken, int protocolVersion)
+    {
+        var gate = peerGates.GetOrAdd(pairedDevice.Id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try { await AcceptPairedDeviceClientAsync(session, pairedDevice, address, cancellationToken, protocolVersion); }
+        finally { gate.Release(); }
+    }
+
+    private async Task AcceptPairedDeviceClientAsync(ServerSession session, PairedDevice pairedDevice, string address, CancellationToken cancellationToken, int protocolVersion)
     {
         logger.Info($"Paired device {pairedDevice.Name} verified, updating connection");
 
+        var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (pairedDevice.Client?.IsHandshaked == true && string.CompareOrdinal(localId, pairedDevice.Id) < 0)
+        {
+            DisconnectSession(session);
+            return;
+        }
         if (pairedDevice.IsConnected && pairedDevice.Session is not null && pairedDevice.Session != session)
         {
             DisconnectSession(pairedDevice.Session);
@@ -521,11 +521,13 @@ public class NetworkService(
         // Sent before ConnectionStatusChanged so it precedes DeviceInfo on the wire.
         var authReply = await CreateAuthenticationMessageAsync();
         cancellationToken.ThrowIfCancellationRequested();
-        ReplyAuthentication(session, pairedDevice, authReply);
+        ReplyAuthentication(session, pairedDevice, authReply, protocolVersion);
 
         // Address and status are bound to the UI; WinUI throws RPC_E_WRONG_THREAD off the UI thread.
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!session.IsConnected || pairedDevice.Session != session) return;
             pairedDevice.Address = address;
             pairedDevice.TryAddAddress(address);
             pairedDevice.ConnectionStatus = new Connected();
@@ -541,7 +543,6 @@ public class NetworkService(
         if (connectionCancellationTokens.TryRemove(pairedDevice.Id, out var cts))
         {
             cts.Cancel();
-            cts.Dispose();
         }
 
         if (pairedDevice.Client is not null)
@@ -554,7 +555,7 @@ public class NetworkService(
     /// another on their newer connection close that connection while staying Connected. Answer only the
     /// newest session of a burst, and only once: without a second reply they keep their newest connection.
     /// </summary>
-    private void ReplyAuthentication(ServerSession session, PairedDevice pairedDevice, Authentication authReply)
+    private void ReplyAuthentication(ServerSession session, PairedDevice pairedDevice, Authentication authReply, int protocolVersion)
     {
         lock (authenticationReplies)
         {
@@ -564,7 +565,7 @@ public class NetworkService(
                 return;
             }
 
-            if (authenticationReplies.TryGetValue(pairedDevice.Id, out var lastReply)
+            if (protocolVersion < 1 && authenticationReplies.TryGetValue(pairedDevice.Id, out var lastReply)
                 && lastReply.SessionId != session.Id
                 && Environment.TickCount64 - lastReply.Ticks < DuplicateConnectionWindow.TotalMilliseconds)
             {
@@ -579,7 +580,7 @@ public class NetworkService(
 
     private async Task AddDiscoveredDevice(ServerSession session, Authentication authMessage, string address, byte[] certificate)
     {
-        var existingDevice = DiscoveredDevices.FirstOrDefault(d => d.Id == authMessage.DeviceId);
+        var existingDevice = discoveredSnapshot.FirstOrDefault(d => d.Id == authMessage.DeviceId);
         if (existingDevice is not null && existingDevice.Session is not null)
         {
             DisconnectSession(existingDevice.Session);
@@ -609,7 +610,7 @@ public class NetworkService(
     public bool ResolveManagementPairing(string id, string code, bool accept)
     {
         return managementPairings.TryGetValue(id, out var pending)
-            && DiscoveredDevices.Contains(pending.Device)
+            && discoveredSnapshot.Contains(pending.Device)
             && pending.Device.VerificationKey == code
             && pending.Completion.TrySetResult(accept);
     }
@@ -647,7 +648,7 @@ public class NetworkService(
 
         var accepted = await tcs.Task;
         managementPairings.TryRemove(device.Id, out _);
-        if (!DiscoveredDevices.Contains(device)) return;
+        if (!discoveredSnapshot.Contains(device)) return;
 
         device.SendMessage(new PairMessage { Pair = accepted });
         if (accepted)
@@ -674,11 +675,13 @@ public class NetworkService(
 
     public void DisconnectSession(ServerSession session, bool forcedDisconnect = false)
     {
+        if (!session.TryBeginClose()) return;
         logger.Debug($"disconnecing session: {session.Id}");
         try
         {
             connectionBuffers.TryRemove(session.Id, out _);
-            CancelAuth(session.Id);
+            messageWorkers.TryRemove(session.Id, out _);
+            if (messageQueues.TryRemove(session.Id, out var messages)) messages.Writer.TryComplete();
             session.Disconnect();
             session.Dispose();
             
@@ -691,7 +694,7 @@ public class NetworkService(
             }
             else
             {
-                var discoveredDevice = DiscoveredDevices.FirstOrDefault(d => d.Session == session);
+                var discoveredDevice = discoveredSnapshot.FirstOrDefault(d => d.Session == session);
                 if (discoveredDevice is not null)
                 {
                     App.MainWindow.DispatcherQueue.EnqueueAsync(() => DiscoveredDevices.Remove(discoveredDevice));
@@ -706,12 +709,16 @@ public class NetworkService(
 
     public void DisconnectClient(Client client, bool forcedDisconnect = false)
     {
+        if (!client.TryBeginClose()) return;
         try
         {
             logger.Debug($"disconnecing client session: {client.Id}");
             connectionBuffers.TryRemove(client.Id, out _);
+            messageWorkers.TryRemove(client.Id, out _);
             awaitingServerAuthentication.TryRemove(client.Id, out _);
-            CancelAuth(client.Id);
+            if (authenticationCompletion.TryRemove(client.Id, out var authPending))
+                authPending.TrySetException(new IOException("Disconnected before authentication completed"));
+            if (messageQueues.TryRemove(client.Id, out var messages)) messages.Writer.TryComplete();
 
             client.Disconnect();
             client.Dispose();
@@ -724,7 +731,7 @@ public class NetworkService(
                     SetDisconnected(device, forcedDisconnect);
             }
 
-            var discoveredDevice = DiscoveredDevices.FirstOrDefault(d => d.Client == client);
+            var discoveredDevice = discoveredSnapshot.FirstOrDefault(d => d.Client == client);
             if (discoveredDevice is not null)
             {
                 App.MainWindow.DispatcherQueue.EnqueueAsync(() => DiscoveredDevices.Remove(discoveredDevice));
@@ -765,7 +772,7 @@ public class NetworkService(
             return;
         }
 
-        if (DiscoveredDevices.Any(d => d.Id == deviceId)) return;
+        if (discoveredSnapshot.Any(d => d.Id == deviceId)) return;
 
         lock (connectingDeviceIds)
         {
@@ -790,11 +797,14 @@ public class NetworkService(
                         await tcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
                     SendAuthenticationMessage(m => SendMessage(client, m));
+                    _ = ExpireUnpairedClientAsync(client);
                 }
+                else DisconnectClient(client);
             }
             catch (Exception ex)
             {
                 logger.Warn($"Error connecting to {address}:{port}", ex);
+                DisconnectClient(client);
             }
         }
         finally
@@ -809,12 +819,24 @@ public class NetworkService(
         }
     }
 
+    private async Task ExpireUnauthenticatedSessionAsync(ServerSession session)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(10));
+        if (!PairedDevices.Any(device => device.Session == session) && !discoveredSnapshot.Any(device => device.Session == session))
+            DisconnectSession(session);
+    }
+
+    private async Task ExpireUnpairedClientAsync(Client client)
+    {
+        await Task.Delay(TimeSpan.FromMinutes(2));
+        if (!PairedDevices.Any(d => d.Client == client)) DisconnectClient(client);
+    }
+
     public void Connect(PairedDevice device)
     {
         if (connectionCancellationTokens.TryRemove(device.Id, out var removedCts))
         {
             removedCts.Cancel();
-            removedCts.Dispose();
             if (device.IsConnecting)
                 App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected());
             return;
@@ -828,7 +850,6 @@ public class NetworkService(
         if (connectionCancellationTokens.TryRemove(device.Id, out var removedCts))
         {
             removedCts.Cancel();
-            removedCts.Dispose();
         }
         ConnectCore(device, [address]);
     }
@@ -845,7 +866,17 @@ public class NetworkService(
 
         var cts = new CancellationTokenSource();
         connectionCancellationTokens[device.Id] = cts;
-        await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Connecting());
+        try
+        {
+            await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Connecting());
+        }
+        catch
+        {
+            lock (connectingDeviceIds) connectingDeviceIds.Remove(device.Id);
+            connectionCancellationTokens.TryRemove(device.Id, out _);
+            cts.Dispose();
+            throw;
+        }
 
         try
         {
@@ -882,9 +913,24 @@ public class NetworkService(
 
                     cts.Token.ThrowIfCancellationRequested();
 
-                    device.Client = client;
-                    awaitingServerAuthentication[client.Id] = device;
+                    var authentication = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    authenticationCompletion[client.Id] = authentication;
+                    var gate = peerGates.GetOrAdd(device.Id, _ => new SemaphoreSlim(1, 1));
+                    await gate.WaitAsync(cts.Token);
+                    try
+                    {
+                        cts.Token.ThrowIfCancellationRequested();
+                        var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
+                        if (device.Session?.IsHandshaked == true && string.CompareOrdinal(localId, device.Id) > 0)
+                            throw new IOException("The preferred inbound connection is already active");
+                        var oldClient = device.Client;
+                        device.Client = client;
+                        if (oldClient is not null && oldClient != client) DisconnectClient(oldClient);
+                        awaitingServerAuthentication[client.Id] = device;
+                    }
+                    finally { gate.Release(); }
                     SendAuthenticationMessage(m => SendMessage(client, m));
+                    await authentication.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
                     return;
                 }
                 catch (OperationCanceledException)
@@ -898,6 +944,8 @@ public class NetworkService(
                 finally
                 {
                     handshakeCompletion.TryRemove(client.Id, out _);
+                    authenticationCompletion.TryRemove(client.Id, out _);
+                    if (!device.IsConnected || device.Client != client) DisconnectClient(client);
                 }
             }
             logger.Warn($"Failed to connect to device {device.Name} on any IP address/port combination");
@@ -918,10 +966,8 @@ public class NetworkService(
                 await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected());
             }
 
-            if (connectionCancellationTokens.TryRemove(device.Id, out var cancellationTokenSource))
-            {
-                cancellationTokenSource.Dispose();
-            }
+            connectionCancellationTokens.TryRemove(KeyValuePair.Create(device.Id, cts));
+            cts.Dispose();
         }
     }
 
@@ -935,7 +981,8 @@ public class NetworkService(
     public void OnConnected(Client client)
     {
         logger.Info($"OnConnected for client {client.Id}");
-        connectionBuffers[client.Id] = new StringBuilder();
+        connectionBuffers[client.Id] = new Utf8LineBuffer();
+        StartMessageQueue(client.Id, message => ProcessClientMessageAsync(client, message), () => DisconnectClient(client));
     }
 
     public void OnHandshaked(Client client)
@@ -944,13 +991,14 @@ public class NetworkService(
             tcs.TrySetResult(true);
     }
 
-    public void OnDisconnected(Client client)
+    public async void OnDisconnected(Client client)
     {
         if (handshakeCompletion.TryRemove(client.Id, out var tcs))
             tcs.TrySetException(new IOException("Disconnected before TLS handshake completed"));
 
         if (!connectionBuffers.ContainsKey(client.Id)) return;
         
+        await DrainMessagesAsync(client.Id);
         DisconnectClient(client);
     }
 
@@ -962,93 +1010,11 @@ public class NetworkService(
         DisconnectClient(client);
     }
 
-    public void OnReceived(Client client, byte[] buffer, long offset, long size)
-    {
-        try
-        {
-            var sb = connectionBuffers.GetOrAdd(client.Id, _ => new StringBuilder());
-            sb.Append(Encoding.UTF8.GetString(buffer, (int)offset, (int)size));
-
-            foreach (var socketMessage in GetMessagesFromBuffer(sb, logger))
-            {
-                if (socketMessage is Authentication authMessage)
-                {
-                    awaitingServerAuthentication.TryRemove(client.Id, out _);
-                    var deviceAuth = StartAuth(client.Id);
-                    AuthenticateClientAsync(client, authMessage, deviceAuth);
-                    continue;
-                }
-
-                if (deviceAuths.TryGetValue(client.Id, out var active))
-                {
-                    active.Deferred.Enqueue(socketMessage);
-                    continue;
-                }
-
-                if (awaitingServerAuthentication.TryRemove(client.Id, out var legacyServer))
-                {
-                    var deviceAuth = StartAuth(client.Id);
-                    deviceAuth.Deferred.Enqueue(socketMessage);
-                    AcceptLegacyServerAsync(client, legacyServer, deviceAuth);
-                    continue;
-                }
-
-                RouteMessage(client.Id, socketMessage);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.Error($"Error in OnReceived for client", ex);
-        }
-    }
+    public void OnReceived(Client client, byte[] buffer, long offset, long size) =>
+        EnqueueReceived(client.Id, buffer, offset, size, () => DisconnectClient(client));
     #endregion
 
     #region Client Authentication
-
-    private async void AuthenticateClientAsync(Client client, Authentication authMessage, DeviceAuth deviceAuth)
-    {
-        try
-        {
-            await HandleServerAuthentication(client, authMessage, deviceAuth.Cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            logger.Debug($"Auth superseded for client {client.Id}");
-        }
-        finally
-        {
-            FinalizeAuth(client.Id, deviceAuth);
-        }
-    }
-
-    /// <summary>
-    /// Desktop servers up to 3.2.0 accept a paired client without replying Authentication.
-    /// The TLS session is pinned to the paired certificate and a server sends application
-    /// messages (DeviceInfo first) only after accepting us, so the first one confirms the link.
-    /// </summary>
-    private async void AcceptLegacyServerAsync(Client client, PairedDevice pairedDevice, DeviceAuth deviceAuth)
-    {
-        try
-        {
-            if (pairedDevice.Client != client || pairedDevice.IsConnected) return;
-            if (client.Socket.RemoteEndPoint is not IPEndPoint endPoint) return;
-
-            logger.Info($"Paired device {pairedDevice.Name} accepted this client without an Authentication reply");
-            await AuthenticatePairedDeviceServer(client, pairedDevice, endPoint.Address.ToString(), deviceAuth.Cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            logger.Debug($"Legacy acceptance superseded for client {client.Id}");
-        }
-        catch (Exception ex)
-        {
-            logger.Error($"Error accepting legacy server", ex);
-        }
-        finally
-        {
-            FinalizeAuth(client.Id, deviceAuth);
-        }
-    }
 
     private async Task HandleServerAuthentication(Client client, Authentication authMessage, CancellationToken cancellationToken)
     {
@@ -1063,6 +1029,9 @@ public class NetworkService(
 
             logger.Info($"Received AuthenticationMessage from server at {address}");
 
+            var certificate = SslHelper.VerifyPeerCertificate(client.Handshake.PeerCertificate, authMessage.PublicKey);
+            if (awaitingServerAuthentication.TryGetValue(client.Id, out var intended) && intended.Id != authMessage.DeviceId)
+                throw new System.Security.Authentication.AuthenticationException("Unexpected device ID on pinned connection");
             var pairedDevice = PairedDevices.FirstOrDefault(d => d.Id == authMessage.DeviceId);
             if (pairedDevice is not null)
             {
@@ -1070,8 +1039,7 @@ public class NetworkService(
             }
             else
             {
-                // New device: we stashed the server cert during TLS; look it up by PublicKey and store on DiscoveredDevice.
-                var certificate = SslHelper.GetCertForPublicKey(authMessage.PublicKey);
+                // Keep this transport's TLS certificate with the pending pairing.
                 if (certificate is null || certificate.Length == 0)
                 {
                     throw new Exception("No server certificate or PublicKey mismatch; rejecting");
@@ -1092,12 +1060,32 @@ public class NetworkService(
 
     private async Task AuthenticatePairedDeviceServer(Client client, PairedDevice pairedDevice, string address, CancellationToken cancellationToken)
     {
+        var gate = peerGates.GetOrAdd(pairedDevice.Id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try { await AcceptPairedDeviceServerAsync(client, pairedDevice, address, cancellationToken); }
+        finally { gate.Release(); }
+    }
+
+    private async Task AcceptPairedDeviceServerAsync(Client client, PairedDevice pairedDevice, string address, CancellationToken cancellationToken)
+    {
+        var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (pairedDevice.Client != client) return;
+        if (pairedDevice.Session?.IsHandshaked == true && string.CompareOrdinal(localId, pairedDevice.Id) > 0)
+        {
+            DisconnectClient(client);
+            return;
+        }
         // Already accepted on this client (e.g. legacy acceptance followed by a late Authentication);
         // disconnecting pairedDevice.Client here would close this very connection.
-        if (pairedDevice.IsConnected && pairedDevice.Client == client)
+        if (pairedDevice.IsConnected && pairedDevice.Client == client && pairedDevice.Session is null)
+        {
+            awaitingServerAuthentication.TryRemove(client.Id, out _);
+            if (authenticationCompletion.TryGetValue(client.Id, out var existing)) existing.TrySetResult(true);
             return;
+        }
 
-        if (pairedDevice.IsConnected && pairedDevice.Client is not null)
+        if (pairedDevice.Client is not null && pairedDevice.Client != client)
         {
             logger.Warn($"Device {pairedDevice.Name} is already connected, disconnect the current client");
             DisconnectClient(pairedDevice.Client);
@@ -1111,6 +1099,8 @@ public class NetworkService(
         // Address and status are bound to the UI; WinUI throws RPC_E_WRONG_THREAD off the UI thread.
         await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!client.IsConnected || pairedDevice.Client != client) return;
             pairedDevice.Address = address;
             pairedDevice.TryAddAddress(address);
             pairedDevice.ConnectionStatus = new Connected();
@@ -1126,6 +1116,8 @@ public class NetworkService(
 
         await deviceManager.UpdateDevice(pairedDevice);
 
+        awaitingServerAuthentication.TryRemove(client.Id, out _);
+        if (authenticationCompletion.TryGetValue(client.Id, out var accepted)) accepted.TrySetResult(true);
         logger.Info($"Paired device {pairedDevice.Name} connected successfully");
     }
 
@@ -1133,7 +1125,7 @@ public class NetworkService(
     {
         var verificationKey = SslHelper.GetVerificationCode(authMessage.PublicKey);
 
-        var existingDevice = DiscoveredDevices.FirstOrDefault(d => d.Id == authMessage.DeviceId);
+        var existingDevice = discoveredSnapshot.FirstOrDefault(d => d.Id == authMessage.DeviceId);
         if (existingDevice is not null && existingDevice.Session is not null)
         {
             DisconnectSession(existingDevice.Session);

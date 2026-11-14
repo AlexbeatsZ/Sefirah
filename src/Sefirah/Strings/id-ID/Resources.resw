@@ -1086,4 +1086,6 @@ input keyevent 66</value>
   <data name="Dialer" xml:space="preserve">
     <value>Dialer</value>
   </data>
+  <data name="RemoteActions" xml:space="preserve"><value>Allow remote actions</value></data>
+  <data name="RemoteActionsDescription" xml:space="preserve"><value>Allow this device to run configured power and command actions</value></data>
 </root>

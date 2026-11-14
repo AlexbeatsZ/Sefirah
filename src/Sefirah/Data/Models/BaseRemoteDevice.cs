@@ -39,9 +39,9 @@ public abstract partial class BaseRemoteDevice : ObservableObject
         {
             var stringMessage = JsonMessageSerializer.Serialize(message);
             var messageBytes = Encoding.UTF8.GetBytes(stringMessage + "\n");
-            Session?.SendAsync(messageBytes);
-            Client?.SendAsync(messageBytes);
+            if (Session?.IsHandshaked == true) Session.SendAsync(messageBytes);
+            else if (Client?.IsHandshaked == true) Client.SendAsync(messageBytes);
         }
-        catch { }
+        catch (Exception ex) { Debug.WriteLine($"Send to {Id} failed: {ex.Message}"); }
     }
 }

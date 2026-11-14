@@ -20,6 +20,8 @@ public partial class ReceiveFileHandler(
     private Client? client;
     private FileStream? fileStream;
     private FileMetadata? currentFileMetadata;
+    private string? currentFilePath;
+    private string? completedFilePath;
     private long bytesTransferred;
     private long totalBytesTransferred = 0;
     private readonly long totalBytes = files.Sum(f => f.FileSize);
@@ -32,7 +34,7 @@ public partial class ReceiveFileHandler(
     private bool disposed;
 
     public Guid TransferId { get; private set; }
-    public double Progress => (double)totalBytesTransferred / totalBytes * 100;
+    public double Progress => totalBytes == 0 ? 100 : (double)totalBytesTransferred / totalBytes * 100;
     public bool IsBulkTransfer => files.Count > 1;
 
     /// <summary>
@@ -45,14 +47,14 @@ public partial class ReceiveFileHandler(
         client = new Client(clientContext, device.Address, serverInfo.Port, this);
         TransferId = client.Id;
 
+        handshakeTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!client.ConnectAsync())
             throw new IOException("Failed to connect to file transfer server");
 
         // Wait for TLS handshake
         if (!client.IsHandshaked)
         {
-            handshakeTcs = new TaskCompletionSource<bool>();
-            await handshakeTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await handshakeTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationTokenSource.Token);
         }
 
         return TransferId;
@@ -83,21 +85,33 @@ public partial class ReceiveFileHandler(
                     await transferCompletionSource.Task;
                 }
 
-                string fullPath = silent
-                    ? LocalAppPaths.CreateClipboardFilePath(Path.GetExtension(fileMetadata.FileName))
-                    : Path.Combine(storageLocation, fileMetadata.FileName);
-                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-
-                transferCompletionSource = new TaskCompletionSource<bool>();
+                TransferFiles.ValidateName(fileMetadata.FileName);
+                if (fileMetadata.FileSize < 0) throw new InvalidDataException("Invalid file size");
+                fileStream = silent
+                    ? new FileStream(LocalAppPaths.CreateClipboardFilePath(Path.GetExtension(fileMetadata.FileName)), FileMode.CreateNew)
+                    : TransferFiles.CreateUnique(storageLocation, fileMetadata.FileName);
+                var fullPath = fileStream.Name;
+                currentFilePath = fullPath;
+                transferCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 currentFileMetadata = fileMetadata;
-                fileStream = new FileStream(fullPath, FileMode.Create);
 
                 var startMessage = Encoding.UTF8.GetBytes(FileTransferService.StartMessage + "\n");
                 client?.Send(startMessage);
 
-                // Wait for this file transfer to complete
+                if (fileMetadata.FileSize == 0) CompleteCurrentFile(client!);
+                // Each chunk renews the inactivity timeout through the progress counter.
+                while (!transferCompletionSource.Task.IsCompleted)
+                {
+                    var previous = Interlocked.Read(ref bytesTransferred);
+                    if (await Task.WhenAny(transferCompletionSource.Task, Task.Delay(TimeSpan.FromSeconds(30), cancellationTokenSource.Token)) == transferCompletionSource.Task) break;
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    if (Interlocked.Read(ref bytesTransferred) == previous) throw new TimeoutException("File transfer stalled");
+                }
                 await transferCompletionSource.Task;
+                completedFilePath = fullPath;
+                currentFilePath = null;
 
+                CleanupFileStream();
                 currentFileIndex++;
                 logger.Info($"Received file {fileMetadata.FileName}");
 
@@ -107,7 +121,6 @@ public partial class ReceiveFileHandler(
                     resultFile = await StorageFile.GetFileFromPathAsync(fullPath);
                 }
 
-                CleanupFileStream();
             }
 
             if (!silent)
@@ -126,7 +139,7 @@ public partial class ReceiveFileHandler(
                         "FileTransferNotification.Completed".GetLocalizedResource(),
                         string.Format("FileTransferNotification.CompletedSingle".GetLocalizedResource(), files[0].FileName, device.Name),
                         TransferId.ToString(),
-                        Path.Combine(storageLocation, files[0].FileName));
+                        completedFilePath);
                 }
             }
 
@@ -186,8 +199,8 @@ public partial class ReceiveFileHandler(
             : string.Format("FileTransferNotification.Receiving".GetLocalizedResource(), device.Name);
 
         // Status: "{transferred} / {total}"
-        var transferredFormatted = FormatBytes(totalBytesTransferred);
-        var totalFormatted = FormatBytes(totalBytes);
+        var transferredFormatted = TransferFiles.FormatBytes(totalBytesTransferred);
+        var totalFormatted = TransferFiles.FormatBytes(totalBytes);
         var status = $"{transferredFormatted} / {totalFormatted}";
 
         notificationHandler.ShowFileTransferNotification(
@@ -199,18 +212,6 @@ public partial class ReceiveFileHandler(
             Progress);
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {sizes[order]}";
-    }
 
     private void CleanupFileStream()
     {
@@ -223,27 +224,13 @@ public partial class ReceiveFileHandler(
 
     private void CleanupFailedFile()
     {
-        // Save file metadata before cleanup
-        var fileToDelete = currentFileMetadata;
-        
+        var path = currentFilePath;
         CleanupFileStream();
-        
-        // Delete the incomplete file if it exists
-        if (fileToDelete is not null)
+        currentFilePath = null;
+        if (path is not null)
         {
-            var failedFilePath = Path.Combine(storageLocation, fileToDelete.FileName);
-            if (File.Exists(failedFilePath))
-            {
-                try
-                {
-                    File.Delete(failedFilePath);
-                    logger.Info($"Deleted incomplete file: {fileToDelete.FileName}");
-                }
-                catch (Exception ex)
-                {
-                    logger.Error($"Failed to delete incomplete file: {fileToDelete.FileName}", ex);
-                }
-            }
+            try { File.Delete(path); }
+            catch (Exception ex) { logger.Warn("Failed to remove incomplete transfer", ex); }
         }
     }
 
@@ -287,6 +274,7 @@ public partial class ReceiveFileHandler(
 
             if (fileStream is null || currentFileMetadata is null) return;
 
+            if (size > currentFileMetadata.FileSize - bytesTransferred) throw new InvalidDataException("Received more file data than declared");
             fileStream.Write(buffer, (int)offset, (int)size);
             bytesTransferred += size;
             totalBytesTransferred += size;
@@ -295,16 +283,21 @@ public partial class ReceiveFileHandler(
 
             if (bytesTransferred >= currentFileMetadata.FileSize)
             {
-                logger.Info($"File {currentFileMetadata.FileName} received successfully");
-                client.Send(Encoding.UTF8.GetBytes(FileTransferService.CompleteMessage + "\n"));
-                bytesTransferred = 0;
-                transferCompletionSource?.TrySetResult(true);
+                CompleteCurrentFile(client);
             }
         }
         catch (Exception ex)
         {
             transferCompletionSource?.TrySetException(ex);
         }
+    }
+
+    private void CompleteCurrentFile(Client connected)
+    {
+        fileStream?.Flush();
+        if (connected.Send(Encoding.UTF8.GetBytes(FileTransferService.CompleteMessage + "\n")) == 0)
+            throw new IOException("Could not confirm file transfer");
+        transferCompletionSource?.TrySetResult(true);
     }
 
     #endregion

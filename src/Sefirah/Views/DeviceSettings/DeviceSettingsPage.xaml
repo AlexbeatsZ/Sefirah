@@ -195,6 +195,13 @@
                     </wuc:SettingsCard.HeaderIcon>
                 </wuc:SettingsCard>
 
+                <wuc:SettingsCard
+                    Description="{helpers:ResourceString Name=RemoteActionsDescription}"
+                    Header="{helpers:ResourceString Name=RemoteActions}">
+                    <wuc:SettingsCard.HeaderIcon><FontIcon Glyph="&#xE945;" /></wuc:SettingsCard.HeaderIcon>
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.AllowRemoteActions, Mode=TwoWay}" />
+                </wuc:SettingsCard>
+
                 <!--  Remote Bluetooth Control  -->
                 <wuc:SettingsCard
                     Description="{helpers:ResourceString Name=RemoteBluetoothControlDescription}"

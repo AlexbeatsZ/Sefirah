@@ -54,6 +54,7 @@ public partial class DeviceManager(
             if (ActiveDevice == device)
                 ActiveDevice = PairedDevices.FirstOrDefault(d => d != device);
 
+            device.Detach();
             device.Wallpaper = null;
         });
 

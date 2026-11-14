@@ -124,7 +124,7 @@ public class ClipboardFeature(
                     logger.Info("Clipboard monitoring stopped");
                     isMonitoring = false;
                 }
-                else if (!isMonitoring)
+                else if (devicesWithClipboardSync.Any() && !isMonitoring)
                 {
 #if WINDOWS
                     StartClipboardListener();

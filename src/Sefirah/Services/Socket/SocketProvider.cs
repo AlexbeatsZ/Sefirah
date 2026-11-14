@@ -1,4 +1,5 @@
 using NetCoreServer;
+using Sefirah.Helpers;
 using System.Net;
 using System.Net.Sockets;
 using UdpClient = NetCoreServer.UdpClient;
@@ -7,6 +8,18 @@ namespace Sefirah.Services.Socket;
 
 public partial class ServerSession(SslServer server, ITcpServerProvider socketProvider) : SslSession(server)
 {
+    private int closing;
+    private int transportClosed;
+    public bool TryBeginClose() => Interlocked.Exchange(ref closing, 1) == 0;
+    public TlsHandshake Handshake { get; } = new();
+    public override bool Disconnect()
+    {
+        if (Interlocked.Exchange(ref transportClosed, 1) != 0) return false;
+        if (OperatingSystem.IsMacOS()) Handshake.Abort();
+        return base.Disconnect();
+    }
+    protected override void OnHandshaking() => Handshake.Begin();
+    protected override void OnHandshaked() => socketProvider.OnHandshaked(this);
 
     protected override void OnDisconnected()
     {
@@ -44,6 +57,17 @@ public partial class Server(SslContext context, IPAddress address, int port, ITc
 
 public partial class Client(SslContext context, string address, int port, ITcpClientProvider socketProvider) : SslClient(context, address, port)
 {
+    private int closing;
+    private int transportClosed;
+    public bool TryBeginClose() => Interlocked.Exchange(ref closing, 1) == 0;
+    public TlsHandshake Handshake { get; } = new();
+    public override bool Disconnect()
+    {
+        if (Interlocked.Exchange(ref transportClosed, 1) != 0) return false;
+        if (OperatingSystem.IsMacOS()) Handshake.Abort();
+        return base.Disconnect();
+    }
+    protected override void OnHandshaking() => Handshake.Begin();
     protected override void OnConnected()
     {
         socketProvider.OnConnected(this);

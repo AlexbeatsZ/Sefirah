@@ -10,6 +10,8 @@ public interface IDeviceSettingsService : IBaseSettingsService, INotifyPropertyC
     string DeviceId { get; }
     string PresentationJson { get; set; }
 
+    bool AllowRemoteActions { get; set; }
+
     bool AllowRemoteBluetoothControl { get; set; }
 
     /// <summary>

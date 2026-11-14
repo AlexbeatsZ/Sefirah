@@ -33,7 +33,7 @@ The direction no longer depends on who connects when the Mac is one end.
 
 Connection attempts come only from discovery events (UDP broadcast, mDNS answers, UI Connect) and are skipped while the device is connected or connecting. A disconnect never triggers an immediate reconnect, so there is no tight loop. Once both ends mark the link connected, discovery stops creating connections. Before this fix the client side never got there.
 
-Connection replacement is still newest-wins on each side, as upstream: server-side authentication closes our client to that peer, and client-side authentication closes our session from it. If both desktops connect at once (conn1 A→B and conn2 B→A), each side can close the other link and leave none. Both then wait for the next discovery event. This race existed upstream without the reply. A deterministic tie-break, such as keeping the link whose client has the smaller device ID, would need both ends patched. It would also keep a half-open stale link after a network change, which newest-wins handles. It is therefore not used.
+The 3.2.0.10 fork serializes registration and outgoing-client installation with a per-peer gate. If opposite-direction links overlap, the link initiated by the ordinally smaller device ID wins. A lone inbound or outbound link remains usable. This removes the simultaneous-connect race while preserving ordinary stale-link replacement. The network regression now exercises the production NetworkService with both sides dialing at once and bidirectional Unicode messages.
 
 Item 4 contains the Store-build double-connect hazard. One rare ordering remains: the reply on the first connection is processed only after the client assigned its second connection, and the server then closes the first. The old client ends Disconnected with an orphaned live connection. It recovers on the next discovery event and never ends in a Connected-but-dead state.
 
@@ -63,3 +63,7 @@ Observed on 2026-11-11 with every desktop on fork 3.2.0.2: Mac↔OMEN and Mac↔
 On macOS `IMdnsService` is `MacBonjourService`, which calls dns_sd from libSystem: DNSServiceRegister for the advertisement, then DNSServiceBrowse, Resolve and IPv4 GetAddrInfo for discovery. Every DNSServiceRef stays on one serial dispatch queue (operations are posted with dispatch_async_f), and the browse restarts every 2 minutes so cached instances are offered again after a peer restarts without sending a goodbye. Windows keeps MeaMod. TXT keys and the advertised ports match MeaMod (SRV = discovery port, `serverPort` = TCP server).
 
 Reason: the MeaMod MulticastService started at login, before Wi-Fi was ready, never recovered. The Mac's own `dns-sd -B` did not list the Mac, the Mac never dialed peers discovered over mDNS, and phones could not find it after a reboot. The same MeaMod version worked from a terminal and after a manual relaunch, so this was a startup-timing failure, not Local Network permission. Info.plist declares NSLocalNetworkUsageDescription and NSBonjourServices `_sefirah._udp`.
+
+## Transport reliability in 3.2.0.10
+
+See ../device-protocol.md for TLS connection binding, ordered dispatch, framing, disconnect, timeouts and compatibility fixtures. Outgoing connections now stay Connecting until authentication succeeds or times out. Windows and macOS share the same framing and transfer components.

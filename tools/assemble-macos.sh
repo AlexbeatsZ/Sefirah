@@ -4,6 +4,9 @@
 set -eu
 work=$1
 identity=$2
+repo=$(cd "$(dirname "$0")/.." && pwd)
+version=$(/usr/bin/xmllint --xpath "string(/Project/PropertyGroup/SefirahVersion)" "$repo/src/Directory.Build.props")
+build=$(/usr/bin/xmllint --xpath "string(/Project/PropertyGroup/SefirahMacBuild)" "$repo/src/Directory.Build.props")
 case "$work" in /tmp/.agents/*) ;; *) echo 'Staging must be under /tmp/.agents' >&2; exit 1;; esac
 app="$work/Sefirah.app"
 test ! -e "$app"
@@ -30,7 +33,7 @@ go_license="$go_root/LICENSE"
 if test ! -f "$go_license"; then go_license="$go_root/../LICENSE"; fi
 cp "$go_license" "$app/Contents/Resources/rclone/SefirahStorageProxy-Go-LICENSE.txt"
 chmod +x "$app/Contents/Resources/rclone/rclone"
-cat > "$app/Contents/Info.plist" <<'PLIST'
+cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -38,8 +41,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.castle.sefirah</string>
 <key>CFBundleName</key><string>Sefirah</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>3.2.0.9</string>
-<key>CFBundleVersion</key><string>83</string>
+<key>CFBundleShortVersionString</key><string>$version</string>
+<key>CFBundleVersion</key><string>$build</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>

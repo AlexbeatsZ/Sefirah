@@ -5,6 +5,8 @@ namespace Sefirah.Services.Settings;
 
 internal sealed partial class DeviceSettingsService(string deviceId) : BaseDeviceAwareJsonSettings(deviceId), IDeviceSettingsService
 {
+    public bool AllowRemoteActions { get => Get(false); set => Set(value); }
+
     public bool AllowRemoteBluetoothControl
     {
         get => Get(false);

@@ -90,7 +90,10 @@ public sealed class LocalManagementService(IDeviceManager devices, ISessionManag
                 return new JsonObject { ["status"] = status };
             case "connect":
                 var id = Required("deviceId");
-                if (devices.FindDeviceById(id) is { } paired) sessions.Connect(paired);
+                if (devices.FindDeviceById(id) is { } paired)
+                {
+                    if (!paired.IsConnectedOrConnecting) sessions.Connect(paired);
+                }
                 else
                 {
                     var port = request.GetProperty("port").GetInt32();

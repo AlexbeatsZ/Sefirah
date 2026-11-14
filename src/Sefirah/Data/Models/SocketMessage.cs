@@ -63,6 +63,9 @@ public class RequestWorkerLaunch : SocketMessage
 
 public class Authentication : SocketMessage
 {
+    // Version 1 confirms ordered authentication and connection lifecycle handling.
+    public int ProtocolVersion { get; set; }
+
     public required string DeviceId { get; set; }
 
     public required string DeviceName { get; set; }
