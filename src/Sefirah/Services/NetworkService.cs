@@ -503,7 +503,7 @@ public class NetworkService(
 
         var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
         cancellationToken.ThrowIfCancellationRequested();
-        if (pairedDevice.Client?.IsHandshaked == true && string.CompareOrdinal(localId, pairedDevice.Id) < 0)
+        if (pairedDevice.IsComputer && pairedDevice.Client?.IsHandshaked == true && string.CompareOrdinal(localId, pairedDevice.Id) < 0)
         {
             DisconnectSession(session);
             return;
@@ -921,7 +921,7 @@ public class NetworkService(
                     {
                         cts.Token.ThrowIfCancellationRequested();
                         var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
-                        if (device.Session?.IsHandshaked == true && string.CompareOrdinal(localId, device.Id) > 0)
+                        if (device.IsComputer && device.Session?.IsHandshaked == true && string.CompareOrdinal(localId, device.Id) > 0)
                             throw new IOException("The preferred inbound connection is already active");
                         var oldClient = device.Client;
                         device.Client = client;
@@ -1071,7 +1071,7 @@ public class NetworkService(
         var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
         cancellationToken.ThrowIfCancellationRequested();
         if (pairedDevice.Client != client) return;
-        if (pairedDevice.Session?.IsHandshaked == true && string.CompareOrdinal(localId, pairedDevice.Id) > 0)
+        if (pairedDevice.IsComputer && pairedDevice.Session?.IsHandshaked == true && string.CompareOrdinal(localId, pairedDevice.Id) > 0)
         {
             DisconnectClient(client);
             return;

@@ -95,7 +95,7 @@ static class NetworkRegression
         {
             if (message is BatteryState battery)
             {
-                await Task.Delay(1);
+                if (battery.BatteryLevel == 0) await Task.Delay(20);
                 Battery.Enqueue(battery.BatteryLevel);
             }
             if (message is ClipboardInfo clipboard) Clipboard.Add(clipboard.Content);
