@@ -5,10 +5,10 @@ Maintain the user's personal fork with shared Windows/macOS transport and Androi
 
 ## Current State
 - 2026-11-17 desktop 3.2.0.12 / Mac build86 fixes wireless ADB restart loops after Android reflashing. USB automation requires a verified paired app ID (identity file or live authenticated endpoint), reads live Wi-Fi IP/TCP port, and serializes mode setup with bounded retries. Read docs/design/wireless-adb.md before editing this flow.
-- ADB32, transport164, controls7 and presentation125 regression checks pass on Windows. Signed release packaging and three-desktop deployment are in progress.
-- Windows x64 self-contained MSIX built on this OMEN checkout. Signature Valid, signer CN=AlexbeatsZ.Sefirah. Release assets are dist/Sefirah-Windows-3.2.0.10-x64.msix and dist/Sefirah-Windows.cer.
+- ADB32, transport164, controls7 and presentation125 regression checks pass on Windows. Windows signature Valid and Mac strict signature verification passed. OMEN/ROG/Mac all run3.2.0.12 (Mac build86); identities/peers retained. Tablet auto-connect is enabled and its150-second USB-mode recovery test passed with exactly one TCP enable and stable USB+wireless afterward.
+- Windows x64 self-contained MSIX built on this OMEN checkout. Signature Valid, signer CN=AlexbeatsZ.Sefirah. Release assets are dist/Sefirah-Windows-3.2.0.12-x64.msix and dist/Sefirah-Windows.cer.
 - Previous native Windows/macOS transport regression passed164 checks. Android v3.2.0.6 remains the current Android build.
-- Installed-device acceptance is pending. Actual installed-device inventory belongs to the existing cross-device task log on Mac.
+- Current desktop deployment and tablet USB/wireless ADB recovery acceptance passed on2026-11-17. Broader login/sleep/background acceptance remains separate.
 - Private signing key and password stay in .private. Build staging/logs are %TEMP%/.agents/sefirah-architecture-20261113.
 
 ## Active Work
