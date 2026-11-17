@@ -390,9 +390,9 @@ public class ScreenMirrorService(
                     selectedDeviceSerial = pairedDevices.FirstOrDefault(d => d.Type is DeviceType.WIFI)?.Serial;
                     if (string.IsNullOrEmpty(selectedDeviceSerial) && !string.IsNullOrEmpty(device.Address))
                     {
-                        if (await adbService.TryConnectTcp(device.Address, device.Model))
+                        if (await adbService.TryConnectTcp(device.Address, device.Id) is { } tcpEndpoint)
                         {
-                            selectedDeviceSerial = device.Address.Contains(':') ? device.Address : $"{device.Address}:5555";
+                            selectedDeviceSerial = tcpEndpoint;
                         }
                     }
                     break;
@@ -412,9 +412,9 @@ public class ScreenMirrorService(
                         }
                         else if (!string.IsNullOrEmpty(device.Address))
                         {
-                            if (await adbService.TryConnectTcp(device.Address, device.Model))
+                            if (await adbService.TryConnectTcp(device.Address, device.Id) is { } autoEndpoint)
                             {
-                                selectedDeviceSerial = device.Address.Contains(':') ? device.Address : $"{device.Address}:5555";
+                                selectedDeviceSerial = autoEndpoint;
                             }
                         }
                     }
@@ -432,9 +432,9 @@ public class ScreenMirrorService(
         else if (!string.IsNullOrEmpty(device.Address))
         {
             // No ADB devices matched currently, try to connect via TCP over Wi-Fi
-            if (await adbService.TryConnectTcp(device.Address, device.Model))
+            if (await adbService.TryConnectTcp(device.Address, device.Id) is { } endpoint)
             {
-                selectedDeviceSerial = device.Address.Contains(':') ? device.Address : $"{device.Address}:5555";
+                selectedDeviceSerial = endpoint;
             }
         }
 

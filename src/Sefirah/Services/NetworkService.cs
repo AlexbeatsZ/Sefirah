@@ -206,7 +206,7 @@ public class NetworkService(
 
             if (device.IsMobile && device.DeviceSettings.AdbAutoConnect)
             {
-                await adbService.TryConnectTcp(device.Address, device.Model);
+                await adbService.TryConnectTcp(device.Address, device.Id);
             }
         }
     }

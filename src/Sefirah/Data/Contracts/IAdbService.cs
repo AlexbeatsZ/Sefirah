@@ -31,7 +31,7 @@ public interface IAdbService
 
     AdbClient AdbClient { get; }
 
-    Task<bool> TryConnectTcp(string host, string model);
+    Task<string?> TryConnectTcp(string host, string deviceId);
 
     Task DisconnectDeviceAsync(AdbDevice device);
 

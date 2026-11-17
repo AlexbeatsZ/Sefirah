@@ -22,6 +22,7 @@ public class AdbService(
     private CancellationTokenSource? cts;
     private DeviceMonitor? deviceMonitor;
     private readonly AdbClient adbClient = new();
+    private readonly WirelessAdbSetup wirelessAdbSetup = new();
     
     public ObservableCollection<AdbDevice> AdbDevices { get; } = [];
     public bool IsMonitoring => deviceMonitor is not null && !(cts?.IsCancellationRequested ?? true);
@@ -347,44 +348,7 @@ public class AdbService(
             }
             catch (Exception ex)
             {
-                logger.Error($"Error getting Android ID for {deviceData.Serial}", ex);
-            }
-
-            // Look for paired devices with matching IP or model
-            if (string.IsNullOrEmpty(androidId))
-            {
-                var deviceModel = fullDeviceData.Model;
-                var pairedDevices = deviceManager.PairedDevices;
-
-                // First try matching by IP (for Wi-Fi ADB devices where Serial is <IP>:<PORT>)
-                var adbHost = fullDeviceData.Serial.Split(':')[0];
-                var matchingDevice = pairedDevices.FirstOrDefault(pd =>
-                    (!string.IsNullOrEmpty(pd.Address) && adbHost == pd.Address) ||
-                    pd.Addresses.Any(a => !string.IsNullOrEmpty(a.Address) && adbHost == a.Address));
-
-                // Fall back to normalized model matching
-                if (matchingDevice is null && !string.IsNullOrEmpty(deviceModel))
-                {
-                    var cleanAdbModel = deviceModel.Replace('_', ' ').Trim();
-                    matchingDevice = pairedDevices.FirstOrDefault(pd =>
-                    {
-                        if (string.IsNullOrEmpty(pd.Model)) return false;
-                        var cleanPdModel = pd.Model.Replace('_', ' ').Trim();
-                        return cleanPdModel.Equals(cleanAdbModel, StringComparison.OrdinalIgnoreCase) ||
-                               cleanPdModel.Contains(cleanAdbModel, StringComparison.OrdinalIgnoreCase) ||
-                               cleanAdbModel.Contains(cleanPdModel, StringComparison.OrdinalIgnoreCase);
-                    });
-                }
-
-                if (matchingDevice is not null)
-                {
-                    androidId = matchingDevice.Id;
-                }
-                else
-                {
-                    logger.Warn($"No matching paired device found for model: {deviceModel}");
-                    androidId = string.Empty;
-                }
+                logger.Debug($"Could not read Sefirah app identity for {deviceData.Serial}: {ex.Message}");
             }
 
             var device = new AdbDevice
@@ -407,7 +371,7 @@ public class AdbService(
             {
                 Serial = deviceData.Serial,
                 Model = "Unknown",
-                AndroidId = "Unknown",
+                AndroidId = string.Empty,
                 State = deviceData.State,
                 Type = deviceData.Serial.Contains(':') || deviceData.Serial.Contains("tcp") ? DeviceType.WIFI : DeviceType.USB,
                 DeviceData = deviceData
@@ -583,7 +547,8 @@ public class AdbService(
 
         try
         {
-            var result = await adbClient.ConnectAsync(cleanHost, port);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var result = await adbClient.ConnectAsync(cleanHost, port, timeout.Token);
             logger.Info($"adb wireless connection ({cleanHost}:{port}): {result}");
             return IsAdbConnectOrPairSuccess(result);
         }
@@ -696,67 +661,48 @@ public class AdbService(
         return AdbDevices.FirstOrDefault(adbDevice => pairedDevice.IsMatchingAdbDevice(adbDevice));
     }
 
-    /// <summary>
-    /// Tries to connect to the device over TCP/IP wirelessly. If connection fails and USB is plugged in, enables TCP/IP mode and retries.
-    /// </summary>
-    /// <param name="host">The host to connect to</param>
-    /// <param name="model">The model of the device to connect to</param>
-    public async Task<bool> TryConnectTcp(string host, string model)
+    /// <summary>Returns the connected endpoint, using a verified USB device's live Wi-Fi address when available.</summary>
+    public async Task<string?> TryConnectTcp(string host, string deviceId)
     {
-        if (string.IsNullOrWhiteSpace(host)) return false;
-
-        const int port = 5555;
-        var cleanHost = host.Trim();
-
         try
         {
-            logger.Info($"Trying to connect to adb device: {cleanHost}:{port}");
-            var result = await ConnectWireless(cleanHost, port);
-            if (result)
+            AdbDevice? usbDevice = null;
+            bool isMobile = false;
+            await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
             {
-                logger.Info($"Connected to adb device: {cleanHost}:{port}");
-                return true;
+                isMobile = deviceManager.PairedDevices.Any(d => d.Id == deviceId && d.IsMobile);
+                usbDevice = AdbDevices.FirstOrDefault(d => d.Type is DeviceType.USB &&
+                    d.IsOnline && d.AndroidId == deviceId);
+            });
+            if (!isMobile) return null;
+
+            if (usbDevice?.DeviceData is { } deviceData)
+            {
+                return await wirelessAdbSetup.ConnectAsync(
+                    usbDevice.Serial,
+                    command => ReadShellAsync(deviceData, command),
+                    ConnectWireless,
+                    () => EnableTcpipMode(usbDevice.Serial),
+                    message => logger.Info(message));
             }
 
-            var cleanTargetModel = model?.Replace('_', ' ').Trim();
-            var usbDevice = AdbDevices.FirstOrDefault(d => d.Type is DeviceType.USB && d.IsOnline &&
-                (!string.IsNullOrEmpty(cleanTargetModel) &&
-                 (!string.IsNullOrEmpty(d.Model) &&
-                  (d.Model.Replace('_', ' ').Trim().Equals(cleanTargetModel, StringComparison.OrdinalIgnoreCase) ||
-                   d.Model.Replace('_', ' ').Trim().Contains(cleanTargetModel, StringComparison.OrdinalIgnoreCase) ||
-                   cleanTargetModel.Contains(d.Model.Replace('_', ' ').Trim(), StringComparison.OrdinalIgnoreCase)))));
-
-            // Never fall back to an unrelated USB device or emulator: "tcpip 5555" restarts its adbd.
-            if (usbDevice is null) return false;
-            
-            // If connection failed, try to enable TCP/IP mode using ADB if USB is connected
-            var tcpipEnabled = await EnableTcpipMode(usbDevice.Serial);
-            if (!tcpipEnabled)
-            {
-                logger.Error("Failed to enable TCP/IP mode");
-                return false;
-            }
-
-            // Retry wireless connection with backoff to allow adbd time to restart on port 5555
-            for (int attempt = 1; attempt <= 3; attempt++)
-            {
-                await Task.Delay(500 * attempt);
-                result = await ConnectWireless(cleanHost, port);
-                if (result)
-                {
-                    logger.Info($"Successfully connected to {cleanHost}:{port} after enabling TCP/IP mode (attempt {attempt})");
-                    return true;
-                }
-            }
-
-            logger.Error($"TCP/IP connection still failed after enabling TCP/IP mode for {cleanHost}:{port}");
-            return false;
+            if (string.IsNullOrWhiteSpace(host)) return null;
+            var cleanHost = host.Trim();
+            return await ConnectWireless(cleanHost, 5555) ? $"{cleanHost}:5555" : null;
         }
         catch (Exception ex)
         {
-            logger.Error($"Error in TryConnectTcp for {cleanHost}:{port}: {ex.Message}", ex);
-            return false;
+            logger.Error($"Wireless ADB connection failed for paired device {deviceId}: {ex.Message}", ex);
+            return null;
         }
+    }
+
+    private async Task<string> ReadShellAsync(DeviceData device, string command)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        var receiver = new ConsoleOutputReceiver();
+        await adbClient.ExecuteShellCommandAsync(device, command, receiver, timeout.Token);
+        return receiver.ToString();
     }
 
     /// <summary>
@@ -779,13 +725,17 @@ public class AdbService(
             var processInfo = new ProcessStartInfo
             {
                 FileName = adbPath,
-                Arguments = $"-s {serialId} tcpip 5555",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
+            processInfo.ArgumentList.Add("-s");
+            processInfo.ArgumentList.Add(serialId);
+            processInfo.ArgumentList.Add("tcpip");
+            processInfo.ArgumentList.Add("5555");
+            ExternalToolLocator.ConfigureEnvironment(processInfo, adbPath);
             using var process = Process.Start(processInfo);
             if (process is null)
             {
@@ -793,9 +743,21 @@ public class AdbService(
                 return false;
             }
 
-            await process.WaitForExitAsync();
-            var output = await process.StandardOutput.ReadToEndAsync();
-            var error = await process.StandardError.ReadToEndAsync();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+                throw;
+            }
+            await outputTask;
+            var error = await errorTask;
             
             if (!string.IsNullOrEmpty(error))
             {
@@ -815,74 +777,29 @@ public class AdbService(
     {
         try
         {
-            if (usbDevice?.DeviceData is null || usbDevice.State is not DeviceState.Online) return;
+            if (usbDevice.DeviceData is null || !usbDevice.IsOnline) return;
+            if (string.IsNullOrEmpty(userSettingsService.GeneralSettingsService.AdbPath)) return;
 
-            var adbPath = userSettingsService.GeneralSettingsService.AdbPath;
-            if (string.IsNullOrEmpty(adbPath)) return;
-
-            // Find device IP: first check paired devices
-            string targetIp = string.Empty;
-            var pairedDevice = deviceManager.PairedDevices.FirstOrDefault(pd => pd.IsMatchingAdbDevice(usbDevice));
-            if (pairedDevice is not null)
+            PairedDevice? pairedDevice = null;
+            await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
             {
-                if (!pairedDevice.DeviceSettings.AdbAutoConnect)
-                {
-                    logger.Debug($"AdbAutoConnect disabled for {usbDevice.Serial}, skipping auto wireless setup");
-                    return;
-                }
-
-                if (!string.IsNullOrEmpty(pairedDevice.Address))
-                {
-                    targetIp = pairedDevice.Address;
-                }
-            }
-
-            // If not found from paired device, query IP directly from Android via adb shell
-            if (string.IsNullOrEmpty(targetIp))
+                pairedDevice = deviceManager.PairedDevices.FirstOrDefault(d =>
+                    d.IsMobile && d.Id == usbDevice.AndroidId);
+            });
+            if (pairedDevice is null)
             {
-                targetIp = await GetDeviceIpAddressAsync(usbDevice.DeviceData);
-            }
-
-            if (string.IsNullOrEmpty(targetIp))
-            {
-                logger.Debug($"Could not determine IP address for USB device {usbDevice.Serial}");
+                logger.Info($"Skipping automatic wireless ADB for {usbDevice.Serial}: no matching Sefirah app identity");
                 return;
             }
+            if (!pairedDevice.DeviceSettings.AdbAutoConnect) return;
 
-            // Check if already connected over Wi-Fi
-            if (AdbDevices.Any(d => d.Type is DeviceType.WIFI && d.IsOnline && d.Serial.Split(':')[0] == targetIp))
-            {
-                logger.Debug($"Wireless ADB already connected for {targetIp}");
-                return;
-            }
-
-            logger.Info($"Auto-configuring wireless ADB for USB device {usbDevice.Serial} at {targetIp}");
-            await TryConnectTcp(targetIp, usbDevice.Model);
+            // TryConnectTcp reads this exact USB device's current address and TCP state.
+            await TryConnectTcp(pairedDevice.Address, pairedDevice.Id);
         }
         catch (Exception ex)
         {
             logger.Warn($"AutoSetupWirelessAdbAsync encountered an issue: {ex.Message}");
         }
-    }
-
-    private async Task<string> GetDeviceIpAddressAsync(DeviceData deviceData)
-    {
-        try
-        {
-            var receiver = new ConsoleOutputReceiver();
-            await adbClient.ExecuteShellCommandAsync(deviceData, "ip -o -4 addr show wlan0", receiver);
-            var output = receiver.ToString();
-            var match = Regex.Match(output, @"inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)");
-            if (match.Success && !match.Groups[1].Value.StartsWith("169.254."))
-            {
-                return match.Groups[1].Value;
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.Debug($"Could not query Wi-Fi IP address from device shell: {ex.Message}");
-        }
-        return string.Empty;
     }
 
     public Task DisconnectDeviceAsync(AdbDevice device)

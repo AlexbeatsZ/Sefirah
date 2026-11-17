@@ -309,32 +309,8 @@ public partial class PairedDevice : BaseRemoteDevice
     {
         if (IsComputer || adbDevice is null || !adbDevice.IsOnline) return false;
 
-        // 1. Match by AndroidId
-        if (!string.IsNullOrEmpty(adbDevice.AndroidId))
-            return adbDevice.AndroidId == Id;
-
-        // 2. Match by IP Address (for Wi-Fi ADB devices whose serial is <IP>:<PORT>)
-        var adbHost = adbDevice.Serial.Split(':')[0];
-        if (!string.IsNullOrEmpty(Address) && adbHost == Address)
-            return true;
-
-        if (Addresses.Any(a => !string.IsNullOrEmpty(a.Address) && adbHost == a.Address))
-            return true;
-
-        // 3. Match by Model (normalizing underscores to spaces and case-insensitive)
-        if (!string.IsNullOrEmpty(adbDevice.Model) && !string.IsNullOrEmpty(Model))
-        {
-            var cleanAdbModel = adbDevice.Model.Replace('_', ' ').Trim();
-            var cleanDeviceModel = Model.Replace('_', ' ').Trim();
-            if (cleanDeviceModel.Equals(cleanAdbModel, StringComparison.OrdinalIgnoreCase) ||
-                cleanDeviceModel.Contains(cleanAdbModel, StringComparison.OrdinalIgnoreCase) ||
-                cleanAdbModel.Contains(cleanDeviceModel, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return AdbDeviceIdentity.Matches(Id, adbDevice.AndroidId, adbDevice.Serial,
+            Addresses.Select(entry => entry.Address).Prepend(Address));
     }
 
     public bool HasAdbConnection
