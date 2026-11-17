@@ -15,6 +15,10 @@ Check(!AdbDeviceIdentity.Matches("old-id", "", "usb-serial", ["192.168.31.157"])
 Check(AdbDeviceIdentity.Matches("old-id", "", "192.168.31.157:5555", ["192.168.31.157"]), "legacy wireless endpoint still associates");
 Check(!AdbDeviceIdentity.Matches("old-id", "", "192.168.31.118:5555", ["192.168.31.157"]), "unrelated wireless endpoint remains separate");
 Check(!AdbDeviceIdentity.Matches("old-id", "", "adb-usb._adb-tls-connect._tcp", ["192.168.31.157"]), "mDNS serial cannot act as a USB pairing ID");
+Check(AdbDeviceIdentity.ResolveAuthenticatedId("192.168.31.118", [("live-id", "192.168.31.118")]) == "live-id", "current authenticated endpoint identifies file-inaccessible USB device");
+Check(AdbDeviceIdentity.ResolveAuthenticatedId("192.168.31.118", [("old-id", "192.168.31.157")]) == "", "stale peer address cannot identify current USB device");
+Check(AdbDeviceIdentity.ResolveAuthenticatedId(null, [("old-id", "192.168.31.157")]) == "", "missing USB address cannot identify a network peer");
+Check(AdbDeviceIdentity.ResolveAuthenticatedId("192.168.31.118", [("a", "192.168.31.118"), ("b", "192.168.31.118")]) == "", "ambiguous authenticated endpoint does not identify a USB device");
 Check(WirelessAdbSetup.GetWifiAddress("inet 169.254.1.2/16") is null, "link-local Wi-Fi address is skipped");
 Check(WirelessAdbSetup.GetWifiAddress("inet 127.0.0.1/8") is null, "loopback address is skipped");
 Check(WirelessAdbSetup.GetWifiAddress("inet 999.1.1.1/24") is null, "malformed address is skipped");

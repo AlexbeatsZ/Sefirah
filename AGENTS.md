@@ -4,8 +4,8 @@
 Maintain the user's personal fork with shared Windows/macOS transport and Android interoperability. Origin AlexbeatsZ/Sefirah, branch codex/personal-fork. Preserve installed identities and pairing data.
 
 ## Current State
-- 2026-11-17 desktop 3.2.0.11 / Mac build85 fixes wireless ADB restart loops after Android reflashing. USB automation requires the actual paired app ID, reads live Wi-Fi IP/TCP port, and serializes mode setup with bounded retries. Read docs/design/wireless-adb.md before editing this flow.
-- ADB28, transport164, controls7 and presentation125 regression checks pass on Windows. Signed release packaging and three-desktop deployment are in progress.
+- 2026-11-17 desktop 3.2.0.12 / Mac build86 fixes wireless ADB restart loops after Android reflashing. USB automation requires a verified paired app ID (identity file or live authenticated endpoint), reads live Wi-Fi IP/TCP port, and serializes mode setup with bounded retries. Read docs/design/wireless-adb.md before editing this flow.
+- ADB32, transport164, controls7 and presentation125 regression checks pass on Windows. Signed release packaging and three-desktop deployment are in progress.
 - Windows x64 self-contained MSIX built on this OMEN checkout. Signature Valid, signer CN=AlexbeatsZ.Sefirah. Release assets are dist/Sefirah-Windows-3.2.0.10-x64.msix and dist/Sefirah-Windows.cer.
 - Previous native Windows/macOS transport regression passed164 checks. Android v3.2.0.6 remains the current Android build.
 - Installed-device acceptance is pending. Actual installed-device inventory belongs to the existing cross-device task log on Mac.

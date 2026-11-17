@@ -351,6 +351,20 @@ public class AdbService(
                 logger.Debug($"Could not read Sefirah app identity for {deviceData.Serial}: {ex.Message}");
             }
 
+            if (string.IsNullOrEmpty(androidId) && !fullDeviceData.Serial.Contains(':'))
+            {
+                // Scoped-storage/locked devices may not expose the app's file. A live
+                // USB Wi-Fi address can instead bind to an authenticated mobile peer.
+                var wifiAddress = WirelessAdbSetup.GetWifiAddress(
+                    await ReadShellAsync(fullDeviceData, "ip -o -4 addr show wlan0"));
+                await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+                {
+                    androidId = AdbDeviceIdentity.ResolveAuthenticatedId(wifiAddress,
+                        deviceManager.PairedDevices.Where(peer => peer.IsMobile && peer.IsConnected)
+                            .Select(peer => (peer.Id, peer.Address)));
+                });
+            }
+
             var device = new AdbDevice
             {
                 Serial = fullDeviceData.Serial,
@@ -667,14 +681,32 @@ public class AdbService(
         try
         {
             AdbDevice? usbDevice = null;
+            AdbDevice[] unknownUsbDevices = [];
             bool isMobile = false;
             await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
             {
                 isMobile = deviceManager.PairedDevices.Any(d => d.Id == deviceId && d.IsMobile);
                 usbDevice = AdbDevices.FirstOrDefault(d => d.Type is DeviceType.USB &&
                     d.IsOnline && d.AndroidId == deviceId);
+                unknownUsbDevices = AdbDevices.Where(d => d.Type is DeviceType.USB &&
+                    d.IsOnline && string.IsNullOrEmpty(d.AndroidId)).ToArray();
             });
             if (!isMobile) return null;
+
+            // The app's network authentication may have completed after USB discovery.
+            foreach (var candidate in unknownUsbDevices)
+            {
+                if (usbDevice is not null) break;
+                if (candidate.DeviceData is null) continue;
+                var refreshed = await GetFullDeviceInfoAsync(candidate.DeviceData);
+                if (refreshed.AndroidId != deviceId) continue;
+                usbDevice = refreshed;
+                await App.MainWindow.DispatcherQueue.EnqueueAsync(() =>
+                {
+                    var index = AdbDevices.IndexOf(candidate);
+                    if (index >= 0) AdbDevices[index] = refreshed;
+                });
+            }
 
             if (usbDevice?.DeviceData is { } deviceData)
             {

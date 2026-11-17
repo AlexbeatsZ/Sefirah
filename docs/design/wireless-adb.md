@@ -4,14 +4,15 @@
 
 Desktop 3.2.0.10 could repeatedly restart a reflashed Android device's adbd. Missing app identity fell back to model matching and inherited an old pairing ID. USB setup then preferred the old saved address. Each connection failure issued `adb tcpip 5555`, producing another offline/online event and concurrent setup attempts.
 
-Version 3.2.0.11 shares the fix across Windows and macOS in `AdbService`, `WirelessAdbSetup` and `AdbDeviceIdentity`.
+Version 3.2.0.12 shares the fix across Windows and macOS in `AdbService`, `WirelessAdbSetup` and `AdbDeviceIdentity`.
 
 ## Device association
 
-- `AdbDevice.AndroidId` contains the identity actually read from the Android app's `device_info.txt`. A missing file leaves this value empty.
-- USB association requires this ID to equal the paired app's ID. Device models are display metadata and cannot establish an app identity after flashing or distinguish two identical models.
+- `AdbDevice.AndroidId` contains the identity read from the Android app's `device_info.txt`, or resolved by matching the USB device's live Wi-Fi IP to exactly one currently authenticated mobile peer. Scoped-storage or locked devices can make the file inaccessible even while the app is connected. Saved inactive addresses never qualify for this fallback.
+- Network authentication can finish after USB discovery. `TryConnectTcp` refreshes unidentified online USB transports before choosing its target, so normal app startup restores automation without a manual replug.
+- USB association requires this verified ID to equal the paired app's ID. Device models are display metadata and cannot establish an app identity after flashing or distinguish two identical models.
 - Legacy Wi-Fi transports without the app identity can still associate through a saved endpoint. An explicitly different app ID takes precedence over the IP match.
-- Unknown USB devices remain available in the explicit screen-mirroring selection dialog. Automatic wireless setup resumes after the actual app identity has been paired and the transport is rediscovered.
+- Unknown USB devices remain available in the explicit screen-mirroring selection dialog. Automatic wireless setup resumes after the actual app identity is paired and verified through USB or the live authenticated endpoint.
 
 ## Setup ownership and current device state
 
