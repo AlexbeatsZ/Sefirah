@@ -429,7 +429,7 @@ public class AdbService(
             var processInfo = new ProcessStartInfo
             {
                 FileName = scrcpyPath,
-                Arguments = $"--list-encoders -s {device.DeviceData.Serial}",
+                Arguments = $"--list-encoders -s \"{device.DeviceData.Serial}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

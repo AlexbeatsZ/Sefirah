@@ -153,7 +153,7 @@ public class ScreenMirrorService(
             if (!(isStartApp && deviceSettings.IsVirtualDisplayEnabled))
                 await TryUnlockDevice(device, deviceSettings, selectedDeviceSerial);
             
-            argBuilder.Add($"-s {selectedDeviceSerial}");
+            argBuilder.Add($"-s \"{selectedDeviceSerial}\"");
 
             // General deviceSettings
             if (deviceSettings.ScreenOff)
