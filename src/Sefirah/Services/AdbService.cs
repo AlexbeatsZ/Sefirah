@@ -20,7 +20,7 @@ public class AdbService(
 ) : IAdbService
 {
     private CancellationTokenSource? cts;
-    private DeviceMonitor? deviceMonitor;
+    private AdbDeviceTracker? deviceMonitor;
     private readonly AdbClient adbClient = new();
     private readonly WirelessAdbSetup wirelessAdbSetup = new();
     
@@ -111,16 +111,24 @@ public class AdbService(
 
             StartServerResult startServerResult = await AdbServer.Instance.StartServerAsync(adbPath, false, cts.Token);
 
-            deviceMonitor = new DeviceMonitor(new AdbSocket(new IPEndPoint(IPAddress.Loopback, AdbClient.AdbServerPort)));
+            deviceMonitor = new AdbDeviceTracker(
+                () => AdbServer.Instance.StartServerAsync(adbPath, false, CancellationToken.None),
+                (message, error) =>
+                {
+                    if (error is null) logger.Warn(message);
+                    else logger.Warn($"{message}: {error.Message}");
+                });
 
             // Get initial list of devices
-            await RefreshDevicesAsync();
+            var initialDevices = await RefreshDevicesAsync();
 
             deviceMonitor.DeviceConnected += DeviceConnected;
             deviceMonitor.DeviceDisconnected += DeviceDisconnected;
             deviceMonitor.DeviceChanged += DeviceChanged;
             
-            await deviceMonitor.StartAsync();
+            // Non-online devices are left to the tracker's first snapshot, which adds them
+            // with their current state as before.
+            deviceMonitor.Start(initialDevices.Where(device => device.State is DeviceState.Online));
             logger.Info("ADB device monitoring started successfully");
         }
         catch (Exception ex)
@@ -290,13 +298,16 @@ public class AdbService(
         }
     }
     
-    private async Task RefreshDevicesAsync()
+    private Task<List<DeviceData>> GetDevicesAsync() =>
+        AdbDeviceTracker.GetDevicesAsync(line => logger.Warn($"Ignoring unparsable adb device entry '{line}'"));
+
+    private async Task<List<DeviceData>> RefreshDevicesAsync()
     {
-        var devices = await adbClient.GetDevicesAsync();
-        if (!devices.Any())
+        var devices = await GetDevicesAsync();
+        if (devices.Count == 0)
         {
             logger.Warn("No adb devices found");
-            return;
+            return devices;
         }
 
         await App.MainWindow.DispatcherQueue.EnqueueAsync(async() =>
@@ -308,6 +319,7 @@ public class AdbService(
                 {
                     // Get full device info including AndroidId for online devices
                     var adbDevice = await GetFullDeviceInfoAsync(device);
+                    if (AdbDevices.Any(d => d.Serial == adbDevice.Serial)) continue;
                     AdbDevices.Add(adbDevice);
                     
                     // Discover codec options for this device
@@ -320,6 +332,8 @@ public class AdbService(
                 }
             }
         });
+
+        return devices;
     }
     
     private async Task<AdbDevice> GetFullDeviceInfoAsync(DeviceData deviceData)
@@ -327,7 +341,7 @@ public class AdbService(
         try
         {
             // Get full device information including model
-            var devices = await adbClient.GetDevicesAsync();
+            var devices = await GetDevicesAsync();
             var fullDeviceData = devices.FirstOrDefault(d => d.Serial == deviceData.Serial) 
                 ?? throw new Exception($"Device {deviceData.Serial} not found in device list");
 

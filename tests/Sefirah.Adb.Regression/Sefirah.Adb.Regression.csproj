@@ -8,5 +8,7 @@
   <ItemGroup>
     <Compile Include="../../src/Sefirah/Services/WirelessAdbSetup.cs" Link="WirelessAdbSetup.cs" />
     <Compile Include="../../src/Sefirah/Data/Models/AdbDeviceIdentity.cs" Link="AdbDeviceIdentity.cs" />
+    <Compile Include="../../src/Sefirah/Services/AdbDeviceList.cs" Link="AdbDeviceList.cs" />
+    <PackageReference Include="AdvancedSharpAdbClient" Version="3.5.15" />
   </ItemGroup>
 </Project>

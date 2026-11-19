@@ -30,6 +30,17 @@ Shell reads and the mode subprocess have eight-second timeouts. ADB connect has 
 
 The existing scrcpy implementation follows the same device-state approach by reading the live device IP and `service.adb.tcp.port` before deciding whether to enable TCP mode. Its `app/src/server.c` functions `get_adb_tcp_port` and `sc_server_switch_to_tcpip` were inspected on 2026-11-17. Source is https://github.com/Genymobile/scrcpy/blob/master/app/src/server.c.
 
+## Device list parsing and tracking
+
+AdvancedSharpAdbClient's `DeviceData` regex (3.5.15 through 3.7.17) rejects serials with spaces or parentheses. adb names duplicate mDNS service instances like `adb-xxxx (2)._adb-tls-connect._tcp`. The library's lazy `GetDevicesAsync` then throws mid-enumeration, and its `DeviceMonitor` loop exits on that ArgumentException, so a single such entry stops all ADB device tracking.
+
+`AdbService` therefore never calls `AdbClient.GetDevicesAsync` or the library `DeviceMonitor`:
+
+- `AdbDeviceList` parses `host:devices-l` / `host:track-devices-l`. The serial is the shortest prefix followed by a known state token. Unknown lines are reported and skipped, never thrown.
+- `AdbDeviceTracker` reads `host:track-devices-l`, diffs snapshots by serial and raises the same connect/disconnect/change events. It is seeded with the online devices already added by the initial refresh. Socket failures wait, ensure the adb server is running and reconnect. Handler exceptions are logged per event.
+
+Do not reintroduce library device list parsing for the device list or monitor without re-running the spaced-serial regression checks.
+
 ## Regression checks
 
 Run `dotnet run --project tests/Sefirah.Adb.Regression -c Release`. The executable compiles the production identity and setup implementations directly and covers missing/new identities, legacy wireless association, stale addresses, absent Wi-Fi, existing and persistent TCP ports, concurrent events, restart reentrancy, failed enable cooldown, reboot recovery, USB exceptions and bounded connection retries.
