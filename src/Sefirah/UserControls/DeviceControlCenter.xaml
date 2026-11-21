@@ -213,23 +213,22 @@
                                             </DataTemplate>
                                         </ItemsRepeater.ItemTemplate>
                                     </ItemsRepeater>
-                                    <wuc:Segmented Grid.Row="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind ViewModel.Device.RingerMode, Mode=OneWay}" SelectionChanged="RingerModeSegmented_SelectionChanged">
-                                        <wuc:SegmentedItem Content="{helpers:ResourceString Name=AudioSilent}">
-                                            <wuc:SegmentedItem.Icon>
-                                                <FontIcon Glyph="&#xE7ED;" />
-                                            </wuc:SegmentedItem.Icon>
-                                        </wuc:SegmentedItem>
-                                        <wuc:SegmentedItem Content="{helpers:ResourceString Name=AudioVibrate}">
-                                            <wuc:SegmentedItem.Icon>
-                                                <FontIcon Glyph="&#xE877;" />
-                                            </wuc:SegmentedItem.Icon>
-                                        </wuc:SegmentedItem>
-                                        <wuc:SegmentedItem Content="{helpers:ResourceString Name=AudioRing}">
-                                            <wuc:SegmentedItem.Icon>
-                                                <FontIcon Glyph="&#xEA8F;" />
-                                            </wuc:SegmentedItem.Icon>
-                                        </wuc:SegmentedItem>
-                                    </wuc:Segmented>
+                                    <Grid Grid.Row="1" ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button HorizontalAlignment="Stretch" Tag="0" Click="RingerMode_Click"
+                                                IsEnabled="{x:Bind ViewModel.Device.CanChangeRinger, Mode=OneWay}"
+                                                Content="{helpers:ResourceString Name=AudioSilent}" />
+                                        <Button Grid.Column="1" HorizontalAlignment="Stretch" Tag="1" Click="RingerMode_Click"
+                                                IsEnabled="{x:Bind ViewModel.Device.CanChangeRinger, Mode=OneWay}"
+                                                Content="{helpers:ResourceString Name=AudioVibrate}" />
+                                        <Button Grid.Column="2" HorizontalAlignment="Stretch" Tag="2" Click="RingerMode_Click"
+                                                IsEnabled="{x:Bind ViewModel.Device.CanChangeRinger, Mode=OneWay}"
+                                                Content="{helpers:ResourceString Name=AudioRing}" />
+                                    </Grid>
                                 </Grid>
                             </Flyout>
                         </Button.Flyout>

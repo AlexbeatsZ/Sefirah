@@ -12,8 +12,19 @@ never queued across reconnects. Results are `applied`, `denied`, `unsupported`,
 `invalid`, `local` or `unconfirmed`; `local` requires an explicit user interaction
 on the target and is not success. Observe actual state before changing the UI.
 
-Existing ringer messages remain available to legacy peers. New Bluetooth control
-defaults to denied. Android never invokes the deprecated enable/disable APIs.
+Changing the ringer mode is a one-shot request. The desktop sends commands only
+on button activation. Connecting, updating the UI and editing the setting locally
+on Android never replay a previous selection. The desktop displays the state
+reported by the target.
+
+`RingerModeState`, `DndState` and `AudioStreamState` remain compatible with
+existing desktops. Android sends them as status only to desktop peers (identified
+by their UUID device IDs). Android accepts these legacy messages as commands only
+from desktops with the relevant per-peer opt-in. This also prevents an older
+Android peer from applying another Android's status during a mixed-version rollout.
+
+New Bluetooth control defaults to denied. Android never invokes the deprecated
+enable/disable APIs.
 When a shell-UID worker (root launcher or Shizuku) is alive, Android declares
 `direct` and the worker runs `cmd bluetooth_manager enable|disable` (the same
 path as adb shell); `applied` is reported only after the adapter reaches the

@@ -119,8 +119,8 @@ public sealed partial class MainPageViewModel : BaseViewModel
     [RelayCommand]
     public void ToggleDnd()
     {
-        var message = new DndState { IsEnabled = !Device!.DndEnabled };
-        Device.SendMessage(message);
+        if (Device is not { IsConnected: true, IsMobile: true } peer) return;
+        peer.SendMessage(new DndState { IsEnabled = !peer.DndEnabled });
     }
 
     [RelayCommand]

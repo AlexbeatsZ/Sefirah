@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <SefirahVersion>3.2.0.13</SefirahVersion>
-    <SefirahMacBuild>87</SefirahMacBuild>
+    <SefirahVersion>3.2.0.14</SefirahVersion>
+    <SefirahMacBuild>88</SefirahMacBuild>
     <ApplicationDisplayVersion>$(SefirahVersion)</ApplicationDisplayVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

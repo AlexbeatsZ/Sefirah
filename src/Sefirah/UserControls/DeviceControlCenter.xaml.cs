@@ -122,10 +122,10 @@ public sealed partial class DeviceControlCenter : UserControl
 
     private void BluetoothToggle_Click(object sender, RoutedEventArgs e) => ViewModel.ToggleBluetooth();
 
-    private void RingerModeSegmented_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void RingerMode_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Segmented { IsLoaded: true } segmented)
-            ViewModel.SetRingerMode(segmented.SelectedIndex);
+        if (sender is Button { Tag: string mode } && int.TryParse(mode, out var value))
+            ViewModel.SetRingerMode(value);
     }
 
     private void AudioSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
