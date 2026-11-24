@@ -62,6 +62,28 @@ static class NetworkRegression
             check(aPeer.Client is null && aPeer.Session is null && bPeer.Client is null && bPeer.Session is null, "disconnect closes both endpoints");
             await Task.Delay(50);
         }
+
+        // A manual disconnect holds on both ends: an automatic attempt is refused with Disconnect and the
+        // dialer mirrors it, while an explicit connect from either end resumes the link.
+        check(aPeer.IsForcedDisconnect && bPeer.IsForcedDisconnect, "manual disconnect on both ends");
+        bPeer.ConnectionStatus = new Disconnected();
+        bNetwork.Connect(a.Local.DeviceId, "127.0.0.1", aPort);
+        await WaitAsync(() => bPeer.IsForcedDisconnect);
+        await Task.Delay(1500);
+        check(aPeer.IsForcedDisconnect && bPeer.IsForcedDisconnect, "automatic attempt refused and mirrored");
+        check(aPeer.Client is null && aPeer.Session is null && bPeer.Client is null && bPeer.Session is null, "refused attempt leaves no transport");
+        foreach (var (network, peer, other, name) in new[] { (bNetwork, bPeer, aPeer, "B"), (aNetwork, aPeer, bPeer, "A") })
+        {
+            network.Connect(peer);
+            await WaitAsync(() => peer.IsConnected && other.IsConnected);
+            var text = "resumed by " + name;
+            peer.SendMessage(new ClipboardInfo { ClipboardType = "text/plain", Content = text });
+            other.SendMessage(new ClipboardInfo { ClipboardType = "text/plain", Content = text });
+            await WaitAsync(() => aMessages.Clipboard.Contains(text) && bMessages.Clipboard.Contains(text));
+            check(true, $"explicit connect from {name} resumes a manual disconnect");
+            network.DisconnectDevice(peer, true);
+            await WaitAsync(() => peer.IsForcedDisconnect && other.IsForcedDisconnect);
+        }
         check(!host.Failures.Any(message => message.Contains("Certificate") || message.Contains("session authentication")), "network authentication succeeds");
     }
 

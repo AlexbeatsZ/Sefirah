@@ -29,6 +29,15 @@ using (var fixtures = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContex
     }
 }
 
+{
+    var explicitAuth = Sefirah.Utils.Serialization.JsonMessageSerializer.DeserializeMessage(
+        """{"type":"Authentication","deviceId":"p","deviceName":"p","publicKey":"k","model":"m","userInitiated":true}""") as Authentication;
+    Check(explicitAuth?.UserInitiated == true, "userInitiated parsed");
+    var automatic = Sefirah.Utils.Serialization.JsonMessageSerializer.Serialize(
+        new Authentication { DeviceId = "p", DeviceName = "p", PublicKey = "k", Model = "m" } as SocketMessage);
+    Check(!automatic.Contains("userInitiated"), "automatic Authentication omits userInitiated");
+}
+
 using (var identity = CreateCertificate())
 {
     using var key = identity.GetECDsaPublicKey();

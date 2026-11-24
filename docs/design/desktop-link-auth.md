@@ -31,7 +31,7 @@ The direction no longer depends on who connects when the Mac is one end.
 
 ## Cross-connects and loops
 
-Connection attempts come only from discovery events (UDP broadcast, mDNS answers, UI Connect) and are skipped while the device is connected or connecting. A disconnect never triggers an immediate reconnect, so there is no tight loop. Once both ends mark the link connected, discovery stops creating connections. Before this fix the client side never got there.
+Connection attempts come only from discovery events (UDP broadcast, mDNS answers, UI Connect) and are skipped while the device is connected or connecting. Since 3.2.0.15 a manually disconnected peer refuses automatic attempts with `Disconnect`, and only a UI or management Connect resumes it (see ../device-protocol.md). A disconnect never triggers an immediate reconnect, so there is no tight loop. Once both ends mark the link connected, discovery stops creating connections. Before this fix the client side never got there.
 
 The 3.2.0.10 fork serializes registration and outgoing-client installation with a per-peer gate. If opposite-direction links overlap, the link initiated by the ordinally smaller device ID wins. A lone inbound or outbound link remains usable. This removes the simultaneous-connect race while preserving ordinary stale-link replacement. The network regression now exercises the production NetworkService with both sides dialing at once and bidirectional Unicode messages.
 

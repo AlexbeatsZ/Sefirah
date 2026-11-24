@@ -18,10 +18,13 @@ public interface ISessionManager
     /// <summary>Disconnects the active session or client for a paired device.</summary>
     void DisconnectDevice(PairedDevice device, bool forcedDisconnect = false, bool notifyPeer = true);
 
-    /// <summary>Connects to a paired device using its enabled addresses. Cancels an in-progress attempt if one exists.</summary>
+    /// <summary>
+    /// User-requested connect to a paired device using its enabled addresses. Cancels an in-progress attempt if one exists.
+    /// It is the only kind of connect that resumes a manual disconnect, locally and on the peer.
+    /// </summary>
     void Connect(PairedDevice device);
 
-    /// <summary>Connects to a paired device at a specific address. Cancels any in-progress attempt first.</summary>
+    /// <summary>User-requested connect to a paired device at a specific address. Cancels any in-progress attempt first.</summary>
     void Connect(PairedDevice device, string address);
 
     void Pair(DiscoveredDevice device);

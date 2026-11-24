@@ -24,6 +24,8 @@ Desktop registration serializes changes per peer. If opposite-direction desktop 
 
 User disconnects send `Disconnect` before closing transport and suppress retries. Received `Disconnect` applies the same local state without echoing another command. Service teardown on Android releases sockets, discovery and feature consumers. It preserves the distinction between service lifecycle and a manual disconnect.
 
+A manual disconnect holds on both ends until a user explicitly connects again from either end. Discovery, announcements and reconnect loops are automatic and never resume it. An explicit connect sends `Authentication.userInitiated = true` (omitted when false, so legacy peers read false). It clears the dialer's own manual disconnect. A server that is manually disconnected from the dialer accepts it and resumes. Any automatic `Authentication` to such a server receives `Disconnect` and is closed one second later. The dialer then enters the same manual-disconnect state and stops retrying. A desktop dialer treats `Disconnect` before the server's `Authentication` as this refusal, not as legacy acceptance. Peers without `userInitiated` support keep refusing explicit connects to a manually disconnected peer. Refreshing a live link on Android drops it locally without sending `Disconnect`.
+
 ## File transfer
 
 New receivers send `start\n` and `complete\n`. Senders also accept legacy fixed ASCII controls without LF. Fragments and multiple controls in one socket read are supported. Readiness is buffered before the send loop starts. Data consists of exactly the advertised byte count for each file. Zero-byte files still exchange both controls.

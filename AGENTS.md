@@ -4,6 +4,7 @@
 Maintain the user's personal fork with shared Windows/macOS transport and Android interoperability. Origin AlexbeatsZ/Sefirah, branch codex/personal-fork. Preserve installed identities and pairing data.
 
 ## Current State
+- 2026-11-23 desktop 3.2.0.15 / Mac build89 (branch fix/manual-disconnect-resume): manual disconnect holds on both ends; only UI/management Connect resumes it via `Authentication.userInitiated`, and refused automatic dials receive `Disconnect`. Installed on the Mac only; OMEN/ROG still run 3.2.0.14.
 - Desktop 3.2.0.14 / Mac build88 is released and running on Mac, OMEN and ROG. Ringer commands require explicit button activation. Applying the remote report to the UI never sends a command. K70 is on Android 3.2.0.7/code45 and reconnected to all three hosts and Pad 4 Plus without new ringer/DND writes. Both tablets lack an ADB transport and still need the Android update.
 - 2026-11-17 desktop 3.2.0.12 / Mac build86 fixes wireless ADB restart loops after Android reflashing. USB automation requires a verified paired app ID (identity file or live authenticated endpoint), reads live Wi-Fi IP/TCP port, and serializes mode setup with bounded retries. Read docs/design/wireless-adb.md before editing this flow.
 - Desktop 3.2.0.14 includes the 2026-11-19 ADB device-list and scrcpy quoting fixes for mDNS serials with spaces such as `adb-x (2)._adb-tls-connect._tcp`. ADB41 checks pass on Windows and macOS.

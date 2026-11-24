@@ -73,6 +73,11 @@ public class Authentication : SocketMessage
     public required string PublicKey { get; set; }
 
     public required string Model { get; set; }
+
+    // Only a connection the user explicitly requested sets this. It may resume a peer that
+    // was manually disconnected; automatic reconnects to such a peer receive Disconnect instead.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool UserInitiated { get; set; }
 }
 
 public class PairMessage : SocketMessage

@@ -1,5 +1,6 @@
 [
   {"type":"Authentication","protocolVersion":1,"deviceId":"contract-peer","deviceName":"电脑🙂","publicKey":"test-only-key","model":"Contract"},
+  {"type":"Authentication","protocolVersion":1,"deviceId":"contract-peer","deviceName":"Contract","publicKey":"test-only-key","model":"Contract","userInitiated":true},
   {"type":"UdpBroadcast","deviceId":"contract-peer","deviceName":"Contract","port":5150},
   {"type":"ClipboardInfo","clipboardType":"text/plain","content":"中文🙂\nsecond line"},
   {"type":"MediaAction","actionType":"Stop","source":"contract-player"},

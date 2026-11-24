@@ -40,6 +40,7 @@ public class NetworkService(
     // Last session each paired client was sent an Authentication reply on
     private readonly Dictionary<string, (Guid SessionId, long Ticks)> authenticationReplies = [];
     private static readonly TimeSpan DuplicateConnectionWindow = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan RefusalCloseDelay = TimeSpan.FromSeconds(1);
 
     // Detect a peer that slept or left the network instead of keeping a half-open link forever.
     private const int KeepAliveTimeSeconds = 30;
@@ -300,7 +301,7 @@ public class NetworkService(
         return messages;
     }
 
-    private async Task<Authentication> CreateAuthenticationMessageAsync()
+    private async Task<Authentication> CreateAuthenticationMessageAsync(bool userInitiated = false)
     {
         var localDevice = await deviceManager.GetLocalDeviceAsync();
 
@@ -310,13 +311,14 @@ public class NetworkService(
             DeviceId = localDevice.DeviceId,
             DeviceName = localDevice.DeviceName,
             PublicKey = SslHelper.DevicePublicKeyString,
-            Model = Environment.MachineName
+            Model = Environment.MachineName,
+            UserInitiated = userInitiated
         };
     }
 
-    public async void SendAuthenticationMessage(Action<SocketMessage> send)
+    public async void SendAuthenticationMessage(Action<SocketMessage> send, bool userInitiated = false)
     {
-        send(await CreateAuthenticationMessageAsync());
+        send(await CreateAuthenticationMessageAsync(userInitiated));
     }
 
     #region Server events
@@ -407,6 +409,13 @@ public class NetworkService(
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         if (message is Authentication authentication)
             await HandleServerAuthentication(client, authentication, timeout.Token);
+        else if (message is Disconnect && awaitingServerAuthentication.TryRemove(client.Id, out var refusing))
+        {
+            // The server is manually disconnected from us and refused this automatic attempt.
+            logger.Info($"{refusing.Name} refused the connection because it was manually disconnected there");
+            if (authenticationCompletion.TryGetValue(client.Id, out var pending))
+                pending.TrySetException(new PeerManuallyDisconnectedException());
+        }
         else
         {
             if (awaitingServerAuthentication.TryGetValue(client.Id, out var legacy) &&
@@ -467,10 +476,18 @@ public class NetworkService(
             var pairedDevice = PairedDevices.FirstOrDefault(d => d.Id == authMessage.DeviceId);
             if (pairedDevice is not null)
             {
-                if (pairedDevice.IsForcedDisconnect) throw new IOException("Peer is manually disconnected");
                 if (pairedDevice.Certificate.Length == 0 || cert.Length != pairedDevice.Certificate.Length || !cert.AsSpan().SequenceEqual(pairedDevice.Certificate))
                 {
                     throw new Exception("Certificate verification failed for paired device");
+                }
+                if (pairedDevice.IsForcedDisconnect)
+                {
+                    if (!authMessage.UserInitiated)
+                    {
+                        await RefuseManuallyDisconnectedAsync(session, pairedDevice);
+                        return;
+                    }
+                    logger.Info($"{pairedDevice.Name} explicitly reconnected; resuming the manually disconnected link");
                 }
                 await AuthenticatePairedDeviceClient(session, pairedDevice, address, cancellationToken, authMessage.ProtocolVersion);
                 return;
@@ -487,6 +504,19 @@ public class NetworkService(
             logger.Error($"Error in session authentication", ex);
             DisconnectSession(session);
         }
+    }
+
+    /// <summary>
+    /// A manually disconnected peer may only come back through an explicit connect. Tell an automatic
+    /// attempt why it is refused so the peer stops retrying and shows itself as manually disconnected.
+    /// The short delay lets the Disconnect line arrive before the close.
+    /// </summary>
+    private async Task RefuseManuallyDisconnectedAsync(ServerSession session, PairedDevice pairedDevice)
+    {
+        logger.Info($"Refusing automatic connection from {pairedDevice.Name}: manually disconnected");
+        SendMessage(session, new Disconnect());
+        await Task.Delay(RefusalCloseDelay);
+        DisconnectSession(session);
     }
 
     private async Task AuthenticatePairedDeviceClient(ServerSession session, PairedDevice pairedDevice, string address, CancellationToken cancellationToken, int protocolVersion)
@@ -842,7 +872,7 @@ public class NetworkService(
             return;
         }
 
-        ConnectCore(device, device.GetEnabledAddresses());
+        ConnectCore(device, device.GetEnabledAddresses(), userInitiated: true);
     }
 
     public void Connect(PairedDevice device, string address)
@@ -851,10 +881,12 @@ public class NetworkService(
         {
             removedCts.Cancel();
         }
-        ConnectCore(device, [address]);
+        ConnectCore(device, [address], userInitiated: true);
     }
 
-    private async void ConnectCore(PairedDevice device, IReadOnlyList<string> addresses)
+    /// <param name="userInitiated">True only for a connection the local user asked for. It clears a
+    /// local manual disconnect and asks the peer to resume one too; discovery and reconnect loops pass false.</param>
+    private async void ConnectCore(PairedDevice device, IReadOnlyList<string> addresses, bool userInitiated = false)
     {
         lock (connectingDeviceIds)
         {
@@ -866,6 +898,7 @@ public class NetworkService(
 
         var cts = new CancellationTokenSource();
         connectionCancellationTokens[device.Id] = cts;
+        var refused = false;
         try
         {
             await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Connecting());
@@ -929,13 +962,18 @@ public class NetworkService(
                         awaitingServerAuthentication[client.Id] = device;
                     }
                     finally { gate.Release(); }
-                    SendAuthenticationMessage(m => SendMessage(client, m));
+                    SendAuthenticationMessage(m => SendMessage(client, m), userInitiated);
                     await authentication.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
                     return;
                 }
                 catch (OperationCanceledException)
                 {
                     throw;
+                }
+                catch (PeerManuallyDisconnectedException)
+                {
+                    refused = true;
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -948,7 +986,8 @@ public class NetworkService(
                     if (!device.IsConnected || device.Client != client) DisconnectClient(client);
                 }
             }
-            logger.Warn($"Failed to connect to device {device.Name} on any IP address/port combination");
+            if (!refused)
+                logger.Warn($"Failed to connect to device {device.Name} on any IP address/port combination");
         }
         catch (OperationCanceledException)
         {
@@ -961,7 +1000,13 @@ public class NetworkService(
                 connectingDeviceIds.Remove(device.Id);
             }
 
-            if (device.IsConnecting)
+            if (refused && !device.IsConnected)
+            {
+                // Mirror the peer's manual disconnect so neither side keeps retrying automatically.
+                await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected(true));
+                ConnectionStatusChanged?.Invoke(this, device);
+            }
+            else if (device.IsConnecting)
             {
                 await App.MainWindow.DispatcherQueue.EnqueueAsync(() => device.ConnectionStatus = new Disconnected());
             }
@@ -1149,3 +1194,6 @@ public class NetworkService(
 
     #endregion
 }
+
+/// <summary>The peer answered an automatic connection with Disconnect because the user disconnected it there.</summary>
+public sealed class PeerManuallyDisconnectedException() : IOException("The peer was manually disconnected");
