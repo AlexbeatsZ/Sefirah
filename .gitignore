@@ -413,3 +413,4 @@ solution-config.props
 *.code-workspace
 /src/.vscode
 /src/.vsconfig
+.DS_Store
