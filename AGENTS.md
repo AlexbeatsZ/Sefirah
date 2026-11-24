@@ -4,6 +4,7 @@
 Maintain the user's personal fork with shared Windows/macOS transport and Android interoperability. Origin AlexbeatsZ/Sefirah, branch codex/personal-fork. Preserve installed identities and pairing data.
 
 ## Current State
+- 2026-11-24 desktop 3.2.0.16 / Mac build90: concurrent clipboard-image sends reserve distinct transfer ports in-process (macOS let several listeners bind 5152) and silent send failures are logged instead of unobserved. Mac installed and verified; Windows build/deploy in progress. Pairs with Android 3.2.0.9 (pread for shared clipboard fd).
 - 2026-11-23 desktop 3.2.0.15 / Mac build89: manual disconnect holds on both ends; only UI/management Connect resumes it via `Authentication.userInitiated`, and refused automatic dials receive `Disconnect`. Release v3.2.0.15 has the Mac ZIP, x64 MSIX (Valid, CN=AlexbeatsZ.Sefirah) and public CER; installed and running on Mac, OMEN and ROG. Windows 173 transport checks pass. Built on OMEN from source\repos\Sefirah with `dotnet publish` (self-contained win-x64, GenerateAppxPackageOnBuild, AppxPackageSigningEnabled=false, PublishReadyToRun=false), then signtool with .private\Sefirah.pfx; install through a one-shot interactive scheduled task (Add-AppxPackage over SSH is unreliable). OMEN gh is not authenticated over SSH: upload assets from the Mac.
 - Desktop 3.2.0.14 / Mac build88 is released and running on Mac, OMEN and ROG. Ringer commands require explicit button activation. Applying the remote report to the UI never sends a command. K70 is on Android 3.2.0.7/code45 and reconnected to all three hosts and Pad 4 Plus without new ringer/DND writes. Both tablets lack an ADB transport and still need the Android update.
 - 2026-11-17 desktop 3.2.0.12 / Mac build86 fixes wireless ADB restart loops after Android reflashing. USB automation requires a verified paired app ID (identity file or live authenticated endpoint), reads live Wi-Fi IP/TCP port, and serializes mode setup with bounded retries. Read docs/design/wireless-adb.md before editing this flow.
@@ -29,6 +30,7 @@ Maintain the user's personal fork with shared Windows/macOS transport and Androi
 ## Durable Lessons
 - Schannel regression certificates need PFX-imported private keys; CreateSelfSigned's ephemeral CNG key failed before certificate validation.
 - Observable PairedDevice properties need the UI dispatcher on Windows.
+- macOS allows several listeners in one process to bind the same TCP port and only one receives connections; never rely on bind failure alone to pick a free transfer port.
 - Preserve per-transport TLS binding, ordered dispatch, TCP backpressure and single-owner close. Run transport regressions on Windows and macOS after runtime/library upgrades.
 
 ## Docs Index

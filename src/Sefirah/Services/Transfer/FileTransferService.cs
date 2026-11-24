@@ -169,6 +169,11 @@ public class FileTransferService(
             
             await handler.SendAsync();
         }
+        catch (Exception ex) when (silent)
+        {
+            // Clipboard sends are fire-and-forget per device; log instead of leaving an unobserved task.
+            logger.Warn($"Clipboard transfer to {device.Name} failed: {ex.Message}");
+        }
         finally
         {
             activeHandlers.TryRemove(handler.TransferId, out _);

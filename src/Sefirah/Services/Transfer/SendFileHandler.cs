@@ -32,6 +32,11 @@ public partial class SendFileHandler(
     private readonly TransferControlBuffer controlBuffer = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private bool disposed;
+    private int reservedPort = -1;
+
+    // macOS lets concurrent listeners in this process bind the same transfer port, and only one of
+    // them receives connections. Reserve ports in-process so parallel sends get distinct ports.
+    private static readonly HashSet<int> ReservedPorts = [];
 
     public Guid TransferId { get; private set; }
     public double Progress => totalBytes == 0 ? 100 : (double)totalBytesTransferred / totalBytes * 100;
@@ -208,6 +213,11 @@ public partial class SendFileHandler(
         var sslContext = SslHelper.CreateSslContext(expectedClientCert);
         foreach (int port in FileTransferService.PortRange)
         {
+            lock (ReservedPorts)
+            {
+                if (!ReservedPorts.Add(port)) continue;
+            }
+            reservedPort = port;
             try
             {
                 server = new Server(sslContext, IPAddress.IPv6Any, port, this)
@@ -224,6 +234,7 @@ public partial class SendFileHandler(
             {
                 server?.Dispose();
                 server = null;
+                ReleasePort();
                 logger.Debug($"Failed to start server on port {port}: {ex.Message}");
             }
         }
@@ -266,6 +277,13 @@ public partial class SendFileHandler(
 
     #endregion
 
+    private void ReleasePort()
+    {
+        if (reservedPort < 0) return;
+        lock (ReservedPorts) ReservedPorts.Remove(reservedPort);
+        reservedPort = -1;
+    }
+
     public void Dispose()
     {
         if (disposed) return;
@@ -274,6 +292,7 @@ public partial class SendFileHandler(
         server?.Stop();
         server?.Dispose();
         server = null;
+        ReleasePort();
         session = null;
         serverInfo = null;
         connectionSource = null;

@@ -150,6 +150,21 @@ try
     await connected.WaitAsync(TimeSpan.FromSeconds(5));
     await Task.WhenAll(sender.SendAsync(), receiver.ReceiveAsync()).WaitAsync(TimeSpan.FromSeconds(10));
     Console.WriteLine("PASS real zero-byte and bulk file handlers");
+    {
+        // Parallel clipboard fan-out: every concurrent sender must own a distinct listening port.
+        var fanOut = Enumerable.Range(0, 4).Select(index =>
+        {
+            var announced = new TaskCompletionSource<Sefirah.Data.Models.ServerInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var handler = new SendFileHandler(sources.ToArray(), metadata, peer, transferContext,
+                value => announced.TrySetResult(value), host, host, silent: true);
+            var waiting = handler.WaitForConnectionAsync();
+            _ = waiting.ContinueWith(task => _ = task.Exception, TaskScheduler.Default);
+            return (handler, announced);
+        }).ToList();
+        var ports = await Task.WhenAll(fanOut.Select(item => item.announced.Task.WaitAsync(TimeSpan.FromSeconds(5))));
+        Check(ports.Select(value => value.Port).Distinct().Count() == fanOut.Count, "concurrent senders use distinct ports");
+        foreach (var item in fanOut) { item.handler.Cancel(); item.handler.Dispose(); }
+    }
     await NetworkRegression.RunAsync(Check);
     Check(host.Failures.Count == 0, "real file handler completion: " + string.Join(", ", host.Failures));
     Check(File.ReadAllText(Path.Combine(destination, "repeated.bin")) == "existing file", "handler preserves existing files");
