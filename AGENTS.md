@@ -4,21 +4,15 @@
 Maintain the user's personal fork with shared Windows/macOS transport and Android interoperability. Origin AlexbeatsZ/Sefirah, branch codex/personal-fork. Preserve installed identities and pairing data.
 
 ## Current State
-- 2026-11-24 desktop 3.2.0.16 / Mac build90: concurrent clipboard-image sends reserve distinct transfer ports in-process (macOS let several listeners bind 5152) and silent send failures are logged instead of unobserved. Release v3.2.0.16 has the Mac ZIP, x64 MSIX (Valid, CN=AlexbeatsZ.Sefirah) and CER; installed on Mac, OMEN and ROG, all peers reconnected. Windows MSIX needs `-p:AppxBundle=Never` or publish emits an msixbundle. Install over SSH via one-shot Interactive scheduled task with `-UserId (whoami)` ($env:USERDOMAIN does not map). Pairs with Android 3.2.0.9 (pread for shared clipboard fd).
-- 2026-11-23 desktop 3.2.0.15 / Mac build89: manual disconnect holds on both ends; only UI/management Connect resumes it via `Authentication.userInitiated`, and refused automatic dials receive `Disconnect`. Release v3.2.0.15 has the Mac ZIP, x64 MSIX (Valid, CN=AlexbeatsZ.Sefirah) and public CER; installed and running on Mac, OMEN and ROG. Windows 173 transport checks pass. Built on OMEN from source\repos\Sefirah with `dotnet publish` (self-contained win-x64, GenerateAppxPackageOnBuild, AppxPackageSigningEnabled=false, PublishReadyToRun=false), then signtool with .private\Sefirah.pfx; install through a one-shot interactive scheduled task (Add-AppxPackage over SSH is unreliable). OMEN gh is not authenticated over SSH: upload assets from the Mac.
-- Desktop 3.2.0.14 / Mac build88 is released and running on Mac, OMEN and ROG. Ringer commands require explicit button activation. Applying the remote report to the UI never sends a command. K70 is on Android 3.2.0.7/code45 and reconnected to all three hosts and Pad 4 Plus without new ringer/DND writes. Both tablets lack an ADB transport and still need the Android update.
-- 2026-11-17 desktop 3.2.0.12 / Mac build86 fixes wireless ADB restart loops after Android reflashing. USB automation requires a verified paired app ID (identity file or live authenticated endpoint), reads live Wi-Fi IP/TCP port, and serializes mode setup with bounded retries. Read docs/design/wireless-adb.md before editing this flow.
-- Desktop 3.2.0.14 includes the 2026-11-19 ADB device-list and scrcpy quoting fixes for mDNS serials with spaces such as `adb-x (2)._adb-tls-connect._tcp`. ADB41 checks pass on Windows and macOS.
-- ADB32, transport164, controls7 and presentation125 regression checks pass on Windows. Windows signature Valid and Mac strict signature verification passed. OMEN/ROG/Mac all run3.2.0.12 (Mac build86); identities/peers retained. Tablet auto-connect is enabled and its150-second USB-mode recovery test passed with exactly one TCP enable and stable USB+wireless afterward.
-- Windows x64 self-contained MSIX built on OMEN, signature Valid, signer CN=AlexbeatsZ.Sefirah. Release v3.2.0.14 contains the Windows MSIX, Windows public CER and macOS arm64 ZIP. Mac bundle passed strict signature validation.
-- Native Windows/macOS transport regression passed164 checks on the earlier transport rollout. Mac passed164 again for 3.2.0.14.
-- The 2026-11-17 desktop deployment and tablet USB/wireless ADB recovery acceptance passed. Broader login/sleep/background acceptance remains separate.
-- Private signing key and password stay in .private. The 3.2.0.14 Windows build log is %TEMP%/.agents/sefirah-one-shot-v14-signed/publish.log on OMEN.
+- 2026-11-26 desktop 3.2.0.18 / Mac build92 installed on Mac, OMEN and ROG; Android 3.2.0.10/code48 installed on K70, Pad 6 Pro and Pad 4 Plus. Both releases are published with signed assets. All six retain their local keys/IDs; final API check is 30/30 directed connections with matching current SPKI pins.
+- Windows/macOS control and independent transfer TLS pin SHA-256 of DER SPKI. Existing saved certificates derive their pins without a database migration. API v2 adds local unpair/remove, explicit configuration-preserving rebind, public local certificate and peer fingerprints. Read docs/design/device-identity.md before editing identity/recovery.
+- K70/OMEN/ROG were explicitly rebound from Pad 6 Pro's old public key to its verified current one. Pad 4 Plus's five missing local pairings were restored; other hosts kept their records/settings. This rollout preserved PFX bytes and Android first-install times/public keys. Report: tests/reports/device-identity-deployment-20261126.md.
+- Mac and native Windows each pass 185 transport checks. Mac and Android real API synthetic-peer suites each pass 9 checks, including certificate renewal, old-key revocation and live unpair. Mac fixed signing certificate/identifier and Windows CN=AlexbeatsZ.Sefirah remain unchanged.
+- Earlier port-reservation, ordered transport, manual disconnect/resume, one-shot controls and wireless ADB fixes remain included. Windows installs use a one-shot Interactive task with the actual WindowsIdentity user, not $env:USERDOMAIN; AppxBundle=Never produces an MSIX.
 
 ## Active Work
-- 2026-11-26 identity rollout: desktop 3.2.0.18 / Mac build92 implements SPKI pins, management unpair/rebind and authenticated asymmetric-pair repair. Mac 185 transport checks and publish pass; Windows build/release/device deployment pending. Read docs/design/device-identity.md before editing identity/recovery.
 - Verify the one-shot ringer changes on physical devices after upgrading the affected peers.
-- Physical device upgrade, login/sleep recovery, locked/background continuity and UI acceptance pending.
+- Login/sleep recovery, locked/background continuity and physical UI acceptance remain pending; all six device upgrades and current pairing recovery are complete.
 - Broader schema generation, unified management CLI, UI-dispatch injection and full PairedDevice separation remain future architecture work.
 
 ## Build / Run / Test
@@ -26,7 +20,7 @@ Maintain the user's personal fork with shared Windows/macOS transport and Androi
 - dotnet run --project tests/Sefirah.Adb.Regression -c Release
 - dotnet run --project tests/Sefirah.Transport.Regression -c Release
 - Publish src/Sefirah/Sefirah.csproj Release net10.0-windows10.0.26100 win-x64 with Platform=x64, SelfContained=true, WindowsAppSDKSelfContained=true, TargetFrameworks restricted to Windows, GenerateAppxPackageOnBuild=true. Use existing .private signer and verify Get-AuthenticodeSignature.
-- The 3.2.0.14 OMEN build driver is %TEMP%/.agents/sefirah-one-shot-sign.ps1. It builds and signs against the task's local NuGet source.
+- When bumping a desktop release, update both src/Directory.Build.props and src/Sefirah/Package.appxmanifest; verify the embedded MSIX manifest version before installation. Windows AppxBundle=Never, signing disabled at publish, then signtool with existing .private signer.
 
 ## Durable Lessons
 - Schannel regression certificates need PFX-imported private keys; CreateSelfSigned's ephemeral CNG key failed before certificate validation.
