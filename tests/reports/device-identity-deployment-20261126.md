@@ -33,6 +33,8 @@ The supplied Pad 6 Pro install time `2026-11-27 11:02:20` uses UTC+8 and corresp
 
 Pins derive from stored certificates, so no pairing database migration is needed. Rebind is an explicit local administrative trust decision and preserves configuration; unpair deletes local trust, like the existing UI removal. Private-key loss cannot be repaired by comparing a device ID. Automatic old-key-signed new-key rotation is not implemented in this release.
 
-This verifies deployment, identity persistence on upgrade, actual recovery/revocation and present connectivity. It does not establish overnight/Doze, login/sleep or reboot recovery, or physical UI acceptance. No phone UI input, reboot, radio toggling or DND command was performed for this task.
+The complete six-end snapshot above was collected after all pair repairs. During an extra post-cleanup check, K70 wireless ADB disappeared and its cached mDNS port refused connections. All other five local management APIs still report 5/5 Sefirah peers connected, including K70; the earlier K70 local snapshot remains the last direct phone-side observation. No ADB, proxy or phone UI configuration was changed to recover that extra check.
+
+This verifies deployment, identity persistence on upgrade, actual recovery/revocation and connectivity at acceptance. It does not establish overnight/Doze, login/sleep or reboot recovery, or physical UI acceptance. No phone UI input, reboot, radio toggling or DND command was performed for this task.
 
 Detailed public management snapshots and build/signature receipts remain on the Mac in `/tmp/.agents/sefirah-identity-20261126/`; Windows build/install receipts remain under each host's `%LOCALAPPDATA%/Temp/.agents/sefirah-identity-20261126/`. Temporary private keys, copied PFX and duplicate build/install artifacts are removed after verification.
