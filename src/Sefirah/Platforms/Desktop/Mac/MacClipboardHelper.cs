@@ -133,13 +133,17 @@ public static class MacClipboardHelper
         var pool = objc_autoreleasePoolPush();
         try
         {
-            var png = EncodePng(imageData);
+            // Preserve the original PNG chunks (sRGB, ICC, gamma) and pixel bytes.
+            // NSBitmapImageRep may replace sRGB with an incorrect gAMA=2.2 on macOS.
+            var png = imageData.AsSpan().StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })
+                ? Send(Class("NSData"), Sel("dataWithBytes:length:"), imageData, (nuint)imageData.Length)
+                : EncodePng(imageData);
             if (png == nint.Zero) return -1;
 
             var pasteboard = GeneralPasteboard;
             Send(pasteboard, Sel("clearContents"));
-            SendBool(pasteboard, Sel("setData:forType:"), png, NSString("public.png"));
-            return Send(pasteboard, Sel("changeCount"));
+            return SendBool(pasteboard, Sel("setData:forType:"), png, NSString("public.png"))
+                ? Send(pasteboard, Sel("changeCount")) : -1;
         }
         finally
         {
