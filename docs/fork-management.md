@@ -4,9 +4,11 @@
 
 Desktop and Android version 3.2.0.1 use the upstream 3.2.0 protocol baseline plus negotiated controls/presentation v1. Mac retains com.castle.sefirah, Sefirah.Desktop and its existing signing identity. Windows uses AlexbeatsZ.Sefirah, publisher CN=AlexbeatsZ.Sefirah; preserve the old Store LocalState database, PFX and per-device/general settings during migration. Android retains com.castle.sefirah with a durable private release signing key. The K70 has no Sefirah installation after the PixelOS migration, so its fork install starts a new identity and must pair again. Do not overwrite a differently signed Android installation without first planning identity loss and re-pairing.
 
-## Desktop management API v1
+## Desktop management API v2
 
 Same-user named pipe: sefirah-management-<OS user name>. PipeOptions.CurrentUserOnly enforces OS user identity. There is no TCP listener. One UTF-8 JSON request and newline per connection; response is {ok,data} or {ok:false,error}. Requests are bounded to 8192 characters and a 20 second connection deadline. Use tools/manage.py, locally or through SSH in the logged-in user's account.
+
+API v2 adds local `unpair` (alias `remove`), configuration-preserving `rebind`, and SPKI fingerprints/public certificate in status; see `design/device-identity.md` for required rebind fields and trust checks. Existing v1 calls remain compatible.
 
 Methods: status; connect (deviceId, and address/port for an unknown peer); pair (deviceId, verificationCode); approve/reject (deviceId, verificationCode); disconnect (deviceId); remove (deviceId). Pairing uses the existing authenticated TLS connection and certificate-derived verification code. Status exposes local ID/port, paired/discovered peers, and pending confirmations. Private keys are never returned. Pairing dialogs can be resolved through the API and expire after two minutes. Do not send a blind approval: match current IDs and verification codes on both peers.
 

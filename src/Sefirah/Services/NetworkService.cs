@@ -37,6 +37,7 @@ public class NetworkService(
     // Pinned client connections to paired devices that have not yet confirmed us
     private readonly ConcurrentDictionary<Guid, PairedDevice> awaitingServerAuthentication = [];
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> authenticationCompletion = [];
+    private readonly ConcurrentDictionary<Guid, byte> pairingAcknowledgements = [];
     // Last session each paired client was sent an Authentication reply on
     private readonly Dictionary<string, (Guid SessionId, long Ticks)> authenticationReplies = [];
     private static readonly TimeSpan DuplicateConnectionWindow = TimeSpan.FromSeconds(3);
@@ -244,6 +245,18 @@ public class NetworkService(
         if (session is null && client is null) SetDisconnected(device, forcedDisconnect);
     }
 
+    public async Task MutatePairingAsync(PairedDevice device, Func<Task> update)
+    {
+        var gate = peerGates.GetOrAdd(device.Id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            DisconnectDevice(device, true);
+            await update();
+        }
+        finally { gate.Release(); }
+    }
+
     public void SendMessage(ServerSession session, SocketMessage message)
     {
         try
@@ -430,6 +443,14 @@ public class NetworkService(
         var pairedDevice = PairedDevices.FirstOrDefault(d => d.Client?.Id == id || d.Session?.Id == id);
         if (pairedDevice is not null && pairedDevice.IsConnected)
         {
+            // Authenticated peers may have lost only their pairing database. Reply once
+            // per transport to repair asymmetric pairing without a PairMessage echo loop.
+            if (message is PairMessage reaffirmation)
+            {
+                if (reaffirmation.Pair && pairingAcknowledgements.TryAdd(id, 0))
+                    pairedDevice.SendMessage(new PairMessage { Pair = true });
+                return;
+            }
             await messageHandler.Value.HandleMessageAsync(pairedDevice, message);
             return;
         }
@@ -476,7 +497,7 @@ public class NetworkService(
             var pairedDevice = PairedDevices.FirstOrDefault(d => d.Id == authMessage.DeviceId);
             if (pairedDevice is not null)
             {
-                if (pairedDevice.Certificate.Length == 0 || cert.Length != pairedDevice.Certificate.Length || !cert.AsSpan().SequenceEqual(pairedDevice.Certificate))
+                if (!SslHelper.MatchesIdentity(cert, pairedDevice.Certificate))
                 {
                     throw new Exception("Certificate verification failed for paired device");
                 }
@@ -529,6 +550,8 @@ public class NetworkService(
 
     private async Task AcceptPairedDeviceClientAsync(ServerSession session, PairedDevice pairedDevice, string address, CancellationToken cancellationToken, int protocolVersion)
     {
+        if (!PairedDevices.Contains(pairedDevice) || !SslHelper.MatchesIdentity(session.Handshake.PeerCertificate, pairedDevice.Certificate))
+            throw new System.Security.Authentication.AuthenticationException("Pairing changed during authentication");
         logger.Info($"Paired device {pairedDevice.Name} verified, updating connection");
 
         var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
@@ -710,6 +733,7 @@ public class NetworkService(
         try
         {
             connectionBuffers.TryRemove(session.Id, out _);
+            pairingAcknowledgements.TryRemove(session.Id, out _);
             messageWorkers.TryRemove(session.Id, out _);
             if (messageQueues.TryRemove(session.Id, out var messages)) messages.Writer.TryComplete();
             session.Disconnect();
@@ -744,6 +768,7 @@ public class NetworkService(
         {
             logger.Debug($"disconnecing client session: {client.Id}");
             connectionBuffers.TryRemove(client.Id, out _);
+            pairingAcknowledgements.TryRemove(client.Id, out _);
             messageWorkers.TryRemove(client.Id, out _);
             awaitingServerAuthentication.TryRemove(client.Id, out _);
             if (authenticationCompletion.TryRemove(client.Id, out var authPending))
@@ -953,6 +978,8 @@ public class NetworkService(
                     try
                     {
                         cts.Token.ThrowIfCancellationRequested();
+                        if (!PairedDevices.Contains(device) || !SslHelper.MatchesIdentity(client.Handshake.PeerCertificate, device.Certificate))
+                            throw new System.Security.Authentication.AuthenticationException("Pairing changed during connection");
                         var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
                         if (device.IsComputer && device.Session?.IsHandshaked == true && string.CompareOrdinal(localId, device.Id) > 0)
                             throw new IOException("The preferred inbound connection is already active");
@@ -1113,6 +1140,8 @@ public class NetworkService(
 
     private async Task AcceptPairedDeviceServerAsync(Client client, PairedDevice pairedDevice, string address, CancellationToken cancellationToken)
     {
+        if (!PairedDevices.Contains(pairedDevice) || !SslHelper.MatchesIdentity(client.Handshake.PeerCertificate, pairedDevice.Certificate))
+            throw new System.Security.Authentication.AuthenticationException("Pairing changed during authentication");
         var localId = (await deviceManager.GetLocalDeviceAsync()).DeviceId;
         cancellationToken.ThrowIfCancellationRequested();
         if (pairedDevice.Client != client) return;

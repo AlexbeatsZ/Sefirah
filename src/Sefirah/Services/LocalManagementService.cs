@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using CommunityToolkit.WinUI;
 using Sefirah.Data.Models;
+using Sefirah.Helpers;
 
 namespace Sefirah.Services;
 
@@ -70,14 +71,18 @@ public sealed class LocalManagementService(IDeviceManager devices, ISessionManag
                 {
                     ["bluetooth"] = localControls is null ? null : new JsonObject
                     { ["control"] = localControls.BluetoothControl, ["enabled"] = localControls.BluetoothEnabled, ["declaredTo"] = controlPeer!.Name },
-                    ["apiVersion"] = 1, ["version"] = typeof(LocalManagementService).Assembly.GetName().Version?.ToString() ?? "unknown",
+                    ["apiVersion"] = 2, ["version"] = typeof(LocalManagementService).Assembly.GetName().Version?.ToString() ?? "unknown",
+                    ["publicKeyFingerprint"] = SslHelper.PublicKeyFingerprint(SslHelper.GetOrCreateCertificate().RawData),
+                    ["certificate"] = Convert.ToBase64String(SslHelper.GetOrCreateCertificate().RawData),
                     ["deviceId"] = local.DeviceId, ["deviceName"] = local.DeviceName,
                     ["port"] = NetworkService.ServerPort,
                     ["paired"] = new JsonArray(devices.PairedDevices.Select(d => (JsonNode)new JsonObject
-                    { ["deviceId"] = d.Id, ["deviceName"] = d.Name, ["connected"] = d.IsConnected, ["address"] = d.Address }).ToArray()),
+                    { ["deviceId"] = d.Id, ["deviceName"] = d.Name, ["connected"] = d.IsConnected, ["address"] = d.Address,
+                        ["publicKeyFingerprint"] = SslHelper.PublicKeyFingerprint(d.Certificate) }).ToArray()),
                     ["discovered"] = new JsonArray(devices.DiscoveredDevices.Select(d => (JsonNode)new JsonObject
                     { ["deviceId"] = d.Id, ["deviceName"] = d.Name, ["verificationCode"] = d.VerificationKey,
-                        ["address"] = d.Address, ["port"] = d.Port }).ToArray()),
+                        ["address"] = d.Address, ["port"] = d.Port,
+                        ["publicKeyFingerprint"] = SslHelper.PublicKeyFingerprint(d.Certificate) }).ToArray()),
                     ["pending"] = new JsonArray(network.PendingManagementPairings.Select(p => (JsonNode)new JsonObject
                     { ["deviceId"] = p.DeviceId, ["verificationCode"] = p.VerificationCode }).ToArray())
                 };
@@ -114,10 +119,19 @@ public sealed class LocalManagementService(IDeviceManager devices, ISessionManag
             case "disconnect":
                 sessions.DisconnectDevice(devices.PairedDevices.Single(d => d.Id == Required("deviceId")), true);
                 break;
+            case "rebind":
+                var rebound = devices.PairedDevices.Single(d => d.Id == Required("deviceId"));
+                var certificate = Convert.FromBase64String(Required("certificate"));
+                SslHelper.ValidateRebind(rebound.Certificate, certificate, Required("expectedFingerprint"),
+                    Required("publicKeyFingerprint"), Required("verificationCode"));
+                await network.MutatePairingAsync(rebound, () => ((DeviceManager)devices).RebindDevice(rebound,
+                    certificate, Required("expectedFingerprint"), Required("publicKeyFingerprint"), Required("verificationCode")));
+                sessions.Connect(rebound);
+                break;
+            case "unpair":
             case "remove":
                 var removed = devices.PairedDevices.Single(d => d.Id == Required("deviceId"));
-                sessions.DisconnectDevice(removed, true);
-                await devices.RemoveDevice(removed);
+                await network.MutatePairingAsync(removed, () => devices.RemoveDevice(removed));
                 break;
             default: throw new ArgumentException("Unknown method");
         }

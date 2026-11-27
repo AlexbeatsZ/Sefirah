@@ -122,6 +122,33 @@ Directory.CreateDirectory(transferRoot);
 ApplicationData.Current.LocalFolder.Path = transferRoot;
 try
 {
+using (var key = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+{
+    var request = new CertificateRequest("CN=Original", key, HashAlgorithmName.SHA256);
+    using var original = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-2), DateTimeOffset.UtcNow.AddYears(1));
+    using var renewed = new CertificateRequest("CN=Renewed", key, HashAlgorithmName.SHA256)
+        .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
+    using var other = CreateCertificate();
+    Check(!original.RawData.SequenceEqual(renewed.RawData), "renewed certificates differ");
+    Check(SslHelper.MatchesIdentity(renewed.RawData, original.RawData), "same-key certificate renewal accepted");
+    Check(!SslHelper.MatchesIdentity(other.RawData, original.RawData), "different public key rejected");
+    Check(!SslHelper.MatchesIdentity([], original.RawData), "empty peer certificate rejected");
+    Check(!SslHelper.MatchesIdentity(original.RawData, []), "empty stored pin rejected");
+    Check(SslHelper.PublicKeyFingerprint(original.RawData) == Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo())), "standard SPKI SHA256");
+    var newFingerprint = SslHelper.PublicKeyFingerprint(other.RawData);
+    using var otherKey = other.GetECDsaPublicKey();
+    var code = SslHelper.GetVerificationCode(Convert.ToBase64String(otherKey!.ExportSubjectPublicKeyInfo()));
+    SslHelper.ValidateRebind(original.RawData, other.RawData, SslHelper.PublicKeyFingerprint(original.RawData), newFingerprint, code);
+    checks++;
+    foreach (var invalid in new[] {
+        ("wrong-old", newFingerprint, code),
+        (SslHelper.PublicKeyFingerprint(original.RawData), "wrong-new", code),
+        (SslHelper.PublicKeyFingerprint(original.RawData), newFingerprint, "wrong-code") })
+    {
+        try { SslHelper.ValidateRebind(original.RawData, other.RawData, invalid.Item1, invalid.Item2, invalid.Item3); throw new Exception("Unauthorized rebind accepted"); }
+        catch (AuthenticationException) { checks++; }
+    }
+}
     var source = Path.Combine(transferRoot, "source");
     var destination = Path.Combine(transferRoot, "received");
     Directory.CreateDirectory(source);
@@ -139,7 +166,11 @@ try
     File.WriteAllText(Path.Combine(destination, "repeated.bin"), "existing file");
     var host = new TestHost();
     var peer = new Sefirah.Data.Models.PairedDevice();
-    var transferContext = SslHelper.GetOrCreateCertificate().RawData;
+    using var transferKey = SslHelper.GetOrCreateCertificate().GetECDsaPrivateKey();
+    using var renewedTransferCertificate = new CertificateRequest("CN=RenewedTransfer", transferKey!, HashAlgorithmName.SHA256)
+        .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(3));
+    var transferContext = renewedTransferCertificate.RawData;
+    Check(!transferContext.SequenceEqual(SslHelper.GetOrCreateCertificate().RawData), "transfer uses a renewed certificate pin");
     var ready = new TaskCompletionSource<Sefirah.Data.Models.ServerInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
     using var sender = new SendFileHandler(sources.ToArray(), metadata, peer, transferContext,
         info => ready.TrySetResult(info), host, host, silent: false);

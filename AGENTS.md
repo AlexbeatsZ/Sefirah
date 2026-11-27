@@ -16,6 +16,7 @@ Maintain the user's personal fork with shared Windows/macOS transport and Androi
 - Private signing key and password stay in .private. The 3.2.0.14 Windows build log is %TEMP%/.agents/sefirah-one-shot-v14-signed/publish.log on OMEN.
 
 ## Active Work
+- 2026-11-26 identity rollout: desktop 3.2.0.18 / Mac build92 implements SPKI pins, management unpair/rebind and authenticated asymmetric-pair repair. Mac 185 transport checks and publish pass; Windows build/release/device deployment pending. Read docs/design/device-identity.md before editing identity/recovery.
 - Verify the one-shot ringer changes on physical devices after upgrading the affected peers.
 - Physical device upgrade, login/sleep recovery, locked/background continuity and UI acceptance pending.
 - Broader schema generation, unified management CLI, UI-dispatch injection and full PairedDevice separation remain future architecture work.
@@ -34,6 +35,7 @@ Maintain the user's personal fork with shared Windows/macOS transport and Androi
 - Preserve per-transport TLS binding, ordered dispatch, TCP backpressure and single-owner close. Run transport regressions on Windows and macOS after runtime/library upgrades.
 
 ## Docs Index
+- docs/design/device-identity.md covers SPKI pins, persistent keys, local unpair/rebind and asymmetric pairing recovery.
 - docs/design/wireless-adb.md covers identity association, live USB network state and idempotent TCP setup.
 - docs/device-protocol.md covers transport ownership, authentication, framing, transfers, discovery, authorization and compatibility fixtures.
 - docs/design/desktop-link-auth.md covers desktop link recovery and legacy authentication.

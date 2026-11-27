@@ -26,9 +26,36 @@ public static class SslHelper
 
     private static byte[] GetPublicKeyEncoded(X509Certificate2 c)
     {
-        using var ecdsa = c.GetECDsaPublicKey();
-        if (ecdsa is not null) return ecdsa.ExportSubjectPublicKeyInfo();
-        return [];
+        return c.PublicKey.ExportSubjectPublicKeyInfo();
+    }
+
+    public static string PublicKeyFingerprint(byte[] certificate)
+    {
+        using var peer = X509CertificateLoader.LoadCertificate(certificate);
+        return Convert.ToHexString(SHA256.HashData(GetPublicKeyEncoded(peer)));
+    }
+
+    public static bool MatchesIdentity(byte[]? certificate, byte[]? pinnedCertificate)
+    {
+        if (certificate is null || pinnedCertificate is null) return false;
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(PublicKeyFingerprint(certificate)),
+                Convert.FromHexString(PublicKeyFingerprint(pinnedCertificate)));
+        }
+        catch (CryptographicException) { return false; }
+    }
+
+    // Local administrator authorization, never inferred from a device ID or advertisement.
+    public static void ValidateRebind(byte[] current, byte[] replacement, string expectedFingerprint,
+        string publicKeyFingerprint, string verificationCode)
+    {
+        using var peer = X509CertificateLoader.LoadCertificate(replacement);
+        if (PublicKeyFingerprint(current) != expectedFingerprint ||
+            PublicKeyFingerprint(replacement) != publicKeyFingerprint ||
+            GetVerificationCode(Convert.ToBase64String(GetPublicKeyEncoded(peer))) != verificationCode)
+            throw new AuthenticationException("Identity fingerprint or verification code mismatch");
     }
 
     public static string GetVerificationCode(string theirPublicKeyBase64)
@@ -128,7 +155,7 @@ public static class SslHelper
         };
     }
 
-    /// <summary>SslContext which validates peer cert against expected cert.</summary>
+    /// <summary>Pin SPKI identity for control and independent transfer connections.</summary>
     public static SslContext CreateSslContext(byte[] expectedPeerCert)
     {
         return new SslContext(SslProtocols.Tls12 | SslProtocols.Tls13, GetOrCreateCertificate(), Validate)
@@ -141,7 +168,7 @@ public static class SslHelper
             if (cert is null) return false;
             using var c = new X509Certificate2(cert);
             var raw = c.RawData;
-            return raw.AsSpan().SequenceEqual(expectedPeerCert) && TlsHandshake.Capture(sender, cert);
+            return MatchesIdentity(raw, expectedPeerCert) && TlsHandshake.Capture(sender, cert);
         }
     }
 

@@ -79,6 +79,18 @@ public partial class DeviceManager(
         }
     }
 
+    public async Task RebindDevice(PairedDevice device, byte[] certificate, string expectedFingerprint,
+        string publicKeyFingerprint, string verificationCode)
+    {
+        var entity = await repository.GetPairedDevice(device.Id)
+            ?? throw new InvalidOperationException("Device is no longer paired");
+        SslHelper.ValidateRebind(entity.Certificate, certificate, expectedFingerprint, publicKeyFingerprint, verificationCode);
+        entity.Certificate = certificate;
+        repository.AddOrUpdateRemoteDevice(entity);
+        device.Certificate = certificate;
+        logger.Info($"Explicit identity rebind for {device.Id}: {expectedFingerprint} -> {publicKeyFingerprint}");
+    }
+
     private static PairedDeviceEntity CreateDeviceEntity(DiscoveredDevice device)
     {
         return new PairedDeviceEntity

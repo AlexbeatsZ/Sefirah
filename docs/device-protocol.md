@@ -16,7 +16,7 @@ Desktop contract fixtures are in `protocol/messages.json`. The same fixtures shi
 
 ## Authentication and connection replacement
 
-Authentication public keys must match the certificate presented by that TLS connection. Paired device certificates remain pinned byte-for-byte. An existing PFX that cannot be read causes an error. New identities are written atomically and never replace an existing file.
+Authentication public keys must match the certificate presented by that TLS connection. Paired devices pin SHA-256 of DER SPKI derived from the stored certificate; same-key certificate renewal is accepted. Read `design/device-identity.md` before changing identity matching or local rebind. An existing PFX that cannot be read causes an error. New identities are written atomically and never replace an existing file.
 
 NetCoreServer 8.0.7 invokes `OnHandshaking` immediately before beginning `SslStream` authentication. `TlsHandshake` uses the captured ExecutionContext to bind certificate validation to that transport. The shared transport regression exercises 24 concurrent mutually authenticated connections. macOS .NET 10 SecureTransport can abort in SSLRead/SSLClose when NetCoreServer sends TLS close-notify while a read is pending. Close each transport once and dispose its captured SslStream before the macOS base disconnect. Application-level Disconnect is transmitted before teardown. Re-run this test when changing NetCoreServer or the runtime.
 
